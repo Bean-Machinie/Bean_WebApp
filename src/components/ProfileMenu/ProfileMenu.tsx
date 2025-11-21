@@ -53,11 +53,7 @@ function ProfileMenu({ isCollapsed, items, activeItemId, onSelect }: ProfileMenu
                 <span className="profile-menu__item-icon" aria-hidden>
                   {item.icon}
                 </span>
-                <span
-                  className={`profile-menu__item-label ${
-                    isCollapsed ? 'profile-menu__item-label--hidden' : ''
-                  }`}
-                >
+                <span className="profile-menu__item-label">
                   {item.title}
                 </span>
               </button>

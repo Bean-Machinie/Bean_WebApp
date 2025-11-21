@@ -32,11 +32,6 @@
   width: var(--sidebar-width-collapsed);
 }
 
-.sidebar--collapsed .workspace-list,
-.sidebar--collapsed .profile-menu {
-  align-items: center;
-}
-
 .sidebar__toggle {
   display: inline-flex;
   align-items: center;
@@ -94,11 +89,6 @@
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
-.sidebar--collapsed .workspace-item {
-  justify-content: center;
-  padding: 10px;
-}
-
 .workspace-item:hover {
   background: #1e293b;
   border-color: #1e293b;
@@ -134,10 +124,6 @@
 .workspace-item__title--hidden {
   opacity: 0;
   max-width: 0;
-}
-
-.sidebar--collapsed .workspace-item__title {
-  margin-left: 0;
 }
 
 .sidebar__spacer {
@@ -213,11 +199,6 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.sidebar--collapsed .profile-menu__trigger {
-  justify-content: center;
-  padding: 10px;
-}
-
 .profile-menu__trigger:hover {
   background: #334155;
   border-color: #334155;
@@ -245,10 +226,6 @@
 .profile-menu__name--hidden {
   opacity: 0;
   max-width: 0;
-}
-
-.sidebar--collapsed .profile-menu__name {
-  margin-left: 0;
 }
 
 .profile-menu__dropdown {
@@ -293,11 +270,6 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.sidebar--collapsed .profile-menu__item {
-  justify-content: center;
-  padding: 10px;
-}
-
 .profile-menu__item:hover {
   background: #1e293b;
   border-color: #1e293b;
@@ -333,6 +305,3 @@
   max-width: 0;
 }
 
-.sidebar--collapsed .profile-menu__item-label {
-  margin-left: 0;
-}
