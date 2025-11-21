@@ -1,8 +1,10 @@
 import { CSSProperties } from 'react';
+import ProfileMenu from '../components/ProfileMenu/ProfileMenu';
 import { Workspace } from './AppLayout';
 
 type SidebarProps = {
   workspaces: Workspace[];
+  profileMenuItems: Workspace[];
   isCollapsed: boolean;
   activeWorkspaceId?: string;
   onSelectWorkspace: (workspaceId: string) => void;
@@ -17,16 +19,17 @@ const SIDEBAR_WIDTHS = {
 
 function Sidebar({
   workspaces,
+  profileMenuItems,
   isCollapsed,
   activeWorkspaceId,
   onSelectWorkspace,
   onToggleCollapse,
 }: SidebarProps) {
-  const sidebarStyle: CSSProperties = {
+  const sidebarStyle = {
     // These CSS variables are consumed in App.css for the width transition.
-    ['--sidebar-width-expanded' as const]: `${SIDEBAR_WIDTHS.expanded}px`,
-    ['--sidebar-width-collapsed' as const]: `${SIDEBAR_WIDTHS.collapsed}px`,
-  };
+    '--sidebar-width-expanded': `${SIDEBAR_WIDTHS.expanded}px`,
+    '--sidebar-width-collapsed': `${SIDEBAR_WIDTHS.collapsed}px`,
+  } as CSSProperties;
 
   return (
     <aside
@@ -68,6 +71,15 @@ function Sidebar({
           );
         })}
       </nav>
+
+      <div className="sidebar__spacer" aria-hidden />
+
+      <ProfileMenu
+        isCollapsed={isCollapsed}
+        items={profileMenuItems}
+        activeItemId={activeWorkspaceId}
+        onSelect={onSelectWorkspace}
+      />
     </aside>
   );
 }
