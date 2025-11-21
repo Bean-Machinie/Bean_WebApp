@@ -14,9 +14,11 @@ const MyProjectsIcon = (props: SVGProps<SVGSVGElement>) => (
     aria-hidden
     {...props}
   >
-    <rect x="4" y="4" width="16" height="16" rx="4" />
-    <path d="M12 8v8" />
-    <path d="M8 12h8" />
+    <rect x="4" y="7" width="16" height="12" rx="3" />
+    <path d="M9 7V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1" />
+    <path d="M8 13.5h6" />
+    <path d="M8 10.5h3" />
+    <path d="M8 16.5h4.5" />
   </svg>
 );
 
