@@ -1,4 +1,3 @@
-import { CSSProperties } from 'react';
 import ProfileMenu from '../components/ProfileMenu/ProfileMenu';
 import { Workspace } from './AppLayout';
 
@@ -11,12 +10,6 @@ type SidebarProps = {
   onToggleCollapse: () => void;
 };
 
-// Sidebar widths are set here so they are easy to tweak later.
-const SIDEBAR_WIDTHS = {
-  expanded: 256,
-  collapsed: 76,
-};
-
 function Sidebar({
   workspaces,
   profileMenuItems,
@@ -25,17 +18,8 @@ function Sidebar({
   onSelectWorkspace,
   onToggleCollapse,
 }: SidebarProps) {
-  const sidebarStyle = {
-    // These CSS variables are consumed in App.css for the width transition.
-    '--sidebar-width-expanded': `${SIDEBAR_WIDTHS.expanded}px`,
-    '--sidebar-width-collapsed': `${SIDEBAR_WIDTHS.collapsed}px`,
-  } as CSSProperties;
-
   return (
-    <aside
-      className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}
-      style={sidebarStyle}
-    >
+    <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
       <button className="sidebar__toggle" onClick={onToggleCollapse}>
         {isCollapsed ? '➜' : '⬅'}
         <span
