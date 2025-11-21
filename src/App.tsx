@@ -1,25 +1,9 @@
-import { Route, Routes } from 'react-router-dom';
-import { DashboardPage } from './pages/DashboardPage';
-import { LandingPage } from './pages/LandingPage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { ProtectedRoute } from './routes/ProtectedRoute';
+import AppLayout from './layout/AppLayout';
+import './App.css';
 
-// Centralized routing so new pages can be added easily.
+// App renders the reusable layout so it can be extended with real workspaces later.
 function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-
-      <Route element={<ProtectedRoute />}>
-        <Route path="/app" element={<DashboardPage />} />
-      </Route>
-
-      <Route path="*" element={<LandingPage />} />
-    </Routes>
-  );
+  return <AppLayout />;
 }
 
 export default App;
