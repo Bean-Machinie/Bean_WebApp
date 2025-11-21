@@ -1,3 +1,4 @@
+import { CSSProperties } from 'react';
 import { Workspace } from './AppLayout';
 
 type SidebarProps = {
@@ -8,6 +9,12 @@ type SidebarProps = {
   onToggleCollapse: () => void;
 };
 
+// Sidebar widths are set here so they are easy to tweak later.
+const SIDEBAR_WIDTHS = {
+  expanded: 256,
+  collapsed: 76,
+};
+
 function Sidebar({
   workspaces,
   isCollapsed,
@@ -15,11 +22,26 @@ function Sidebar({
   onSelectWorkspace,
   onToggleCollapse,
 }: SidebarProps) {
+  const sidebarStyle: CSSProperties = {
+    // These CSS variables are consumed in App.css for the width transition.
+    ['--sidebar-width-expanded' as const]: `${SIDEBAR_WIDTHS.expanded}px`,
+    ['--sidebar-width-collapsed' as const]: `${SIDEBAR_WIDTHS.collapsed}px`,
+  };
+
   return (
-    <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
+    <aside
+      className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}
+      style={sidebarStyle}
+    >
       <button className="sidebar__toggle" onClick={onToggleCollapse}>
         {isCollapsed ? '➜' : '⬅'}
-        {!isCollapsed && <span className="sidebar__toggle-label">Collapse</span>}
+        <span
+          className={`sidebar__toggle-label ${
+            isCollapsed ? 'sidebar__toggle-label--hidden' : ''
+          }`}
+        >
+          Collapse
+        </span>
       </button>
 
       <nav className="workspace-list" aria-label="Workspaces">
@@ -35,7 +57,13 @@ function Sidebar({
               <span className="workspace-item__icon" aria-hidden>
                 {workspace.icon}
               </span>
-              {!isCollapsed && <span className="workspace-item__title">{workspace.title}</span>}
+              <span
+                className={`workspace-item__title ${
+                  isCollapsed ? 'workspace-item__title--hidden' : ''
+                }`}
+              >
+                {workspace.title}
+              </span>
             </button>
           );
         })}
