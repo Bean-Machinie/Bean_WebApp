@@ -6,27 +6,22 @@ const settingsSections: { id: SettingsSectionId; label: string; description: str
   {
     id: 'profile',
     label: 'Profile',
-    description: 'Update your name, bio, and basic information.',
   },
   {
     id: 'account',
     label: 'Account',
-    description: 'Manage login details and account info.',
   },
   {
     id: 'security',
     label: 'Security',
-    description: 'Passwords, 2FA, keys…',
   },
   {
     id: 'notifications',
     label: 'Notifications',
-    description: 'Control emails and alerts.',
   },
   {
     id: 'appearance',
     label: 'Appearance',
-    description: 'Choose light, dark, or system theme.',
   },
 ];
 
