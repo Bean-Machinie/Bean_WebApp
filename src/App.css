@@ -764,6 +764,10 @@
   font-weight: 700;
   opacity: 0;
   transition: opacity 0.2s ease;
+  font-size: 0.85rem;
+  padding: 0 10px;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .settings-profile__avatar:hover .settings-profile__avatar-overlay {
@@ -924,31 +928,33 @@
   position: relative;
   border-radius: 50%;
   overflow: hidden;
+  background: linear-gradient(135deg, #0b172c, #0f172a);
 }
 
 .avatar-modal__cropper img {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  user-select: none;
-  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .avatar-modal__cropper-frame {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  box-shadow: 0 0 0 1400px rgba(15, 23, 42, 0.55);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.12);
   pointer-events: none;
 }
 
 .avatar-modal__placeholder {
   color: #cbd5e1;
+  text-align: center;
 }
 
 .avatar-modal__controls {
   display: grid;
   gap: 10px;
+  align-content: start;
 }
 
 .avatar-modal__actions {
@@ -960,6 +966,11 @@
   margin: 0;
   color: #b91c1c;
   font-weight: 700;
+}
+
+.avatar-modal__helper {
+  margin: 0 0 4px;
+  color: #475569;
 }
 
 .theme-grid {
