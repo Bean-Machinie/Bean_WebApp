@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import AvatarUploadModal from '../../components/AvatarUploadModal';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -16,6 +15,7 @@ type ProfileForm = {
 function SettingsProfilePage() {
   const { user } = useAuth();
   const detectedTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<ProfileForm>({
     displayName: '',
     bio: '',
@@ -27,7 +27,7 @@ function SettingsProfilePage() {
   });
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -80,6 +80,42 @@ function SettingsProfilePage() {
     setProfile({ ...profile, timezoneEnabled: event.target.checked });
   };
 
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.id) return;
+
+    setIsUploadingAvatar(true);
+    setStatus(null);
+
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const path = `avatars/${user.id}-${Date.now()}.${extension}`;
+
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, {
+        cacheControl: '0',
+        upsert: true,
+        contentType: file.type || 'image/jpeg',
+      });
+
+      if (uploadError) throw uploadError;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: path })
+        .eq('id', user.id);
+
+      if (profileError) throw profileError;
+
+      setProfile((current) => ({ ...current, avatarUrl: path }));
+      setStatus('Profile picture updated');
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Unable to update profile picture');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+
   const handleSave = async () => {
     if (!user?.id) return;
     setIsSaving(true);
@@ -114,10 +150,23 @@ function SettingsProfilePage() {
       <p>Personalize your profile so teammates can recognize you around the app.</p>
 
       <div className="settings-profile__header">
-        <div className="settings-profile__avatar" onClick={() => setIsModalOpen(true)}>
+        <div
+          className="settings-profile__avatar"
+          onClick={() => fileInputRef.current?.click()}
+          aria-busy={isUploadingAvatar}
+        >
           {publicAvatarUrl ? <img src={publicAvatarUrl} alt="Profile avatar" /> : <span>{initials}</span>}
-          <div className="settings-profile__avatar-overlay">Change profile picture</div>
+          <div className="settings-profile__avatar-overlay">
+            {isUploadingAvatar ? 'Uploading…' : 'Change profile picture'}
+          </div>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleAvatarChange}
+        />
         <div className="settings-profile__identity">
           <h3>{resolvedName}</h3>
           <p>{profile.bio || 'Add a short bio so collaborators know who you are.'}</p>
@@ -211,14 +260,6 @@ function SettingsProfilePage() {
         </button>
         {status ? <span className="settings-profile__status">{status}</span> : null}
       </div>
-
-      <AvatarUploadModal
-        isOpen={isModalOpen}
-        userId={user?.id ?? ''}
-        onClose={() => setIsModalOpen(false)}
-        onAvatarUpdated={(path) => setProfile((current) => ({ ...current, avatarUrl: path }))}
-        initialPreview={publicAvatarUrl}
-      />
     </div>
   );
 }
