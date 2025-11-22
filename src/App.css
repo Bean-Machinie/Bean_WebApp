@@ -425,6 +425,240 @@
   color: #475569;
 }
 
+.settings-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #f8fafc;
+}
+
+.settings-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.settings-card__header h3 {
+  margin: 0 0 4px;
+}
+
+.settings-card__header p {
+  margin: 0;
+  color: #475569;
+}
+
+.settings-card__meta {
+  background: #e2e8f0;
+  color: #0f172a;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  align-self: flex-start;
+}
+
+.settings-card__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.settings-choice {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.settings-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-choice__preview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.settings-choice__swatch {
+  display: block;
+  border-radius: 8px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+}
+
+.settings-choice__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-choice__label {
+  font-weight: 700;
+}
+
+.settings-choice__description {
+  margin: 0;
+  color: #475569;
+}
+
+.settings-choice--active {
+  border-color: #2563eb;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.settings-accent-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.settings-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-accent input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-accent__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+
+.settings-accent--active {
+  border-color: #2563eb;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+}
+
+.settings-radio-group {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-radio {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-radio input {
+  margin-top: 4px;
+}
+
+.settings-radio__label {
+  font-weight: 700;
+}
+
+.settings-radio__description {
+  margin: 4px 0 0;
+  color: #475569;
+}
+
+.settings-radio--active {
+  border-color: #2563eb;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+}
+
+.settings-form {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-form--split {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.settings-field input,
+.settings-field textarea,
+.settings-field select {
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fff;
+}
+
+.settings-field textarea {
+  resize: vertical;
+}
+
+.settings-field__help {
+  margin: 0;
+  color: #475569;
+  font-weight: 500;
+}
+
+.settings-integration-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-integration {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.settings-integration__title {
+  font-weight: 700;
+}
+
+.settings-integration__description {
+  margin: 4px 0 0;
+  color: #475569;
+}
+
+.settings-integration__status {
+  font-weight: 700;
+  color: #2563eb;
+}
+
 @media (max-width: 960px) {
   .settings-layout__body {
     grid-template-columns: 1fr;
