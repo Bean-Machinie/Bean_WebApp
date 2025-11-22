@@ -1,5 +1,7 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabaseClient';
 
 type ProfileMenuItem = {
   id: string;
@@ -10,13 +12,85 @@ type ProfileMenuItem = {
 type ProfileMenuProps = {
   isCollapsed: boolean;
   items: ProfileMenuItem[];
+  profile?: { displayName: string; avatarUrl: string; emailFallback: string };
 };
 
-// ProfileMenu renders the avatar row and its upward dropdown.
-// Replace `User Name` and the circle avatar with real profile data when available.
-function ProfileMenu({ isCollapsed, items }: ProfileMenuProps) {
+function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [profile, setProfile] = useState({
+    displayName: '',
+    avatarUrl: '',
+    emailFallback: '',
+  });
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (profileFromProps) {
+      setProfile(profileFromProps);
+    }
+  }, [profileFromProps]);
+
+  useEffect(() => {
+    if (profileFromProps) return;
+    if (!user?.id) return;
+
+    const loadProfile = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('display_name, avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      setProfile({
+        displayName: data?.display_name ?? '',
+        avatarUrl: data?.avatar_url ?? '',
+        emailFallback: user.email ?? '',
+      });
+    };
+
+    loadProfile();
+
+    const channel = supabase
+      .channel('profile-menu-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+        (payload) => {
+          const newRecord = payload.new as { display_name?: string; avatar_url?: string };
+          setProfile((current) => ({
+            ...current,
+            displayName: newRecord.display_name ?? current.displayName,
+            avatarUrl: newRecord.avatar_url ?? current.avatarUrl,
+            emailFallback: user.email ?? current.emailFallback,
+          }));
+        },
+      );
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [profileFromProps, user]);
+
+  const resolvedName = useMemo(() => {
+    return profile.displayName || profile.emailFallback || 'Profile';
+  }, [profile.displayName, profile.emailFallback]);
+
+  const publicAvatarUrl = useMemo(() => {
+    if (!profile.avatarUrl) return '';
+    const { data } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
+    return data.publicUrl;
+  }, [profile.avatarUrl]);
+
+  const initials = useMemo(() => {
+    const source = profile.displayName || profile.emailFallback || 'User';
+    return source
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('');
+  }, [profile.displayName, profile.emailFallback]);
 
   const handleToggle = () => setIsOpen((prev) => !prev);
   const handleSelect = (itemId: string) => {
@@ -38,12 +112,18 @@ function ProfileMenu({ isCollapsed, items }: ProfileMenuProps) {
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
-        <div className="profile-menu__avatar" aria-hidden />
+        <div className="profile-menu__avatar" aria-hidden>
+          {publicAvatarUrl ? (
+            <img src={publicAvatarUrl} alt="Profile avatar" />
+          ) : (
+            <span className="profile-menu__avatar-initials">{initials}</span>
+          )}
+        </div>
         <span
           className={`profile-menu__name ${isCollapsed ? 'profile-menu__name--hidden' : ''}`}
-          title="User Name"
+          title={resolvedName}
         >
-          User Name
+          {resolvedName}
         </span>
       </button>
 

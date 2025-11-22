@@ -1,159 +1,88 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabaseClient';
+
+const themeOptions = [
+  {
+    id: 'system',
+    name: 'System',
+    description: 'Automatically follows your OS preference.',
+  },
+  {
+    id: 'light',
+    name: 'Light',
+    description: 'Bright backgrounds and strong contrast.',
+  },
+  {
+    id: 'dark',
+    name: 'Dark',
+    description: 'Low-glare palette for late sessions.',
+  },
+];
 
 function SettingsAppearancePage() {
+  const { user } = useAuth();
   const [theme, setTheme] = useState('system');
-  const [accent, setAccent] = useState('indigo');
-  const [density, setDensity] = useState('comfortable');
+  const [status, setStatus] = useState<string | null>(null);
 
-  const themes = [
-    {
-      id: 'light',
-      name: 'Light',
-      description: 'Bright background with crisp contrast.',
-      swatches: ['#f8fafc', '#e2e8f0', '#0f172a'],
-    },
-    {
-      id: 'dark',
-      name: 'Dark',
-      description: 'Low glare palette for late nights.',
-      swatches: ['#0f172a', '#1e293b', '#e2e8f0'],
-    },
-    {
-      id: 'system',
-      name: 'Follow system',
-      description: 'Match your operating system preference.',
-      swatches: ['#cbd5e1', '#e2e8f0', '#0f172a'],
-    },
-  ];
+  useEffect(() => {
+    if (!user?.id) return;
 
-  const accentOptions = [
-    { id: 'indigo', label: 'Indigo', swatch: '#4f46e5' },
-    { id: 'emerald', label: 'Emerald', swatch: '#059669' },
-    { id: 'amber', label: 'Amber', swatch: '#f59e0b' },
-    { id: 'rose', label: 'Rose', swatch: '#e11d48' },
-  ];
+    const loadTheme = async () => {
+      const { data } = await supabase.from('profiles').select('theme_preference').eq('id', user.id).single();
+      if (data?.theme_preference) {
+        setTheme(data.theme_preference);
+        applyTheme(data.theme_preference);
+      }
+    };
+
+    loadTheme();
+  }, [user]);
+
+  const applyTheme = (value: string) => {
+    document.documentElement.dataset.theme = value;
+  };
+
+  const handleSelect = async (value: string) => {
+    setTheme(value);
+    applyTheme(value);
+    if (!user?.id) return;
+    const { error } = await supabase.from('profiles').upsert({ id: user.id, theme_preference: value });
+    setStatus(error ? error.message : 'Theme saved');
+  };
 
   return (
     <div className="settings-panel__content">
-      <h2>Appearance</h2>
-      <p>
-        Control how the interface looks and feels. Preview themes, choose accent colors, and decide the
-        density that keeps you most comfortable.
-      </p>
+      <h2>Themes</h2>
+      <p>Choose how the interface looks. Changes apply instantly and are stored with your profile.</p>
 
       <div className="settings-card">
         <div className="settings-card__header">
           <div>
             <h3>Theme</h3>
-            <p>Pick the mode you want to use across the app. Each option includes a quick preview.</p>
+            <p>System respects your OS, while Light and Dark force a preference.</p>
           </div>
           <span className="settings-card__meta">Live preview</span>
         </div>
 
-        <div className="settings-card__grid">
-          {themes.map((option) => (
-            <label
+        <div className="theme-grid">
+          {themeOptions.map((option) => (
+            <button
               key={option.id}
-              className={`settings-choice ${theme === option.id ? 'settings-choice--active' : ''}`}
+              type="button"
+              className={`theme-card ${theme === option.id ? 'theme-card--active' : ''}`}
+              onClick={() => handleSelect(option.id)}
             >
-              <input
-                type="radio"
-                name="theme"
-                value={option.id}
-                checked={theme === option.id}
-                onChange={(event) => setTheme(event.target.value)}
-              />
-              <div className="settings-choice__preview">
-                {option.swatches.map((swatch) => (
-                  <span key={swatch} className="settings-choice__swatch" style={{ backgroundColor: swatch }} />
-                ))}
+              <div className="theme-card__preview" data-theme={option.id} />
+              <div className="theme-card__body">
+                <div className="theme-card__title">{option.name}</div>
+                <p className="theme-card__description">{option.description}</p>
               </div>
-              <div className="settings-choice__body">
-                <div className="settings-choice__label">{option.name}</div>
-                <p className="settings-choice__description">{option.description}</p>
-              </div>
-            </label>
+            </button>
           ))}
         </div>
-      </div>
 
-      <div className="settings-card">
-        <div className="settings-card__header">
-          <div>
-            <h3>Accent color</h3>
-            <p>Choose the accent used for buttons, sliders, and focus states.</p>
-          </div>
-          <span className="settings-card__meta">Applied instantly</span>
-        </div>
-        <div className="settings-accent-options">
-          {accentOptions.map((option) => (
-            <label
-              key={option.id}
-              className={`settings-accent ${accent === option.id ? 'settings-accent--active' : ''}`}
-            >
-              <input
-                type="radio"
-                name="accent"
-                value={option.id}
-                checked={accent === option.id}
-                onChange={(event) => setAccent(event.target.value)}
-              />
-              <span className="settings-accent__swatch" style={{ backgroundColor: option.swatch }} />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="settings-card">
-        <div className="settings-card__header">
-          <div>
-            <h3>Density</h3>
-            <p>Adjust the amount of spacing between items. Perfect for small screens or large monitors.</p>
-          </div>
-          <span className="settings-card__meta">Affects lists and tables</span>
-        </div>
-        <div className="settings-radio-group">
-          <label className={`settings-radio ${density === 'compact' ? 'settings-radio--active' : ''}`}>
-            <input
-              type="radio"
-              name="density"
-              value="compact"
-              checked={density === 'compact'}
-              onChange={(event) => setDensity(event.target.value)}
-            />
-            <div>
-              <div className="settings-radio__label">Compact</div>
-              <p className="settings-radio__description">Tighter spacing so you can see more rows at once.</p>
-            </div>
-          </label>
-          <label className={`settings-radio ${density === 'comfortable' ? 'settings-radio--active' : ''}`}>
-            <input
-              type="radio"
-              name="density"
-              value="comfortable"
-              checked={density === 'comfortable'}
-              onChange={(event) => setDensity(event.target.value)}
-            />
-            <div>
-              <div className="settings-radio__label">Comfortable</div>
-              <p className="settings-radio__description">Balanced padding that matches the rest of the app.</p>
-            </div>
-          </label>
-          <label className={`settings-radio ${density === 'spacious' ? 'settings-radio--active' : ''}`}>
-            <input
-              type="radio"
-              name="density"
-              value="spacious"
-              checked={density === 'spacious'}
-              onChange={(event) => setDensity(event.target.value)}
-            />
-            <div>
-              <div className="settings-radio__label">Spacious</div>
-              <p className="settings-radio__description">Extra breathing room for focus-intensive work.</p>
-            </div>
-          </label>
-        </div>
+        {status ? <p className="settings-field__help">{status}</p> : null}
       </div>
     </div>
   );

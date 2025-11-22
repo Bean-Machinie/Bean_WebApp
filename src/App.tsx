@@ -5,7 +5,6 @@ import SettingsLayout from './pages/settings/SettingsLayout';
 import SettingsNotificationsPage from './pages/settings/SettingsNotificationsPage';
 import SettingsProfilePage from './pages/settings/SettingsProfilePage';
 import SettingsAccountPage from './pages/settings/SettingsAccountPage';
-import SettingsSecurityPage from './pages/settings/SettingsSecurityPage';
 import './App.css';
 
 // App wires global routes: workspaces under /app and account settings under /settings.
@@ -18,7 +17,7 @@ function App() {
         <Route index element={<SettingsProfilePage />} />
         <Route path="profile" element={<SettingsProfilePage />} />
         <Route path="account" element={<SettingsAccountPage />} />
-        <Route path="security" element={<SettingsSecurityPage />} />
+        <Route path="friends" element={<SettingsNotificationsPage />} />
         <Route path="notifications" element={<SettingsNotificationsPage />} />
         <Route path="appearance" element={<SettingsAppearancePage />} />
         <Route path="themes" element={<SettingsAppearancePage />} />
