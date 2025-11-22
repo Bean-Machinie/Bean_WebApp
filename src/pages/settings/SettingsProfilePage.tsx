@@ -89,9 +89,10 @@ function SettingsProfilePage() {
 
     try {
       const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const path = `avatars/${user.id}-${Date.now()}.${extension}`;
+      const fileName = `${user.id}-${Date.now()}.${extension}`;
+      const filePath = `${user.id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, {
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, {
         cacheControl: '0',
         upsert: true,
         contentType: file.type || 'image/jpeg',
@@ -101,12 +102,12 @@ function SettingsProfilePage() {
 
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ avatar_url: path })
+        .update({ avatar_url: filePath })
         .eq('id', user.id);
 
       if (profileError) throw profileError;
 
-      setProfile((current) => ({ ...current, avatarUrl: path }));
+      setProfile((current) => ({ ...current, avatarUrl: filePath }));
       setStatus('Profile picture updated');
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Unable to update profile picture');
