@@ -31,12 +31,8 @@ function SettingsLayout() {
       <div className="settings-layout__shell">
         <header className="settings-layout__header">
           <div>
-            <p className="settings-layout__eyebrow">Settings</p>
-            <h1>Manage your account</h1>
+            <p className="settings-layout__eyebrow">Settings Center</p>
           </div>
-          <p className="settings-layout__lede">
-            Configure your profile, security, notifications, and appearance from one place.
-          </p>
         </header>
 
         <div className="settings-layout__body">
