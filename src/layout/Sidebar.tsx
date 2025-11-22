@@ -58,12 +58,7 @@ function Sidebar({
 
       <div className="sidebar__spacer" aria-hidden />
 
-      <ProfileMenu
-        isCollapsed={isCollapsed}
-        items={profileMenuItems}
-        activeItemId={activeWorkspaceId}
-        onSelect={onSelectWorkspace}
-      />
+      <ProfileMenu isCollapsed={isCollapsed} items={profileMenuItems} />
     </aside>
   );
 }
