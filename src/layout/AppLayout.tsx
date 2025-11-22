@@ -89,11 +89,9 @@ function AppLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(workspaces[0]?.id);
 
-  const allDestinations = useMemo(() => [...workspaces, ...profileMenuItems], []);
-
   const activeWorkspace = useMemo(
-    () => allDestinations.find((workspace) => workspace.id === activeWorkspaceId),
-    [allDestinations, activeWorkspaceId],
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    [activeWorkspaceId],
   );
 
   return (

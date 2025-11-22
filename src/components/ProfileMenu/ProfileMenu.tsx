@@ -1,4 +1,5 @@
 import { ReactNode, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 type ProfileMenuItem = {
   id: string;
@@ -9,18 +10,23 @@ type ProfileMenuItem = {
 type ProfileMenuProps = {
   isCollapsed: boolean;
   items: ProfileMenuItem[];
-  activeItemId?: string;
-  onSelect: (itemId: string) => void;
 };
 
 // ProfileMenu renders the avatar row and its upward dropdown.
 // Replace `User Name` and the circle avatar with real profile data when available.
-function ProfileMenu({ isCollapsed, items, activeItemId, onSelect }: ProfileMenuProps) {
+function ProfileMenu({ isCollapsed, items }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
 
   const handleToggle = () => setIsOpen((prev) => !prev);
   const handleSelect = (itemId: string) => {
-    onSelect(itemId);
+    const destinations: Record<string, string> = {
+      profile: '/settings/profile',
+      themes: '/settings/appearance',
+      settings: '/settings',
+    };
+
+    navigate(destinations[itemId] ?? '/settings');
     setIsOpen(false);
   };
 
@@ -43,19 +49,13 @@ function ProfileMenu({ isCollapsed, items, activeItemId, onSelect }: ProfileMenu
 
       <ul className={`profile-menu__dropdown ${isOpen ? 'profile-menu__dropdown--open' : ''}`} role="menu">
         {items.map((item) => {
-          const isActive = item.id === activeItemId;
           return (
             <li key={item.id} role="menuitem">
-              <button
-                className={`profile-menu__item ${isActive ? 'profile-menu__item--active' : ''}`}
-                onClick={() => handleSelect(item.id)}
-              >
+              <button className="profile-menu__item" onClick={() => handleSelect(item.id)}>
                 <span className="profile-menu__item-icon" aria-hidden>
                   {item.icon}
                 </span>
-                <span className="profile-menu__item-label">
-                  {item.title}
-                </span>
+                <span className="profile-menu__item-label">{item.title}</span>
               </button>
             </li>
           );

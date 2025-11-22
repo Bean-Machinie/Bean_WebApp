@@ -305,3 +305,128 @@
   max-width: 0;
 }
 
+
+/* Settings layout */
+.settings-layout {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+.settings-layout__shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-layout__header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-layout__header h1 {
+  margin: 0;
+  font-size: 1.9rem;
+}
+
+.settings-layout__eyebrow {
+  margin: 0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.settings-layout__lede {
+  margin: 0;
+  color: #475569;
+  max-width: 720px;
+}
+
+.settings-layout__body {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+}
+
+.settings-nav {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-nav__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  color: #0f172a;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.settings-nav__item:hover {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+}
+
+.settings-nav__item--active {
+  background: #1d4ed8;
+  color: #f8fafc;
+  border-color: #1d4ed8;
+}
+
+.settings-nav__label {
+  font-weight: 700;
+}
+
+.settings-nav__description {
+  color: inherit;
+  opacity: 0.8;
+  font-size: 0.95rem;
+}
+
+.settings-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  background: #fff;
+  min-height: 280px;
+}
+
+.settings-panel__content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-panel__content h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.settings-panel__content p {
+  margin: 0;
+  color: #475569;
+}
+
+@media (max-width: 960px) {
+  .settings-layout__body {
+    grid-template-columns: 1fr;
+  }
+}
