@@ -25,6 +25,7 @@ function SettingsProfilePage() {
     timezoneValue: detectedTimezone,
     avatarUrl: '',
   });
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -56,10 +57,35 @@ function SettingsProfilePage() {
     loadProfile();
   }, [detectedTimezone, user]);
 
-  const publicAvatarUrl = useMemo(() => {
-    if (!profile.avatarUrl) return '';
-    const { data } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
-    return data.publicUrl;
+  useEffect(() => {
+    let isActive = true;
+
+    const resolveAvatarUrl = async () => {
+      if (!profile.avatarUrl) {
+        setResolvedAvatarUrl('');
+        return;
+      }
+
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('avatars')
+        .createSignedUrl(profile.avatarUrl, 60 * 60 * 24 * 7);
+
+      if (isActive && signedData?.signedUrl && !signedError) {
+        setResolvedAvatarUrl(signedData.signedUrl);
+        return;
+      }
+
+      const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
+      if (isActive) {
+        setResolvedAvatarUrl(publicData.publicUrl ?? '');
+      }
+    };
+
+    resolveAvatarUrl();
+
+    return () => {
+      isActive = false;
+    };
   }, [profile.avatarUrl]);
 
   const resolvedName = profile.displayName || user?.email || 'Profile';
@@ -156,7 +182,7 @@ function SettingsProfilePage() {
           onClick={() => fileInputRef.current?.click()}
           aria-busy={isUploadingAvatar}
         >
-          {publicAvatarUrl ? <img src={publicAvatarUrl} alt="Profile avatar" /> : <span>{initials}</span>}
+          {resolvedAvatarUrl ? <img src={resolvedAvatarUrl} alt="Profile avatar" /> : <span>{initials}</span>}
           <div className="settings-profile__avatar-overlay">
             {isUploadingAvatar ? 'Uploading…' : 'Change profile picture'}
           </div>
