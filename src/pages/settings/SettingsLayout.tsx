@@ -1,27 +1,24 @@
 import { NavLink, Outlet } from 'react-router-dom';
 
-export type SettingsSectionId = 'profile' | 'account' | 'security' | 'notifications' | 'appearance';
+export type SettingsSectionId = 'profile' | 'account' | 'friends' | 'notifications' | 'appearance';
 
-const settingsSections: { id: SettingsSectionId; label: string; description: string }[] = [
+const groupedSections: { heading?: string; sections: { id: SettingsSectionId; label: string }[] }[] = [
   {
-    id: 'profile',
-    label: 'Profile',
+    sections: [
+      { id: 'profile', label: 'Profile' },
+      { id: 'account', label: 'Account' },
+    ],
   },
   {
-    id: 'account',
-    label: 'Account',
+    heading: 'Access',
+    sections: [
+      { id: 'friends', label: 'Friends' },
+      { id: 'notifications', label: 'Notifications' },
+    ],
   },
   {
-    id: 'security',
-    label: 'Security',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-  },
-  {
-    id: 'appearance',
-    label: 'Appearance',
+    heading: 'Appearance',
+    sections: [{ id: 'appearance', label: 'Themes' }],
   },
 ];
 
@@ -35,20 +32,29 @@ function SettingsLayout() {
           </div>
         </header>
 
-        <div className="settings-layout__body">
-          <nav className="settings-nav" aria-label="Settings sections">
-            {settingsSections.map((section) => (
-              <NavLink
-                key={section.id}
-                to={section.id}
-                replace
-                className={({ isActive }) => `settings-nav__item ${isActive ? 'settings-nav__item--active' : ''}`}
-              >
-                <span className="settings-nav__label">{section.label}</span>
-                <span className="settings-nav__description">{section.description}</span>
-              </NavLink>
-            ))}
-          </nav>
+      <div className="settings-layout__body">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {groupedSections.map((group, index) => (
+            <div key={group.heading ?? `group-${index}`} className="settings-nav__group">
+              {group.heading ? <p className="settings-nav__group-title">{group.heading}</p> : null}
+              <div className="settings-nav__list">
+                {group.sections.map((section) => (
+                  <NavLink
+                    key={section.id}
+                    to={section.id}
+                    replace
+                    className={({ isActive }) =>
+                      `settings-nav__item ${isActive ? 'settings-nav__item--active' : ''}`
+                    }
+                  >
+                    <span className="settings-nav__label">{section.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+              {index < groupedSections.length - 1 ? <div className="settings-nav__divider" aria-hidden /> : null}
+            </div>
+          ))}
+        </nav>
 
           <section className="settings-panel" aria-live="polite">
             <Outlet />
