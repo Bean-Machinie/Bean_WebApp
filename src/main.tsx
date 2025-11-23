@@ -5,6 +5,7 @@ import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ProfileProvider } from './context/ProfileContext';
 import { ThemeProvider } from './theme/ThemeProvider';
+import 'antd/dist/reset.css';
 import './styles/themes.css';
 import './index.css';
 
