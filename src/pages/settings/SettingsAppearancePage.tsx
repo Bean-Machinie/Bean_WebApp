@@ -1,54 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabaseClient';
-
-const themeOptions = [
-  {
-    id: 'system',
-    name: 'System',
-    description: 'Automatically follows your OS preference.',
-  },
-  {
-    id: 'light',
-    name: 'Light',
-    description: 'Bright backgrounds and strong contrast.',
-  },
-  {
-    id: 'dark',
-    name: 'Dark',
-    description: 'Low-glare palette for late sessions.',
-  },
-];
+import { useTheme } from '../../theme/ThemeProvider';
+import { themeOptions, type ThemeId } from '../../theme/themeList';
 
 function SettingsAppearancePage() {
-  const { user } = useAuth();
-  const [theme, setTheme] = useState('system');
-  const [status, setStatus] = useState<string | null>(null);
+  const { theme, setThemePreference, status } = useTheme();
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.id) return;
+    setMessage(status);
+  }, [status]);
 
-    const loadTheme = async () => {
-      const { data } = await supabase.from('profiles').select('theme_preference').eq('id', user.id).single();
-      if (data?.theme_preference) {
-        setTheme(data.theme_preference);
-        applyTheme(data.theme_preference);
-      }
-    };
-
-    loadTheme();
-  }, [user]);
-
-  const applyTheme = (value: string) => {
-    document.documentElement.dataset.theme = value;
-  };
-
-  const handleSelect = async (value: string) => {
-    setTheme(value);
-    applyTheme(value);
-    if (!user?.id) return;
-    const { error } = await supabase.from('profiles').upsert({ id: user.id, theme_preference: value });
-    setStatus(error ? error.message : 'Theme saved');
+  const handleSelect = async (value: ThemeId) => {
+    setMessage(null);
+    await setThemePreference(value);
   };
 
   return (
@@ -81,7 +45,7 @@ function SettingsAppearancePage() {
           ))}
         </div>
 
-        {status ? <p className="settings-field__help">{status}</p> : null}
+        {message ? <p className="settings-field__help">{message}</p> : null}
       </div>
     </div>
   );
