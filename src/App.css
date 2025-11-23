@@ -353,6 +353,25 @@
   max-width: 0;
 }
 
+.profile-menu__separator {
+  height: 1px;
+  background: #1f2937;
+  margin: 6px 4px 4px 4px;
+  border-radius: 999px;
+  opacity: 0.7;
+}
+
+.profile-menu__item--danger {
+  color: #fca5a5;
+  border-color: #1e293b;
+}
+
+.profile-menu__item--danger:hover {
+  background: #2f1515;
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
 
 /* Settings layout */
 .settings-layout {

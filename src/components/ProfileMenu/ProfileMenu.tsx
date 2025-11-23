@@ -25,7 +25,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
   const [isProfileLoading, setIsProfileLoading] = useState(!profileFromProps);
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     if (profileFromProps) {
@@ -139,6 +139,31 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
     setIsOpen(false);
   };
 
+  const handleLogout = async () => {
+    setIsOpen(false);
+    await signOut();
+    navigate('/login');
+  };
+
+  const logoutIcon = (
+    <svg width="20px" height="20px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M15 16.5V19C15 20.1046 14.1046 21 13 21H6C4.89543 21 4 20.1046 4 19V5C4 3.89543 4.89543 3 6 3H13C14.1046 3 15 3.89543 15 5V8.0625"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11 12H21M21 12L18.5 9.5M21 12L18.5 14.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
   return (
     <div className="profile-menu">
       <button
@@ -180,6 +205,17 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
             </li>
           );
         })}
+
+        <li className="profile-menu__separator" aria-hidden />
+
+        <li role="menuitem">
+          <button className="profile-menu__item profile-menu__item--danger" onClick={handleLogout}>
+            <span className="profile-menu__item-icon" aria-hidden>
+              {logoutIcon}
+            </span>
+            <span className="profile-menu__item-label">Log out</span>
+          </button>
+        </li>
       </ul>
     </div>
   );
