@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
-import { ProfileProvider } from './context/ProfileContext';
 import './index.css';
 
 // Root entry: set up providers and routing for the whole app.
@@ -11,9 +10,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <ProfileProvider>
-          <App />
-        </ProfileProvider>
+        <App />
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
