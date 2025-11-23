@@ -1,4 +1,3 @@
-import MyProjectsWorkspace from '../workspaces/MyProjectsWorkspace';
 import { Workspace } from './AppLayout';
 
 type WorkspaceAreaProps = {
@@ -7,23 +6,6 @@ type WorkspaceAreaProps = {
 
 // Replace the placeholder content below with routed pages, editors, or other workspace UIs.
 function WorkspaceArea({ activeWorkspace }: WorkspaceAreaProps) {
-  const renderWorkspace = () => {
-    if (!activeWorkspace) {
-      return <p>Choose a workspace from the sidebar to get started.</p>;
-    }
-
-    if (activeWorkspace.id === 'my-projects') {
-      return <MyProjectsWorkspace />;
-    }
-
-    return (
-      <p>
-        Page content goes here. Swap this section out for your real feature area for
-        {` ${activeWorkspace.title.toLowerCase()}`}.
-      </p>
-    );
-  };
-
   return (
     <main className="workspace-area">
       <div className="workspace-area__header">
@@ -32,7 +14,11 @@ function WorkspaceArea({ activeWorkspace }: WorkspaceAreaProps) {
       </div>
 
       <div className="workspace-area__body">
-        {renderWorkspace()}
+        <p>
+          {activeWorkspace
+            ? 'Page content goes here. Swap this section out for your real feature area.'
+            : 'Choose a workspace from the sidebar to get started.'}
+        </p>
       </div>
     </main>
   );
