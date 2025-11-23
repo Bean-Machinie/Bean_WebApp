@@ -95,15 +95,6 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
         return;
       }
 
-      if (
-        profile.avatarUrl.startsWith('http') ||
-        profile.avatarUrl.startsWith('data:') ||
-        profile.avatarUrl.startsWith('blob:')
-      ) {
-        setResolvedAvatarUrl(profile.avatarUrl);
-        return;
-      }
-
       const { data: signedData, error: signedError } = await supabase.storage
         .from('avatars')
         .createSignedUrl(profile.avatarUrl, 60 * 60 * 24 * 7);

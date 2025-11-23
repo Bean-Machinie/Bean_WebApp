@@ -4,13 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient';
-import { clearProfileCache } from '../lib/profileCache';
 
 type AuthContextValue = {
   user: User | null;
@@ -28,7 +26,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const previousUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -51,18 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (previousUserIdRef.current && previousUserIdRef.current !== user?.id) {
-      clearProfileCache(previousUserIdRef.current);
-    }
-
-    if (!user?.id) {
-      clearProfileCache();
-    }
-
-    previousUserIdRef.current = user?.id ?? null;
-  }, [user?.id]);
-
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -76,7 +61,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-    clearProfileCache();
   }, []);
 
   const value = useMemo(
