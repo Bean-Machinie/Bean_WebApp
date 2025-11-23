@@ -48,6 +48,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
   });
   const [isProfileLoading, setIsProfileLoading] = useState(!profileFromProps);
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState(() => getCachedAvatarUrl());
+  const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -150,6 +151,10 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
     };
   }, [profile.avatarUrl]);
 
+  useEffect(() => {
+    setIsAvatarLoaded(false);
+  }, [resolvedAvatarUrl]);
+
   const initials = useMemo(() => {
     const source = profile.displayName || profile.emailFallback || 'User';
     return source
@@ -181,14 +186,23 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
         aria-expanded={isOpen}
       >
         <div
-          className={`profile-menu__avatar ${isProfileLoading ? 'profile-menu__avatar--loading' : ''}`}
+          className={`profile-menu__avatar ${
+            isProfileLoading || (resolvedAvatarUrl && !isAvatarLoaded) ? 'profile-menu__avatar--loading' : ''
+          }`}
           aria-hidden
         >
-          {isProfileLoading ? (
+          {resolvedAvatarUrl && (
+            <img
+              src={resolvedAvatarUrl}
+              alt="Profile avatar"
+              onLoad={() => setIsAvatarLoaded(true)}
+              onError={() => setIsAvatarLoaded(false)}
+              style={{ opacity: isAvatarLoaded ? 1 : 0 }}
+            />
+          )}
+          {isProfileLoading || (resolvedAvatarUrl && !isAvatarLoaded) ? (
             <div className="profile-menu__avatar-skeleton" />
-          ) : resolvedAvatarUrl ? (
-            <img src={resolvedAvatarUrl} alt="Profile avatar" />
-          ) : (
+          ) : resolvedAvatarUrl ? null : (
             <span className="profile-menu__avatar-initials">{initials}</span>
           )}
         </div>
