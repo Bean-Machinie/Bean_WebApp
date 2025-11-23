@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { getCachedProfile, updateCachedProfile } from '../../lib/profileCache';
 import { supabase } from '../../lib/supabaseClient';
 
 type ProfileForm = {
@@ -21,22 +22,76 @@ function SettingsProfilePage() {
     avatarUrl: '',
   });
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [, setDisplayNameTimestamp] = useState(0);
+  const [, setAvatarTimestamp] = useState(0);
+  const [avatarSourceTimestamp, setAvatarSourceTimestamp] = useState(0);
+
+  const applyDisplayNameCandidate = useCallback((value: string, candidateTimestamp: number) => {
+    let applied = false;
+    setDisplayNameTimestamp((current) => {
+      if (candidateTimestamp >= current) {
+        applied = true;
+        setProfile((currentProfile) => ({ ...currentProfile, displayName: value }));
+        return candidateTimestamp;
+      }
+      return current;
+    });
+    return applied;
+  }, []);
+
+  const applyAvatarCandidate = useCallback(
+    (value: string, candidateTimestamp: number) => {
+      let applied = false;
+      setAvatarTimestamp((current) => {
+        if (candidateTimestamp >= current) {
+          applied = true;
+          setResolvedAvatarUrl(value);
+          return candidateTimestamp;
+        }
+        return current;
+      });
+      return applied;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!user?.id) {
+      setProfile({
+        displayName: '',
+        bio: '',
+        website: '',
+        socialAccounts: ['', '', ''],
+        avatarUrl: '',
+      });
+      setResolvedAvatarUrl('');
+      setAvatarPreviewUrl('');
+      setAvatarTimestamp(0);
+      setDisplayNameTimestamp(0);
       setIsProfileLoading(false);
       return;
     }
+
+    const cached = getCachedProfile(user.id);
+    if (cached?.displayName) {
+      applyDisplayNameCandidate(cached.displayName, cached.displayNameUpdatedAt ?? 0);
+    }
+    if (cached?.avatarPreviewUrl) {
+      setAvatarPreviewUrl(cached.avatarPreviewUrl);
+      applyAvatarCandidate(cached.avatarPreviewUrl, cached.avatarUpdatedAt ?? 0);
+    }
+    setIsProfileLoading(!cached);
 
     const loadProfile = async () => {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('display_name, bio, website, social_accounts, avatar_url')
+          .select('display_name, bio, website, social_accounts, avatar_url, updated_at')
           .eq('id', user.id)
           .single();
 
@@ -45,28 +100,46 @@ function SettingsProfilePage() {
           .map((account: string) => account.trim())
           .filter(Boolean);
 
+        const serverUpdatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+
         setProfile((current) => ({
           ...current,
-          displayName: data?.display_name ?? '',
           bio: data?.bio ?? '',
           website: data?.website ?? '',
           socialAccounts: [parsedSocialAccounts[0] ?? '', parsedSocialAccounts[1] ?? '', parsedSocialAccounts[2] ?? ''],
           avatarUrl: data?.avatar_url ?? '',
         }));
+
+        const appliedName = applyDisplayNameCandidate(data?.display_name ?? '', serverUpdatedAt);
+        setAvatarSourceTimestamp(serverUpdatedAt);
+
+        if (appliedName) {
+          updateCachedProfile(user.id, { displayName: data?.display_name ?? '' }, serverUpdatedAt);
+        }
       } finally {
         setIsProfileLoading(false);
       }
     };
 
     loadProfile();
-  }, [user]);
+  }, [applyAvatarCandidate, applyDisplayNameCandidate, user]);
 
   useEffect(() => {
     let isActive = true;
 
     const resolveAvatarUrl = async () => {
+      if (
+        profile.avatarUrl &&
+        (profile.avatarUrl.startsWith('http') ||
+          profile.avatarUrl.startsWith('data:') ||
+          profile.avatarUrl.startsWith('blob:'))
+      ) {
+        applyAvatarCandidate(profile.avatarUrl, avatarSourceTimestamp);
+        return;
+      }
+
       if (!profile.avatarUrl) {
-        setResolvedAvatarUrl('');
+        applyAvatarCandidate(avatarPreviewUrl, avatarSourceTimestamp);
         return;
       }
 
@@ -75,13 +148,20 @@ function SettingsProfilePage() {
         .createSignedUrl(profile.avatarUrl, 60 * 60 * 24 * 7);
 
       if (isActive && signedData?.signedUrl && !signedError) {
-        setResolvedAvatarUrl(signedData.signedUrl);
+        const applied = applyAvatarCandidate(signedData.signedUrl, avatarSourceTimestamp);
+        if (applied) {
+          updateCachedProfile(user?.id, { avatarPreviewUrl: signedData.signedUrl }, avatarSourceTimestamp);
+        }
         return;
       }
 
       const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
       if (isActive) {
-        setResolvedAvatarUrl(publicData.publicUrl ?? '');
+        const fallbackUrl = publicData.publicUrl ?? '';
+        const applied = applyAvatarCandidate(fallbackUrl, avatarSourceTimestamp);
+        if (applied) {
+          updateCachedProfile(user?.id, { avatarPreviewUrl: fallbackUrl }, avatarSourceTimestamp);
+        }
       }
     };
 
@@ -90,7 +170,7 @@ function SettingsProfilePage() {
     return () => {
       isActive = false;
     };
-  }, [profile.avatarUrl]);
+  }, [applyAvatarCandidate, avatarPreviewUrl, avatarSourceTimestamp, profile.avatarUrl, user?.id]);
 
   const resolvedName = profile.displayName || user?.email || 'Profile';
   const initials = resolvedName
@@ -103,7 +183,17 @@ function SettingsProfilePage() {
   const updateField = (key: keyof ProfileForm) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
-    setProfile({ ...profile, [key]: event.target.value });
+    const value = event.target.value;
+    if (key === 'displayName' && user?.id) {
+      const timestamp = Date.now();
+      const applied = applyDisplayNameCandidate(value, timestamp);
+      if (applied) {
+        updateCachedProfile(user.id, { displayName: value }, timestamp);
+      }
+      return;
+    }
+
+    setProfile({ ...profile, [key]: value });
   };
 
   const handleSocialAccountChange = (index: number) => (
@@ -123,26 +213,35 @@ function SettingsProfilePage() {
     setIsUploadingAvatar(true);
     setStatus(null);
 
-    try {
-      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${user.id}-${Date.now()}.${extension}`;
-      const filePath = `${user.id}/${fileName}`;
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${user.id}-${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, {
-        cacheControl: '0',
-        upsert: true,
-        contentType: file.type || 'image/jpeg',
+    try {
+      const previewUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
       });
 
-      if (uploadError) throw uploadError;
+      const previewTimestamp = Date.now();
+      setAvatarPreviewUrl(previewUrl);
+      const appliedPreview = applyAvatarCandidate(previewUrl, previewTimestamp);
+      if (appliedPreview) {
+        updateCachedProfile(user.id, { avatarPreviewUrl: previewUrl }, previewTimestamp);
+      }
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: filePath })
-        .eq('id', user.id);
+      const { data, error } = await supabase.storage.from('avatars').upload(filePath, file, {
+        upsert: true,
+        cacheControl: '3600',
+      });
 
-      if (profileError) throw profileError;
+      if (error) throw error;
 
+      const publicUrl = data?.path;
+      if (!publicUrl) throw new Error('Upload failed');
+
+      setAvatarSourceTimestamp(previewTimestamp);
       setProfile((current) => ({ ...current, avatarUrl: filePath }));
       setStatus('Profile picture updated');
     } catch (err) {
