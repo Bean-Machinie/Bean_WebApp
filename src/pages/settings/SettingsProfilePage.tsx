@@ -24,30 +24,38 @@ function SettingsProfilePage() {
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIsProfileLoading(false);
+      return;
+    }
 
     const loadProfile = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, bio, website, social_accounts, avatar_url')
-        .eq('id', user.id)
-        .single();
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('display_name, bio, website, social_accounts, avatar_url')
+          .eq('id', user.id)
+          .single();
 
-      const parsedSocialAccounts = (data?.social_accounts || '')
-        .split('\n')
-        .map((account: string) => account.trim())
-        .filter(Boolean);
+        const parsedSocialAccounts = (data?.social_accounts || '')
+          .split('\n')
+          .map((account: string) => account.trim())
+          .filter(Boolean);
 
-      setProfile((current) => ({
-        ...current,
-        displayName: data?.display_name ?? '',
-        bio: data?.bio ?? '',
-        website: data?.website ?? '',
-        socialAccounts: [parsedSocialAccounts[0] ?? '', parsedSocialAccounts[1] ?? '', parsedSocialAccounts[2] ?? ''],
-        avatarUrl: data?.avatar_url ?? '',
-      }));
+        setProfile((current) => ({
+          ...current,
+          displayName: data?.display_name ?? '',
+          bio: data?.bio ?? '',
+          website: data?.website ?? '',
+          socialAccounts: [parsedSocialAccounts[0] ?? '', parsedSocialAccounts[1] ?? '', parsedSocialAccounts[2] ?? ''],
+          avatarUrl: data?.avatar_url ?? '',
+        }));
+      } finally {
+        setIsProfileLoading(false);
+      }
     };
 
     loadProfile();
@@ -177,14 +185,22 @@ function SettingsProfilePage() {
 
       <div className="settings-profile__header">
         <div
-          className="settings-profile__avatar"
+          className={`settings-profile__avatar ${isProfileLoading ? 'settings-profile__avatar--loading' : ''}`}
           onClick={() => fileInputRef.current?.click()}
           aria-busy={isUploadingAvatar}
         >
-          {resolvedAvatarUrl ? <img src={resolvedAvatarUrl} alt="Profile avatar" /> : <span>{initials}</span>}
-          <div className="settings-profile__avatar-overlay">
-            {isUploadingAvatar ? 'Uploading…' : 'Change profile picture'}
-          </div>
+          {isProfileLoading ? (
+            <div className="settings-profile__avatar-skeleton" />
+          ) : resolvedAvatarUrl ? (
+            <img src={resolvedAvatarUrl} alt="Profile avatar" />
+          ) : (
+            <span>{initials}</span>
+          )}
+          {!isProfileLoading && (
+            <div className="settings-profile__avatar-overlay">
+              {isUploadingAvatar ? 'Uploading…' : 'Change profile picture'}
+            </div>
+          )}
         </div>
         <input
           ref={fileInputRef}
@@ -194,8 +210,17 @@ function SettingsProfilePage() {
           onChange={handleAvatarChange}
         />
         <div className="settings-profile__identity">
-          <h3>{resolvedName}</h3>
-          <p>{profile.bio || 'Because even heroes need a profile.'}</p>
+          {isProfileLoading ? (
+            <>
+              <div className="settings-profile__name-skeleton" />
+              <div className="settings-profile__bio-skeleton" />
+            </>
+          ) : (
+            <>
+              <h3>{resolvedName}</h3>
+              <p>{profile.bio || 'Because even heroes need a profile.'}</p>
+            </>
+          )}
         </div>
       </div>
 

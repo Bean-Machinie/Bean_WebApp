@@ -22,6 +22,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
     avatarUrl: '',
     emailFallback: '',
   });
+  const [isProfileLoading, setIsProfileLoading] = useState(!profileFromProps);
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -29,25 +30,33 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
   useEffect(() => {
     if (profileFromProps) {
       setProfile(profileFromProps);
+      setIsProfileLoading(false);
     }
   }, [profileFromProps]);
 
   useEffect(() => {
     if (profileFromProps) return;
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIsProfileLoading(false);
+      return;
+    }
 
     const loadProfile = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, avatar_url')
-        .eq('id', user.id)
-        .single();
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('display_name, avatar_url')
+          .eq('id', user.id)
+          .single();
 
-      setProfile({
-        displayName: data?.display_name ?? '',
-        avatarUrl: data?.avatar_url ?? '',
-        emailFallback: user.email ?? '',
-      });
+        setProfile({
+          displayName: data?.display_name ?? '',
+          avatarUrl: data?.avatar_url ?? '',
+          emailFallback: user.email ?? '',
+        });
+      } finally {
+        setIsProfileLoading(false);
+      }
     };
 
     loadProfile();
@@ -138,8 +147,13 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
-        <div className="profile-menu__avatar" aria-hidden>
-          {resolvedAvatarUrl ? (
+        <div
+          className={`profile-menu__avatar ${isProfileLoading ? 'profile-menu__avatar--loading' : ''}`}
+          aria-hidden
+        >
+          {isProfileLoading ? (
+            <div className="profile-menu__avatar-skeleton" />
+          ) : resolvedAvatarUrl ? (
             <img src={resolvedAvatarUrl} alt="Profile avatar" />
           ) : (
             <span className="profile-menu__avatar-initials">{initials}</span>
@@ -149,7 +163,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
           className={`profile-menu__name ${isCollapsed ? 'profile-menu__name--hidden' : ''}`}
           title={resolvedName}
         >
-          {resolvedName}
+          {isProfileLoading ? <span className="profile-menu__name-skeleton" /> : resolvedName}
         </span>
       </button>
 
