@@ -6,7 +6,6 @@ import PlaygroundIcon from '../icons/PlaygroundIcon';
 import {
   StaggeredMenu,
   type StaggeredMenuItem,
-  type StaggeredMenuSocialItem,
 } from '../components/StaggeredMenu/StaggeredMenu';
 import Sidebar from './Sidebar';
 import WorkspaceArea from './WorkspaceArea';
@@ -68,37 +67,22 @@ function AppLayout() {
   );
 
   const actionMenuItems = useMemo<StaggeredMenuItem[]>(
-    () => [
-      ...workspaces.map((workspace) => ({
+    () =>
+      workspaces.map((workspace) => ({
         label: workspace.title,
         ariaLabel: `Switch to ${workspace.title}`,
         link: `/app#${workspace.id}`,
         onSelect: () => setActiveWorkspaceId(workspace.id),
       })),
-      { label: 'Profile', ariaLabel: 'View your profile settings', link: '/settings/profile' },
-      { label: 'Themes', ariaLabel: 'Open appearance settings', link: '/settings/appearance' },
-      { label: 'Account', ariaLabel: 'Manage account settings', link: '/settings/account' },
-    ],
     [setActiveWorkspaceId],
-  );
-
-  const socialItems = useMemo<StaggeredMenuSocialItem[]>(
-    () => [
-      { label: 'GitHub', link: 'https://github.com/Bean-Machinie/Bean_WebApp' },
-      { label: 'Docs', link: 'https://supabase.com/docs' },
-      { label: 'Community', link: 'https://discord.com/invite/supabase' },
-    ],
-    [],
   );
 
   return (
     <div className="app-layout">
       <StaggeredMenu
         className="app-action-menu"
-        position="right"
+        position="left"
         items={actionMenuItems}
-        socialItems={socialItems}
-        displaySocials
         displayItemNumbering
         logoUrl={reactLogo}
         colors={['#0e111a', '#161927', '#1f2131']}

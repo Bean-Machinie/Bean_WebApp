@@ -11,9 +11,13 @@
   padding: 24px;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   pointer-events: none;
   z-index: 40;
+}
+
+.staggered-menu-wrapper.fixed-wrapper[data-position='right'] {
+  align-items: flex-end;
 }
 
 .staggered-menu-header {
