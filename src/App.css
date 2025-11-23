@@ -637,6 +637,12 @@
   gap: 12px;
 }
 
+.settings-divider {
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 4px 0 8px;
+}
+
 .settings-toggle {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -670,6 +676,15 @@
   color: #0f172a;
 }
 
+.settings-field--inline {
+  flex-direction: row;
+  align-items: center;
+}
+
+.settings-field--inline input {
+  flex: 1;
+}
+
 .settings-field input,
 .settings-field textarea,
 .settings-field select {
@@ -690,6 +705,32 @@
   color: #475569;
   font-weight: 150;
   font-size: 0.85rem;
+}
+
+.settings-social {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-social__title {
+  font-weight: 700;
+}
+
+.settings-social__list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-social__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
 }
 
 .settings-integration-list {
