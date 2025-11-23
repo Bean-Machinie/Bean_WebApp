@@ -1,4 +1,12 @@
-export type ThemeId = 'system' | 'light' | 'dark' | 'ocean' | 'forest' | 'neon' | 'sunset';
+export type ThemeId =
+  | 'system'
+  | 'light'
+  | 'dark'
+  | 'ink-wash'
+  | 'jade-pebble'
+  | 'urban-slate'
+  | 'sorbet'
+  | 'yacht-club';
 
 export type ThemeOption = {
   id: ThemeId;
@@ -15,7 +23,7 @@ export const themeOptions: ThemeOption[] = [
   {
     id: 'light',
     name: 'Light',
-    description: 'Bright backgrounds and strong contrast.',
+    description: 'Bright, crisp default palette.',
   },
   {
     id: 'dark',
@@ -23,23 +31,28 @@ export const themeOptions: ThemeOption[] = [
     description: 'Low-glare palette for late sessions.',
   },
   {
-    id: 'ocean',
-    name: 'Ocean',
-    description: 'Reserved for future rolling waves of blue.',
+    id: 'ink-wash',
+    name: 'Ink Wash',
+    description: 'Graphite neutrals inspired by monochrome ink.',
   },
   {
-    id: 'forest',
-    name: 'Forest',
-    description: 'Reserved for earthy, woodland-inspired greens.',
+    id: 'jade-pebble',
+    name: 'Jade Pebble Morning',
+    description: 'Soft greens and stone neutrals.',
   },
   {
-    id: 'neon',
-    name: 'Neon',
-    description: 'Reserved for a vivid high-contrast glow.',
+    id: 'urban-slate',
+    name: 'Urban Slate',
+    description: 'Warm grays with steel blue accents.',
   },
   {
-    id: 'sunset',
-    name: 'Sunset',
-    description: 'Reserved for warm, radiant dusk tones.',
+    id: 'sorbet',
+    name: 'Sorbet',
+    description: 'Pastel citrus and berry tones.',
+  },
+  {
+    id: 'yacht-club',
+    name: 'Yacht Club',
+    description: 'Nautical copper and deep teal highlights.',
   },
 ];
