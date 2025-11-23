@@ -1,9 +1,8 @@
 import { ReactNode, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
 import MyProjectsIcon from '../icons/MyProjectsIcon';
 import NewProjectIcon from '../icons/NewProjectIcon';
 import PlaygroundIcon from '../icons/PlaygroundIcon';
-import ActionMenu from '../components/ActionMenu/ActionMenu';
+import Sidebar from './Sidebar';
 import WorkspaceArea from './WorkspaceArea';
 
 export type Workspace = {
@@ -11,18 +10,15 @@ export type Workspace = {
   title: string;
   icon: ReactNode;
   source?: 'workspace' | 'profile';
-  path?: string;
 };
-
-type MenuWorkspace = Workspace & { path: string };
 
 // AppLayout owns the overall UI shell: sidebar state + active workspace/profile page.
 // Extend the `workspaces` and `profileMenuItems` arrays to surface more destinations.
 // Edit the workspaces array to surface new destinations in the middle of the sidebar.
-const workspaces: MenuWorkspace[] = [
-  { id: 'new-project', title: 'New Project', icon: <NewProjectIcon />, source: 'workspace', path: '/app/new' },
-  { id: 'my-projects', title: 'My Projects', icon: <MyProjectsIcon />, source: 'workspace', path: '/app/projects' },
-  { id: 'playground', title: 'Playground', icon: <PlaygroundIcon />, source: 'workspace', path: '/app/playground' },
+const workspaces: Workspace[] = [
+  { id: 'my-projects', title: 'My Projects', icon: <MyProjectsIcon />, source: 'workspace' },
+  { id: 'new-project', title: 'New Project', icon: <NewProjectIcon />, source: 'workspace' },
+  { id: 'playground', title: 'Playground', icon: <PlaygroundIcon />, source: 'workspace' },
 ];
 
 const profileIcon = (
@@ -57,20 +53,22 @@ const profileMenuItems: Workspace[] = [
 ];
 
 function AppLayout() {
-  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(workspaces[0]?.id);
+
   const activeWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.path && location.pathname.startsWith(workspace.path)) || workspaces[0],
-    [location.pathname],
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    [activeWorkspaceId],
   );
 
   return (
-    <div className="app-layout" data-collapsed={isCollapsed || undefined}>
-      <ActionMenu
-        items={workspaces}
+    <div className="app-layout">
+      <Sidebar
+        workspaces={workspaces}
         profileMenuItems={profileMenuItems}
         isCollapsed={isCollapsed}
-        activeWorkspaceId={activeWorkspace?.id}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectWorkspace={setActiveWorkspaceId}
         onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
       />
 

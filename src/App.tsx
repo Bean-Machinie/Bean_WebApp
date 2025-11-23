@@ -57,7 +57,7 @@ function App() {
   return (
     <Routes>
       <Route
-        path="/app/*"
+        path="/app"
         element={
           <ProtectedRoute>
             <AppLayout />
