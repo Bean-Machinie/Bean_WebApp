@@ -1,22 +1,12 @@
 import { SVGProps } from 'react';
 
 const NewProjectIcon = (props: SVGProps<SVGSVGElement>) => (
-  <svg
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-    {...props}
-  >
-    <path d="M15 12L12 12M12 12L9 12M12 12L12 9M12 12L12 15" />
-    <path d="M22 12C22 16.714 22 19.0711 20.5355 20.5355C19.0711 22 16.714 22 12 22C7.28595 22 4.92893 22 3.46447 20.5355C2 19.0711 2 16.714 2 12C2 7.28595 2 4.92893 3.46447 3.46447C4.92893 2 7.28595 2 12 2C16.714 2 19.0711 2 20.5355 3.46447C21.5093 4.43821 21.8356 5.80655 21.9449 8" />
-  </svg>
+  <svg width="24px" height="24px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3 6C3 4.34315 4.34315 3 6 3H14C15.6569 3 17 4.34315 17 6V14C17 15.6569 15.6569 17 14 17H6C4.34315 17 3 15.6569 3 14V6Z" stroke="#ffffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M21 7V18C21 19.6569 19.6569 21 18 21H7" stroke="#ffffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M10 10V7M10 10V13M10 10H13M10 10H7" stroke="#ffffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
 );
 
 export default NewProjectIcon;
+
