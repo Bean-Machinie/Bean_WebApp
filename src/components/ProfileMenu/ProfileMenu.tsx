@@ -1,7 +1,6 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabaseClient';
+import { useProfile } from '../../context/ProfileContext';
 
 type ProfileMenuItem = {
   id: string;
@@ -12,111 +11,30 @@ type ProfileMenuItem = {
 type ProfileMenuProps = {
   isCollapsed: boolean;
   items: ProfileMenuItem[];
-  profile?: { displayName: string; avatarUrl: string; emailFallback: string };
 };
 
-function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileMenuProps) {
+function ProfileMenu({ isCollapsed, items }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [profile, setProfile] = useState({
-    displayName: '',
-    avatarUrl: '',
-    emailFallback: '',
-  });
-  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
   const navigate = useNavigate();
-  const { user } = useAuth();
-
-  useEffect(() => {
-    if (profileFromProps) {
-      setProfile(profileFromProps);
-    }
-  }, [profileFromProps]);
-
-  useEffect(() => {
-    if (profileFromProps) return;
-    if (!user?.id) return;
-
-    const loadProfile = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, avatar_url')
-        .eq('id', user.id)
-        .single();
-
-      setProfile({
-        displayName: data?.display_name ?? '',
-        avatarUrl: data?.avatar_url ?? '',
-        emailFallback: user.email ?? '',
-      });
-    };
-
-    loadProfile();
-
-    const channel = supabase
-      .channel('profile-menu-updates')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
-        (payload) => {
-          const newRecord = payload.new as { display_name?: string; avatar_url?: string };
-          setProfile((current) => ({
-            ...current,
-            displayName: newRecord.display_name ?? current.displayName,
-            avatarUrl: newRecord.avatar_url ?? current.avatarUrl,
-            emailFallback: user.email ?? current.emailFallback,
-          }));
-        },
-      );
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [profileFromProps, user]);
+  const { profile, loading, resolvedAvatarUrl, avatarLoading } = useProfile();
 
   const resolvedName = useMemo(() => {
-    return profile.displayName || profile.emailFallback || 'Profile';
-  }, [profile.displayName, profile.emailFallback]);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const resolveAvatarUrl = async () => {
-      if (!profile.avatarUrl) {
-        setResolvedAvatarUrl('');
-        return;
-      }
-
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(profile.avatarUrl, 60 * 60 * 24 * 7);
-
-      if (isActive && signedData?.signedUrl && !signedError) {
-        setResolvedAvatarUrl(signedData.signedUrl);
-        return;
-      }
-
-      const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
-      if (isActive) {
-        setResolvedAvatarUrl(publicData.publicUrl ?? '');
-      }
-    };
-
-    resolveAvatarUrl();
-
-    return () => {
-      isActive = false;
-    };
-  }, [profile.avatarUrl]);
+    return profile?.displayName || profile?.emailFallback || 'Profile';
+  }, [profile?.displayName, profile?.emailFallback]);
 
   const initials = useMemo(() => {
-    const source = profile.displayName || profile.emailFallback || 'User';
+    const source = resolvedName || 'User';
     return source
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase())
       .join('');
-  }, [profile.displayName, profile.emailFallback]);
+  }, [resolvedName]);
+
+  const isProfileHydrating = loading && (!profile || (!profile.displayName && !profile.avatarUrl));
+  const showAvatarSkeleton = isProfileHydrating || (avatarLoading && !!profile?.avatarUrl);
+  const showNameSkeleton = isProfileHydrating;
 
   const handleToggle = () => setIsOpen((prev) => !prev);
   const handleSelect = (itemId: string) => {
@@ -139,7 +57,9 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
         aria-expanded={isOpen}
       >
         <div className="profile-menu__avatar" aria-hidden>
-          {resolvedAvatarUrl ? (
+          {showAvatarSkeleton ? (
+            <span className="skeleton skeleton--circle skeleton--avatar-sm" />
+          ) : resolvedAvatarUrl ? (
             <img src={resolvedAvatarUrl} alt="Profile avatar" />
           ) : (
             <span className="profile-menu__avatar-initials">{initials}</span>
@@ -149,7 +69,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
           className={`profile-menu__name ${isCollapsed ? 'profile-menu__name--hidden' : ''}`}
           title={resolvedName}
         >
-          {resolvedName}
+          {showNameSkeleton ? <span className="skeleton skeleton--text skeleton--name" /> : resolvedName}
         </span>
       </button>
 
