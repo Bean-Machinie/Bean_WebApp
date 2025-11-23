@@ -16,8 +16,8 @@ export type Workspace = {
 // Extend the `workspaces` and `profileMenuItems` arrays to surface more destinations.
 // Edit the workspaces array to surface new destinations in the middle of the sidebar.
 const workspaces: Workspace[] = [
-  { id: 'my-projects', title: 'My Projects', icon: <MyProjectsIcon />, source: 'workspace' },
   { id: 'new-project', title: 'New Project', icon: <NewProjectIcon />, source: 'workspace' },
+  { id: 'my-projects', title: 'My Projects', icon: <MyProjectsIcon />, source: 'workspace' },
   { id: 'playground', title: 'Playground', icon: <PlaygroundIcon />, source: 'workspace' },
 ];
 
