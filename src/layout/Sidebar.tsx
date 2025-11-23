@@ -1,7 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
 import ProfileMenu from '../components/ProfileMenu/ProfileMenu';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabaseClient';
 import { Workspace } from './AppLayout';
 
 type SidebarProps = {
@@ -21,62 +18,6 @@ function Sidebar({
   onSelectWorkspace,
   onToggleCollapse,
 }: SidebarProps) {
-  const { user } = useAuth();
-  const [profile, setProfile] = useState({
-    displayName: '',
-    avatarUrl: '',
-    emailFallback: '',
-  });
-
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const loadProfile = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, avatar_url, bio, website, social_accounts, timezone_enabled, timezone_value')
-        .eq('id', user.id)
-        .single();
-
-      setProfile({
-        displayName: data?.display_name ?? '',
-        avatarUrl: data?.avatar_url ?? '',
-        emailFallback: user.email ?? '',
-      });
-    };
-
-    loadProfile();
-
-    const channel = supabase
-      .channel('sidebar-profile-updates')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
-        (payload) => {
-          const next = payload.new as { display_name?: string; avatar_url?: string };
-          setProfile((current) => ({
-            ...current,
-            displayName: next.display_name ?? current.displayName,
-            avatarUrl: next.avatar_url ?? current.avatarUrl,
-            emailFallback: user.email ?? current.emailFallback,
-          }));
-        },
-      );
-
-    return () => {
-      channel.unsubscribe();
-    };
-  }, [user]);
-
-  const mergedProfile = useMemo(
-    () => ({
-      displayName: profile.displayName,
-      avatarUrl: profile.avatarUrl,
-      emailFallback: profile.emailFallback,
-    }),
-    [profile],
-  );
-
   return (
     <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
       <button className="sidebar__toggle" onClick={onToggleCollapse}>
@@ -117,7 +58,7 @@ function Sidebar({
 
       <div className="sidebar__spacer" aria-hidden />
 
-      <ProfileMenu isCollapsed={isCollapsed} items={profileMenuItems} profile={mergedProfile} />
+      <ProfileMenu isCollapsed={isCollapsed} items={profileMenuItems} />
     </aside>
   );
 }

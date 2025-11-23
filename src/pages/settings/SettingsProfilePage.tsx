@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import { supabase } from '../../lib/supabaseClient';
 
 type ProfileForm = {
@@ -12,87 +13,33 @@ type ProfileForm = {
 
 function SettingsProfilePage() {
   const { user } = useAuth();
+  const { profile, avatarUrl, isLoading, refreshProfile } = useProfile();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [profile, setProfile] = useState<ProfileForm>({
+  const [profileForm, setProfileForm] = useState<ProfileForm>({
     displayName: '',
     bio: '',
     website: '',
     socialAccounts: ['', '', ''],
     avatarUrl: '',
   });
-  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [isProfileLoading, setIsProfileLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.id) {
-      setIsProfileLoading(false);
-      return;
-    }
+    if (!profile) return;
 
-    const loadProfile = async () => {
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('display_name, bio, website, social_accounts, avatar_url')
-          .eq('id', user.id)
-          .single();
+    setProfileForm({
+      displayName: profile.displayName,
+      bio: profile.bio,
+      website: profile.website,
+      socialAccounts: [...profile.socialAccounts],
+      avatarUrl: profile.avatarUrl,
+    });
+  }, [profile]);
 
-        const parsedSocialAccounts = (data?.social_accounts || '')
-          .split('\n')
-          .map((account: string) => account.trim())
-          .filter(Boolean);
-
-        setProfile((current) => ({
-          ...current,
-          displayName: data?.display_name ?? '',
-          bio: data?.bio ?? '',
-          website: data?.website ?? '',
-          socialAccounts: [parsedSocialAccounts[0] ?? '', parsedSocialAccounts[1] ?? '', parsedSocialAccounts[2] ?? ''],
-          avatarUrl: data?.avatar_url ?? '',
-        }));
-      } finally {
-        setIsProfileLoading(false);
-      }
-    };
-
-    loadProfile();
-  }, [user]);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const resolveAvatarUrl = async () => {
-      if (!profile.avatarUrl) {
-        setResolvedAvatarUrl('');
-        return;
-      }
-
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(profile.avatarUrl, 60 * 60 * 24 * 7);
-
-      if (isActive && signedData?.signedUrl && !signedError) {
-        setResolvedAvatarUrl(signedData.signedUrl);
-        return;
-      }
-
-      const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
-      if (isActive) {
-        setResolvedAvatarUrl(publicData.publicUrl ?? '');
-      }
-    };
-
-    resolveAvatarUrl();
-
-    return () => {
-      isActive = false;
-    };
-  }, [profile.avatarUrl]);
-
-  const resolvedName = profile.displayName || user?.email || 'Profile';
+  const isProfileLoading = isLoading || !profile;
+  const resolvedName = profileForm.displayName || profile?.emailFallback || user?.email || 'Profile';
   const initials = resolvedName
     .split(/\s+/)
     .filter(Boolean)
@@ -103,13 +50,13 @@ function SettingsProfilePage() {
   const updateField = (key: keyof ProfileForm) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
-    setProfile({ ...profile, [key]: event.target.value });
+    setProfileForm({ ...profileForm, [key]: event.target.value });
   };
 
   const handleSocialAccountChange = (index: number) => (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    setProfile((current) => {
+    setProfileForm((current) => {
       const updated = [...current.socialAccounts];
       updated[index] = event.target.value;
       return { ...current, socialAccounts: updated };
@@ -143,8 +90,9 @@ function SettingsProfilePage() {
 
       if (profileError) throw profileError;
 
-      setProfile((current) => ({ ...current, avatarUrl: filePath }));
+      setProfileForm((current) => ({ ...current, avatarUrl: filePath }));
       setStatus('Profile picture updated');
+      await refreshProfile();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Unable to update profile picture');
     } finally {
@@ -161,17 +109,18 @@ function SettingsProfilePage() {
     try {
       const payload = {
         id: user.id,
-        display_name: profile.displayName,
-        bio: profile.bio,
-        website: profile.website,
-        social_accounts: profile.socialAccounts.map((account) => account.trim()).filter(Boolean).join('\n'),
-        avatar_url: profile.avatarUrl ?? null,
+        display_name: profileForm.displayName,
+        bio: profileForm.bio,
+        website: profileForm.website,
+        social_accounts: profileForm.socialAccounts.map((account) => account.trim()).filter(Boolean).join('\n'),
+        avatar_url: profileForm.avatarUrl ?? null,
       };
 
       const { error } = await supabase.from('profiles').upsert(payload);
       if (error) throw error;
 
       setStatus('Profile updated');
+      await refreshProfile();
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Unable to update profile');
     } finally {
@@ -191,8 +140,8 @@ function SettingsProfilePage() {
         >
           {isProfileLoading ? (
             <div className="settings-profile__avatar-skeleton" />
-          ) : resolvedAvatarUrl ? (
-            <img src={resolvedAvatarUrl} alt="Profile avatar" />
+          ) : avatarUrl ? (
+            <img src={avatarUrl} alt="Profile avatar" />
           ) : (
             <span>{initials}</span>
           )}
@@ -218,7 +167,7 @@ function SettingsProfilePage() {
           ) : (
             <>
               <h3>{resolvedName}</h3>
-              <p>{profile.bio || 'Because even heroes need a profile.'}</p>
+              <p>{profileForm.bio || 'Because even heroes need a profile.'}</p>
             </>
           )}
         </div>
@@ -234,13 +183,13 @@ function SettingsProfilePage() {
         <div className="settings-form">
           <label className="settings-field">
             <span className="settings-field__label">Display name</span>
-            <input type="text" value={profile.displayName} onChange={updateField('displayName')} />
+            <input type="text" value={profileForm.displayName} onChange={updateField('displayName')} />
             <p className="settings-field__help">If you leave this blank, your email graciously takes the stage.</p>
           </label>
 
           <label className="settings-field">
             <span className="settings-field__label">Short bio</span>
-            <textarea rows={3} value={profile.bio} onChange={updateField('bio')} />
+            <textarea rows={3} value={profileForm.bio} onChange={updateField('bio')} />
             <p className="settings-field__help">Share a tiny tale about yourself for those who peek at your profile.</p>
           </label>
         </div>
@@ -256,7 +205,7 @@ function SettingsProfilePage() {
         <div className="settings-form">
           <label className="settings-field">
             <span className="settings-field__label">Website</span>
-            <input type="url" value={profile.website} onChange={updateField('website')} placeholder="https://" />
+            <input type="url" value={profileForm.website} onChange={updateField('website')} placeholder="https://" />
             <p className="settings-field__help">Portfolio, company site, or docs.</p>
           </label>
 
@@ -265,7 +214,7 @@ function SettingsProfilePage() {
           <div className="settings-social">
             <div className="settings-social__title">Social accounts</div>
             <div className="settings-social__list">
-              {profile.socialAccounts.map((account, index) => (
+              {profileForm.socialAccounts.map((account, index) => (
                 <label key={index} className="settings-field settings-field--inline">
                   <span className="settings-social__icon" aria-hidden="true">
                     <svg
