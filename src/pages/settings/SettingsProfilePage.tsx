@@ -49,6 +49,7 @@ function SettingsProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
 
   useEffect(() => {
     if (!user?.id) {
@@ -92,6 +93,7 @@ function SettingsProfilePage() {
       if (!profile.avatarUrl) {
         clearCachedAvatarUrl();
         setResolvedAvatarUrl('');
+        setIsAvatarLoaded(false);
         return;
       }
 
@@ -107,6 +109,7 @@ function SettingsProfilePage() {
       if (isActive && signedData?.signedUrl && !signedError) {
         setCachedAvatarUrl(signedData.signedUrl);
         setResolvedAvatarUrl(signedData.signedUrl);
+        setIsAvatarLoaded(false);
         return;
       }
 
@@ -115,6 +118,7 @@ function SettingsProfilePage() {
         const nextUrl = publicData.publicUrl ?? '';
         setCachedAvatarUrl(nextUrl);
         setResolvedAvatarUrl(nextUrl);
+        setIsAvatarLoaded(false);
       }
     };
 
@@ -225,7 +229,15 @@ function SettingsProfilePage() {
           {isProfileLoading ? (
             <div className="settings-profile__avatar-skeleton" />
           ) : resolvedAvatarUrl ? (
-            <img src={resolvedAvatarUrl} alt="Profile avatar" />
+            <img
+              src={resolvedAvatarUrl}
+              alt="Profile avatar"
+              className={`settings-profile__avatar-image ${
+                isAvatarLoaded ? 'settings-profile__avatar-image--visible' : ''
+              }`}
+              onLoad={() => setIsAvatarLoaded(true)}
+              onError={() => setIsAvatarLoaded(false)}
+            />
           ) : (
             <span>{initials}</span>
           )}
@@ -250,8 +262,12 @@ function SettingsProfilePage() {
             </>
           ) : (
             <>
-              <h3>{resolvedName}</h3>
-              <p>{profile.bio || 'Because even heroes need a profile.'}</p>
+              <h3 className="settings-profile__identity-content settings-profile__identity-content--visible">
+                {resolvedName}
+              </h3>
+              <p className="settings-profile__identity-content settings-profile__identity-content--visible">
+                {profile.bio || 'Because even heroes need a profile.'}
+              </p>
             </>
           )}
         </div>

@@ -27,9 +27,13 @@ function Sidebar({
     avatarUrl: '',
     emailFallback: '',
   });
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIsProfileLoading(false);
+      return;
+    }
 
     const loadProfile = async () => {
       const { data } = await supabase
@@ -43,6 +47,7 @@ function Sidebar({
         avatarUrl: data?.avatar_url ?? '',
         emailFallback: user.email ?? '',
       });
+      setIsProfileLoading(false);
     };
 
     loadProfile();
@@ -117,7 +122,12 @@ function Sidebar({
 
       <div className="sidebar__spacer" aria-hidden />
 
-      <ProfileMenu isCollapsed={isCollapsed} items={profileMenuItems} profile={mergedProfile} />
+      <ProfileMenu
+        isCollapsed={isCollapsed}
+        items={profileMenuItems}
+        profile={mergedProfile}
+        isLoading={isProfileLoading}
+      />
     </aside>
   );
 }
