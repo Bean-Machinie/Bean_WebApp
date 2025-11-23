@@ -47,9 +47,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps, isLoading 
     avatarUrl: '',
     emailFallback: '',
   });
-  const [isProfileLoading, setIsProfileLoading] = useState(
-    isLoading ?? !profileFromProps || (!profileFromProps.displayName && !profileFromProps.avatarUrl),
-  );
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState(() => getCachedAvatarUrl());
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
   const navigate = useNavigate();
