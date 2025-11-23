@@ -37,16 +37,19 @@ type ProfileMenuProps = {
   isCollapsed: boolean;
   items: ProfileMenuItem[];
   profile?: { displayName: string; avatarUrl: string; emailFallback: string };
+  isLoading?: boolean;
 };
 
-function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileMenuProps) {
+function ProfileMenu({ isCollapsed, items, profile: profileFromProps, isLoading }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [profile, setProfile] = useState({
     displayName: '',
     avatarUrl: '',
     emailFallback: '',
   });
-  const [isProfileLoading, setIsProfileLoading] = useState(!profileFromProps);
+  const [isProfileLoading, setIsProfileLoading] = useState(
+    isLoading ?? !profileFromProps || (!profileFromProps.displayName && !profileFromProps.avatarUrl),
+  );
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState(() => getCachedAvatarUrl());
   const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
   const navigate = useNavigate();
@@ -55,9 +58,11 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
   useEffect(() => {
     if (profileFromProps) {
       setProfile(profileFromProps);
-      setIsProfileLoading(false);
+      setIsProfileLoading(
+        isLoading ?? (!profileFromProps.displayName && !profileFromProps.avatarUrl && !profileFromProps.emailFallback),
+      );
     }
-  }, [profileFromProps]);
+  }, [isLoading, profileFromProps]);
 
   useEffect(() => {
     if (profileFromProps) return;
@@ -197,7 +202,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
               alt="Profile avatar"
               onLoad={() => setIsAvatarLoaded(true)}
               onError={() => setIsAvatarLoaded(false)}
-              style={{ opacity: isAvatarLoaded ? 1 : 0 }}
+              className={`profile-menu__avatar-image ${isAvatarLoaded ? 'profile-menu__avatar-image--visible' : ''}`}
             />
           )}
           {isProfileLoading || (resolvedAvatarUrl && !isAvatarLoaded) ? (
@@ -210,7 +215,11 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
           className={`profile-menu__name ${isCollapsed ? 'profile-menu__name--hidden' : ''}`}
           title={resolvedName}
         >
-          {isProfileLoading ? <span className="profile-menu__name-skeleton" /> : resolvedName}
+          {isProfileLoading ? (
+            <span className="profile-menu__name-skeleton" />
+          ) : (
+            <span className="profile-menu__name-content profile-menu__name-content--visible">{resolvedName}</span>
+          )}
         </span>
       </button>
 

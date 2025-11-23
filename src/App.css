@@ -243,6 +243,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.profile-menu__avatar-image--visible {
+  opacity: 1;
 }
 
 .profile-menu__avatar-initials {
@@ -269,6 +275,15 @@
   background: linear-gradient(90deg, #1e293b, #334155, #1e293b);
   background-size: 200% 200%;
   animation: pulse-skeleton 1.3s ease-in-out infinite;
+}
+
+.profile-menu__name-content {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.profile-menu__name-content--visible {
+  opacity: 1;
 }
 
 .profile-menu__name--hidden {
@@ -839,6 +854,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.settings-profile__avatar-image--visible {
+  opacity: 1;
 }
 
 .settings-profile__avatar-overlay {
@@ -877,6 +898,15 @@
   background: linear-gradient(90deg, #e2e8f0, #cbd5e1, #e2e8f0);
   background-size: 200% 200%;
   animation: pulse-skeleton 1.3s ease-in-out infinite;
+}
+
+.settings-profile__identity-content {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.settings-profile__identity-content--visible {
+  opacity: 1;
 }
 
 .settings-profile__name-skeleton {
