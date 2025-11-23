@@ -3,6 +3,30 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 
+const AVATAR_URL_CACHE_KEY = 'cachedAvatarPublicUrl';
+let avatarUrlMemoryCache = '';
+
+const getCachedAvatarUrl = () => {
+  if (avatarUrlMemoryCache) return avatarUrlMemoryCache;
+  if (typeof window === 'undefined') return '';
+  avatarUrlMemoryCache = window.localStorage.getItem(AVATAR_URL_CACHE_KEY) ?? '';
+  return avatarUrlMemoryCache;
+};
+
+const setCachedAvatarUrl = (url: string) => {
+  avatarUrlMemoryCache = url;
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(AVATAR_URL_CACHE_KEY, url);
+  }
+};
+
+const clearCachedAvatarUrl = () => {
+  avatarUrlMemoryCache = '';
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(AVATAR_URL_CACHE_KEY);
+  }
+};
+
 type ProfileMenuItem = {
   id: string;
   title: string;
@@ -23,7 +47,7 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
     emailFallback: '',
   });
   const [isProfileLoading, setIsProfileLoading] = useState(!profileFromProps);
-  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState(() => getCachedAvatarUrl());
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -91,8 +115,14 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
 
     const resolveAvatarUrl = async () => {
       if (!profile.avatarUrl) {
+        clearCachedAvatarUrl();
         setResolvedAvatarUrl('');
         return;
+      }
+
+      const cached = getCachedAvatarUrl();
+      if (cached) {
+        setResolvedAvatarUrl((current) => current || cached);
       }
 
       const { data: signedData, error: signedError } = await supabase.storage
@@ -100,13 +130,16 @@ function ProfileMenu({ isCollapsed, items, profile: profileFromProps }: ProfileM
         .createSignedUrl(profile.avatarUrl, 60 * 60 * 24 * 7);
 
       if (isActive && signedData?.signedUrl && !signedError) {
+        setCachedAvatarUrl(signedData.signedUrl);
         setResolvedAvatarUrl(signedData.signedUrl);
         return;
       }
 
       const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(profile.avatarUrl);
       if (isActive) {
-        setResolvedAvatarUrl(publicData.publicUrl ?? '');
+        const nextUrl = publicData.publicUrl ?? '';
+        setCachedAvatarUrl(nextUrl);
+        setResolvedAvatarUrl(nextUrl);
       }
     };
 
