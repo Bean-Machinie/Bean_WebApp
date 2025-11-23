@@ -24,7 +24,7 @@ function SettingsAppearancePage() {
         <div className="settings-card__header">
           <div>
             <h3>Theme</h3>
-            <p>System respects your OS, while Light and Dark force a preference.</p>
+            <p>System follows your OS preference; selecting any palette applies it immediately.</p>
           </div>
         </div>
 
