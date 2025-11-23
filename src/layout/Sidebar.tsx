@@ -20,12 +20,15 @@ function Sidebar({
 }: SidebarProps) {
   return (
     <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
-      <button
-        className="sidebar__toggle"
-        onClick={onToggleCollapse}
-        aria-label={isCollapsed ? 'Expand action menu' : 'Collapse action menu'}
-      >
-        <span aria-hidden>{isCollapsed ? '➜' : '⬅'}</span>
+      <button className="sidebar__toggle" onClick={onToggleCollapse}>
+        {isCollapsed ? '➜' : '⬅'}
+        <span
+          className={`sidebar__toggle-label ${
+            isCollapsed ? 'sidebar__toggle-label--hidden' : ''
+          }`}
+        >
+          Collapse
+        </span>
       </button>
 
       <nav className="workspace-list" aria-label="Workspaces">
