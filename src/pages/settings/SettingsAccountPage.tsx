@@ -58,7 +58,6 @@ function SettingsAccountPage() {
             <h3>Login details</h3>
             <p>Your email is how you sign in and receive account updates.</p>
           </div>
-          <span className="settings-card__meta">Private</span>
         </div>
         <div className="settings-form">
           <label className="settings-field">

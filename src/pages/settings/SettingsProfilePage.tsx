@@ -174,7 +174,6 @@ function SettingsProfilePage() {
   return (
     <div className="settings-panel__content">
       <h2>Profile</h2>
-      <p>Personalize your profile so teammates can recognize you around the app.</p>
 
       <div className="settings-profile__header">
         <div
@@ -196,7 +195,7 @@ function SettingsProfilePage() {
         />
         <div className="settings-profile__identity">
           <h3>{resolvedName}</h3>
-          <p>{profile.bio || 'Add a short bio so collaborators know who you are.'}</p>
+          <p>{profile.bio || 'Because even heroes need a profile.'}</p>
         </div>
       </div>
 
@@ -204,21 +203,20 @@ function SettingsProfilePage() {
         <div className="settings-card__header">
           <div>
             <h3>Public details</h3>
-            <p>These fields show up wherever your profile card appears.</p>
+            <p>Your profile card carries these details wherever it wanders.</p>
           </div>
-          <span className="settings-card__meta">Public</span>
         </div>
         <div className="settings-form">
           <label className="settings-field">
             <span className="settings-field__label">Display name</span>
             <input type="text" value={profile.displayName} onChange={updateField('displayName')} />
-            <p className="settings-field__help">Fallbacks to your email if left blank.</p>
+            <p className="settings-field__help">If you leave this blank, your email graciously takes the stage.</p>
           </label>
 
           <label className="settings-field">
             <span className="settings-field__label">Short bio</span>
             <textarea rows={3} value={profile.bio} onChange={updateField('bio')} />
-            <p className="settings-field__help">Keep it concise—appears on cards and comments.</p>
+            <p className="settings-field__help">Share a tiny tale about yourself for those who peek at your profile.</p>
           </label>
         </div>
       </div>
@@ -229,7 +227,6 @@ function SettingsProfilePage() {
             <h3>Links</h3>
             <p>Share the destinations you want teammates to find.</p>
           </div>
-          <span className="settings-card__meta">Visible on your profile</span>
         </div>
         <div className="settings-form settings-form--split">
           <label className="settings-field">
@@ -256,7 +253,6 @@ function SettingsProfilePage() {
             <h3>Timezone</h3>
             <p>Show your current local time to collaborators.</p>
           </div>
-          <span className="settings-card__meta">Optional</span>
         </div>
         <div className="settings-form">
           <label className="settings-toggle">

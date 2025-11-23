@@ -62,7 +62,6 @@ function SettingsAppearancePage() {
             <h3>Theme</h3>
             <p>System respects your OS, while Light and Dark force a preference.</p>
           </div>
-          <span className="settings-card__meta">Live preview</span>
         </div>
 
         <div className="theme-grid">

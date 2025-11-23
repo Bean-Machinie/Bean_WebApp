@@ -688,7 +688,8 @@
 .settings-field__help {
   margin: 0;
   color: #475569;
-  font-weight: 500;
+  font-weight: 150;
+  font-size: 0.85rem;
 }
 
 .settings-integration-list {
