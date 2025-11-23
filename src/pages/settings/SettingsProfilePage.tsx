@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 
@@ -6,23 +6,18 @@ type ProfileForm = {
   displayName: string;
   bio: string;
   website: string;
-  socialAccounts: string;
-  timezoneEnabled: boolean;
-  timezoneValue: string;
+  socialAccounts: string[];
   avatarUrl?: string;
 };
 
 function SettingsProfilePage() {
   const { user } = useAuth();
-  const detectedTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [profile, setProfile] = useState<ProfileForm>({
     displayName: '',
     bio: '',
     website: '',
-    socialAccounts: '',
-    timezoneEnabled: false,
-    timezoneValue: detectedTimezone,
+    socialAccounts: ['', '', ''],
     avatarUrl: '',
   });
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState('');
@@ -36,26 +31,27 @@ function SettingsProfilePage() {
     const loadProfile = async () => {
       const { data } = await supabase
         .from('profiles')
-        .select(
-          'display_name, bio, website, social_accounts, timezone_enabled, timezone_value, avatar_url',
-        )
+        .select('display_name, bio, website, social_accounts, avatar_url')
         .eq('id', user.id)
         .single();
+
+      const parsedSocialAccounts = (data?.social_accounts || '')
+        .split('\n')
+        .map((account: string) => account.trim())
+        .filter(Boolean);
 
       setProfile((current) => ({
         ...current,
         displayName: data?.display_name ?? '',
         bio: data?.bio ?? '',
         website: data?.website ?? '',
-        socialAccounts: data?.social_accounts ?? '',
-        timezoneEnabled: Boolean(data?.timezone_enabled),
-        timezoneValue: data?.timezone_value || detectedTimezone,
+        socialAccounts: [parsedSocialAccounts[0] ?? '', parsedSocialAccounts[1] ?? '', parsedSocialAccounts[2] ?? ''],
         avatarUrl: data?.avatar_url ?? '',
       }));
     };
 
     loadProfile();
-  }, [detectedTimezone, user]);
+  }, [user]);
 
   useEffect(() => {
     let isActive = true;
@@ -102,8 +98,14 @@ function SettingsProfilePage() {
     setProfile({ ...profile, [key]: event.target.value });
   };
 
-  const handleToggleTimezone = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setProfile({ ...profile, timezoneEnabled: event.target.checked });
+  const handleSocialAccountChange = (index: number) => (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setProfile((current) => {
+      const updated = [...current.socialAccounts];
+      updated[index] = event.target.value;
+      return { ...current, socialAccounts: updated };
+    });
   };
 
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,9 +156,7 @@ function SettingsProfilePage() {
         display_name: profile.displayName,
         bio: profile.bio,
         website: profile.website,
-        social_accounts: profile.socialAccounts,
-        timezone_enabled: profile.timezoneEnabled,
-        timezone_value: profile.timezoneValue || detectedTimezone,
+        social_accounts: profile.socialAccounts.map((account) => account.trim()).filter(Boolean).join('\n'),
         avatar_url: profile.avatarUrl ?? null,
       };
 
@@ -228,52 +228,48 @@ function SettingsProfilePage() {
             <p>Share the destinations you want teammates to find.</p>
           </div>
         </div>
-        <div className="settings-form settings-form--split">
+        <div className="settings-form">
           <label className="settings-field">
             <span className="settings-field__label">Website</span>
             <input type="url" value={profile.website} onChange={updateField('website')} placeholder="https://" />
             <p className="settings-field__help">Portfolio, company site, or docs.</p>
           </label>
-          <label className="settings-field">
-            <span className="settings-field__label">Social accounts</span>
-            <input
-              type="text"
-              value={profile.socialAccounts}
-              onChange={updateField('socialAccounts')}
-              placeholder="@handle or URLs"
-            />
-            <p className="settings-field__help">Separate multiple handles with commas.</p>
-          </label>
-        </div>
-      </div>
 
-      <div className="settings-card">
-        <div className="settings-card__header">
-          <div>
-            <h3>Timezone</h3>
-            <p>Show your current local time to collaborators.</p>
-          </div>
-        </div>
-        <div className="settings-form">
-          <label className="settings-toggle">
-            <input type="checkbox" checked={profile.timezoneEnabled} onChange={handleToggleTimezone} />
-            <div>
-              <div className="settings-toggle__label">Display current local time</div>
-              <p className="settings-toggle__description">
-                We auto-detected {detectedTimezone}. You can store any timezone string.
-              </p>
+          <hr className="settings-divider" />
+
+          <div className="settings-social">
+            <div className="settings-social__title">Social accounts</div>
+            <div className="settings-social__list">
+              {profile.socialAccounts.map((account, index) => (
+                <label key={index} className="settings-field settings-field--inline">
+                  <span className="settings-social__icon" aria-hidden="true">
+                    <svg
+                      width="20px"
+                      height="20px"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M10.6666 13.3333L10.0808 12.7475C9.29978 11.9664 9.29978 10.7001 10.0808 9.91905L14.5857 5.41416C15.3668 4.63311 16.6331 4.63311 17.4142 5.41415L18.5857 6.58572C19.3668 7.36677 19.3668 8.6331 18.5857 9.41415L16.9999 10.9999M13.3333 10.6666L13.919 11.2524C14.7001 12.0335 14.7001 13.2998 13.919 14.0808L9.41415 18.5857C8.6331 19.3668 7.36677 19.3668 6.58572 18.5857L5.41416 17.4142C4.63311 16.6331 4.63311 15.3668 5.41416 14.5857L6.99994 12.9999"
+                        stroke="#000000"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <input
+                    type="text"
+                    value={account}
+                    onChange={handleSocialAccountChange(index)}
+                    placeholder="Profile URL or handle"
+                  />
+                </label>
+              ))}
             </div>
-          </label>
-          <label className="settings-field">
-            <span className="settings-field__label">Timezone value</span>
-            <input
-              type="text"
-              value={profile.timezoneValue}
-              onChange={updateField('timezoneValue')}
-              placeholder={detectedTimezone}
-            />
-            <p className="settings-field__help">Uses the IANA timezone format.</p>
-          </label>
+            <p className="settings-field__help">Share up to three profiles for teammates to follow.</p>
+          </div>
         </div>
       </div>
 
