@@ -47,7 +47,11 @@
 .sidebar__header {
   display: flex;
   justify-content: flex-end;
+<<<<<<< HEAD
   margin-bottom: 0px;
+=======
+  margin-bottom: 10px;
+>>>>>>> 2a720cdd2034d5a9f1c0c8e338c286be1b639ea4
 }
 
 .sidebar__collapse-button {
