@@ -14,14 +14,22 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 function applyTheme(theme: ThemeId) {
+  if (typeof document === 'undefined') return;
   document.documentElement.dataset.theme = theme;
+}
+
+function getStoredThemePreference(): ThemeId {
+  if (typeof window === 'undefined') return 'system';
+  const stored = window.localStorage.getItem('theme-preference') as ThemeId | null;
+  return stored ?? 'system';
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [theme, setTheme] = useState<ThemeId>(() => {
-    applyTheme('system');
-    return 'system';
+    const initialTheme = getStoredThemePreference();
+    applyTheme(initialTheme);
+    return initialTheme;
   });
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
@@ -31,8 +39,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const loadPreference = async () => {
       if (!user?.id) {
-        setTheme('system');
-        applyTheme('system');
+        const localPreference = getStoredThemePreference();
+        setTheme(localPreference);
+        applyTheme(localPreference);
         setStatus(null);
         setLoading(false);
         return;
@@ -50,6 +59,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const preference = (data?.theme_preference as ThemeId | null) ?? 'system';
       setTheme(preference);
       applyTheme(preference);
+      window.localStorage.setItem('theme-preference', preference);
       setStatus(error && error.code !== 'PGRST116' ? error.message : null);
       setLoading(false);
     };
@@ -69,6 +79,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     async (value: ThemeId) => {
       setTheme(value);
       applyTheme(value);
+      window.localStorage.setItem('theme-preference', value);
       setStatus(null);
 
       if (!user?.id) return;
