@@ -29,6 +29,7 @@ function NewProjectPanel({
     () => projectTypes.find((type) => type.id === selectedProjectTypeId),
     [projectTypes, selectedProjectTypeId],
   );
+  const isCanvasProject = selectedProjectTypeId === 'canvas';
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -60,11 +61,13 @@ function NewProjectPanel({
     setIsSubmitting(true);
     setError(null);
 
-    const config = {
-      width,
-      height,
-      backgroundColor,
-    };
+    const config = isCanvasProject
+      ? {
+          width,
+          height,
+          backgroundColor,
+        }
+      : {};
 
     const insertPayload = {
       user_id: user.id,
@@ -148,48 +151,50 @@ function NewProjectPanel({
               />
             </div>
 
-            <div className="new-project-form__section">
-              <p className="new-project-panel__eyebrow">Canvas Settings</p>
-              <div className="new-project-form__grid">
-                <div className="new-project-form__group">
-                  <label className="new-project-form__label" htmlFor="canvas-width">
-                    Width
-                  </label>
-                  <input
-                    id="canvas-width"
-                    type="number"
-                    min={1}
-                    value={width}
-                    onChange={(event) => setWidth(Number(event.target.value))}
-                  />
-                </div>
+            {isCanvasProject ? (
+              <div className="new-project-form__section">
+                <p className="new-project-panel__eyebrow">Canvas Settings</p>
+                <div className="new-project-form__grid">
+                  <div className="new-project-form__group">
+                    <label className="new-project-form__label" htmlFor="canvas-width">
+                      Width
+                    </label>
+                    <input
+                      id="canvas-width"
+                      type="number"
+                      min={1}
+                      value={width}
+                      onChange={(event) => setWidth(Number(event.target.value))}
+                    />
+                  </div>
 
-                <div className="new-project-form__group">
-                  <label className="new-project-form__label" htmlFor="canvas-height">
-                    Height
-                  </label>
-                  <input
-                    id="canvas-height"
-                    type="number"
-                    min={1}
-                    value={height}
-                    onChange={(event) => setHeight(Number(event.target.value))}
-                  />
-                </div>
+                  <div className="new-project-form__group">
+                    <label className="new-project-form__label" htmlFor="canvas-height">
+                      Height
+                    </label>
+                    <input
+                      id="canvas-height"
+                      type="number"
+                      min={1}
+                      value={height}
+                      onChange={(event) => setHeight(Number(event.target.value))}
+                    />
+                  </div>
 
-                <div className="new-project-form__group">
-                  <label className="new-project-form__label" htmlFor="canvas-bg">
-                    Background Color
-                  </label>
-                  <input
-                    id="canvas-bg"
-                    type="color"
-                    value={backgroundColor}
-                    onChange={(event) => setBackgroundColor(event.target.value)}
-                  />
+                  <div className="new-project-form__group">
+                    <label className="new-project-form__label" htmlFor="canvas-bg">
+                      Background Color
+                    </label>
+                    <input
+                      id="canvas-bg"
+                      type="color"
+                      value={backgroundColor}
+                      onChange={(event) => setBackgroundColor(event.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
 
             {error ? <p className="new-project-form__error">{error}</p> : null}
 
