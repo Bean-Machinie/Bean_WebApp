@@ -1147,6 +1147,251 @@
   place-items: center;
 }
 
+.canvas-workspace {
+  display: grid;
+  grid-template-columns: 80px 1fr 340px;
+  gap: 12px;
+  min-height: 70vh;
+  background: var(--bg-secondary);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.canvas-toolbar {
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+}
+
+.canvas-toolbar__group {
+  display: grid;
+  gap: 8px;
+}
+
+.canvas-tool {
+  height: 40px;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 18px;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.canvas-tool:hover {
+  background: color-mix(in srgb, var(--bg) 80%, var(--text) 20%);
+  border-color: var(--primary);
+}
+
+.canvas-tool--active {
+  background: var(--primary);
+  color: var(--button-text, #0b1224);
+  border-color: var(--primary);
+}
+
+.canvas-center {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.canvas-viewport {
+  flex: 1;
+  position: relative;
+  background: repeating-conic-gradient(
+      color-mix(in srgb, var(--bg) 92%, var(--text) 8%) 0% 25%,
+      color-mix(in srgb, var(--bg) 96%, var(--text) 4%) 0% 50%
+    )
+    50% / 24px 24px;
+  border-bottom: 1px solid var(--border);
+  cursor: crosshair;
+}
+
+.canvas-viewport--panning {
+  cursor: grabbing;
+}
+
+.canvas-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transform-origin: top left;
+  transition: transform 0.04s ease;
+}
+
+.canvas-stage__surface {
+  position: relative;
+  width: 1200px;
+  height: 800px;
+  box-shadow: 0 30px 60px color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.canvas-selection {
+  position: absolute;
+  border: 1px dashed var(--primary);
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  pointer-events: none;
+}
+
+.canvas-status {
+  display: flex;
+  gap: 16px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.canvas-sidepanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.canvas-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.canvas-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.canvas-panel__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.canvas-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.canvas-layer {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+}
+
+.canvas-layer--active {
+  border-color: var(--primary);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.canvas-layer__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvas-layer__drag {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: grab;
+}
+
+.canvas-layer__meta {
+  display: grid;
+  gap: 4px;
+}
+
+.canvas-layer__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.canvas-layer__toggles {
+  display: flex;
+  gap: 8px;
+}
+
+.canvas-layer__icon {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+}
+
+.canvas-layer__icon--muted {
+  opacity: 0.6;
+}
+
+.canvas-layer__delete {
+  background: var(--danger-bg, rgba(220, 38, 38, 0.12));
+  color: var(--danger, #ef4444);
+  border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 40%, transparent);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.canvas-props {
+  display: grid;
+  gap: 8px;
+}
+
+.canvas-stage__surface input[type='color'] {
+  background: transparent;
+}
+
+@media (max-width: 1200px) {
+  .canvas-workspace {
+    grid-template-columns: 70px 1fr 280px;
+  }
+}
+
+@media (max-width: 960px) {
+  .canvas-workspace {
+    grid-template-columns: 70px 1fr;
+    grid-template-areas:
+      'toolbar center'
+      'toolbar side';
+  }
+
+  .canvas-sidepanel {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 960px) {
   .settings-layout__body {
     grid-template-columns: 1fr;
