@@ -46,8 +46,24 @@
 
 .sidebar__header {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 10px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.sidebar__title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 180px;
+  transition: opacity 0.2s ease, max-width 0.2s ease;
+}
+
+.sidebar__title--hidden {
+  opacity: 0;
+  max-width: 0;
 }
 
 .sidebar__collapse-button {
@@ -101,6 +117,14 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.sidebar__divider {
+  height: 1px;
+  background: var(--sidebar-border);
+  opacity: 0.7;
+  border-radius: 999px;
+  margin: 2px 4px 10px;
 }
 
 .workspace-item {
