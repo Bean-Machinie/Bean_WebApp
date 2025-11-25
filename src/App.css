@@ -44,11 +44,10 @@
   width: var(--sidebar-width-collapsed);
 }
 
-.sidebar__footer {
+.sidebar__header {
   display: flex;
   justify-content: flex-end;
-  padding-top: 10px;
-  border-top: 1px solid var(--sidebar-border);
+  margin-bottom: 10px;
 }
 
 .sidebar__collapse-button {
@@ -63,13 +62,39 @@
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease,
     box-shadow 0.15s ease;
-  align-self: flex-end;
+  position: relative;
+  overflow: hidden;
 }
 
 .sidebar__collapse-button:hover {
   background: var(--sidebar-hover);
   border-color: var(--sidebar-hover);
   box-shadow: 0 6px 12px color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.sidebar__collapse-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.sidebar__collapse-icon--expanded {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sidebar__collapse-button--collapsed .sidebar__collapse-icon--expanded {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.sidebar__collapse-button--collapsed .sidebar__collapse-icon--collapsed {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .workspace-list {
