@@ -1,0 +1,80 @@
+.scrollable-list {
+  position: relative;
+  width: 100%;
+}
+
+.scrollable-list__items {
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scrollable-list__items::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollable-list__items::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.scrollable-list__items::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+
+.scrollable-list__item {
+  width: 100%;
+  text-align: left;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: inherit;
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.scrollable-list__item:hover {
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-secondary));
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.scrollable-list__item--selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--bg-secondary));
+  box-shadow: 0 10px 25px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.scrollable-list__item-label {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.scrollable-list__item-description {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.scrollable-list__gradient {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 60px;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.scrollable-list__gradient--top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+}
+
+.scrollable-list__gradient--bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg), transparent);
+}
