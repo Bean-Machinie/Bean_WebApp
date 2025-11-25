@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SignInPage } from '../components/ui/sign-in';
 
 // Email/password sign-up flow.
 export function RegisterPage() {
@@ -26,45 +27,26 @@ export function RegisterPage() {
     }
   };
 
+  const handleGoToLogin = () => {
+    navigate('/login');
+  };
+
   return (
-    <div className="page">
-      <header className="page__header">
-        <h1>Create an account</h1>
-        <p className="muted">Set up access to the app and future features.</p>
-      </header>
-
-      <div className="card">
-        <form className="form" onSubmit={handleSubmit}>
-          <label className="form__field">
-            <span>Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </label>
-          <label className="form__field">
-            <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </label>
-
-          {error && <p className="error">{error}</p>}
-
-          <button className="button" type="submit" disabled={submitting}>
-            {submitting ? 'Creating account…' : 'Create account'}
-          </button>
-        </form>
-
-        <p className="muted">
-          Already registered? <Link to="/login">Log in here</Link>.
-        </p>
-      </div>
-    </div>
+    <SignInPage
+      title={<span className="font-light text-foreground tracking-tighter">Create an Account</span>}
+      description="Set up access to the app and future features."
+      heroImageSrc="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=2160&q=80"
+      onSignIn={handleSubmit}
+      onCreateAccount={handleGoToLogin}
+      submitButtonText="Create Account"
+      alternateActionText="Already registered?"
+      alternateActionLinkText="Log in here"
+      email={email}
+      password={password}
+      onEmailChange={setEmail}
+      onPasswordChange={setPassword}
+      error={error}
+      submitting={submitting}
+    />
   );
 }

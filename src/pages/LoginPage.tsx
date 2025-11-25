@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SignInPage } from '../components/ui/sign-in';
 
 // Email/password sign-in flow.
 export function LoginPage() {
@@ -25,45 +26,26 @@ export function LoginPage() {
     }
   };
 
+  const handleCreateAccount = () => {
+    navigate('/register');
+  };
+
   return (
-    <div className="page">
-      <header className="page__header">
-        <h1>Log in</h1>
-        <p className="muted">Access your dashboard to keep building.</p>
-      </header>
-
-      <div className="card">
-        <form className="form" onSubmit={handleSubmit}>
-          <label className="form__field">
-            <span>Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </label>
-          <label className="form__field">
-            <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </label>
-
-          {error && <p className="error">{error}</p>}
-
-          <button className="button" type="submit" disabled={submitting}>
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-
-        <p className="muted">
-          Need an account? <Link to="/register">Register here</Link>.
-        </p>
-      </div>
-    </div>
+    <SignInPage
+      title={<span className="font-light text-foreground tracking-tighter">Welcome Back</span>}
+      description="Access your dashboard to keep building."
+      heroImageSrc="https://images.unsplash.com/photo-1642615835477-d303d7dc9ee9?w=2160&q=80"
+      onSignIn={handleSubmit}
+      onCreateAccount={handleCreateAccount}
+      submitButtonText="Sign In"
+      alternateActionText="Need an account?"
+      alternateActionLinkText="Register here"
+      email={email}
+      password={password}
+      onEmailChange={setEmail}
+      onPasswordChange={setPassword}
+      error={error}
+      submitting={submitting}
+    />
   );
 }
