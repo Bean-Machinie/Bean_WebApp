@@ -31,9 +31,7 @@ function NewProjectPanel({
       >
         <div className="new-project-panel__column new-project-panel__column--left">
           <div className="new-project-panel__header">
-            <p className="new-project-panel__eyebrow">Pick a Project Type</p>
             <h2 id="new-project-title">New Project</h2>
-            <p className="new-project-panel__subtitle">Choose a starting point and we will tailor the setup.</p>
           </div>
 
           <ScrollableList
@@ -44,7 +42,6 @@ function NewProjectPanel({
         </div>
 
         <div className="new-project-panel__column new-project-panel__column--right">
-          <p className="new-project-panel__eyebrow">Project Type</p>
           <h3 className="new-project-panel__selection-title">
             {selectedProjectType ? selectedProjectType.label : 'Select a project type'}
           </h3>

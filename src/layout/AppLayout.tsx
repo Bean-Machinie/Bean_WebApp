@@ -32,6 +32,7 @@ const projectTypes: ScrollableListItem[] = [
   { id: 'item-cards', label: 'Item Cards' },
   { id: 'game-boards', label: 'Game Boards' },
   { id: 'campaign-journal', label: 'Campaign Journal' },
+  
 ];
 
 const profileIcon = (
