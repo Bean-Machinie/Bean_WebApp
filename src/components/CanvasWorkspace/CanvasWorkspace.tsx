@@ -49,9 +49,6 @@ const defaultLayer: Layer = {
   locked: false,
 };
 
-const CANVAS_WIDTH = 1200;
-const CANVAS_HEIGHT = 800;
-
 const defaultBrush = { color: '#ffffff', width: 6 };
 const defaultEraser = { width: 24 };
 
@@ -187,13 +184,14 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   }, [editorState.zoom, editorState.pan, editorState.brush, editorState.eraser, editorState.layers, editorState.activeLayerId, editorState.activeTool, schedulePersist]);
 
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const zoomDelta = event.deltaY > 0 ? -0.1 : 0.1;
-    setEditorState((state) => {
-      const nextZoom = Math.min(4, Math.max(0.2, state.zoom + zoomDelta));
-      if (nextZoom === state.zoom) return state;
-      return { ...state, zoom: nextZoom };
-    });
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      const delta = event.deltaY > 0 ? -0.1 : 0.1;
+      setEditorState((state) => {
+        const nextZoom = Math.min(4, Math.max(0.2, state.zoom + delta));
+        return { ...state, zoom: nextZoom };
+      });
+    }
   };
 
   const startPan = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -464,19 +462,14 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             className="canvas-stage"
             style={{ transform: `translate3d(${editorState.pan.x}px, ${editorState.pan.y}px, 0) scale(${editorState.zoom})` }}
           >
-            <div
-              className="canvas-stage__surface"
-              style={{ width: `${CANVAS_WIDTH}px`, height: `${CANVAS_HEIGHT}px` }}
-            >
+            <div className="canvas-stage__surface">
               <ReactSketchCanvas
                 ref={canvasRef}
                 style={{
-                  width: `${CANVAS_WIDTH}px`,
-                  height: `${CANVAS_HEIGHT}px`,
+                  width: '100%',
+                  height: '100%',
                   pointerEvents: editorState.activeTool === 'brush' || editorState.activeTool === 'eraser' ? 'auto' : 'none',
                 }}
-                width={`${CANVAS_WIDTH}px`}
-                height={`${CANVAS_HEIGHT}px`}
                 strokeColor={editorState.brush.color}
                 strokeWidth={editorState.brush.width}
                 eraserWidth={editorState.eraser.width}
