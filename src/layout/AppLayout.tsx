@@ -1,9 +1,14 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MyProjectsIcon from '../icons/MyProjectsIcon';
 import NewProjectIcon from '../icons/NewProjectIcon';
 import PlaygroundIcon from '../icons/PlaygroundIcon';
 import NewProjectPanel from '../components/NewProjectPanel/NewProjectPanel';
 import { ScrollableListItem } from '../components/ScrollableList/ScrollableList';
+import MyProjectsWorkspace from '../components/MyProjectsWorkspace/MyProjectsWorkspace';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
+import type { Project } from '../types/project';
 import Sidebar from './Sidebar';
 import WorkspaceArea from './WorkspaceArea';
 
@@ -67,15 +72,66 @@ const profileMenuItems: Workspace[] = [
 ];
 
 function AppLayout() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(realWorkspaces[0]?.id ?? workspaces[0]?.id);
   const [isNewProjectPanelOpen, setIsNewProjectPanelOpen] = useState(false);
   const [selectedProjectTypeId, setSelectedProjectTypeId] = useState(projectTypes[0]?.id ?? '');
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+
+  const fetchProjects = useCallback(async () => {
+    if (!user) {
+      setProjects([]);
+      return;
+    }
+
+    setIsLoadingProjects(true);
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setProjects(data as Project[]);
+    }
+    setIsLoadingProjects(false);
+  }, [user]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  const handleProjectCreated = (project: Project) => {
+    setProjects((prev) => [project, ...prev.filter((existing) => existing.id !== project.id)]);
+    setActiveWorkspaceId('my-projects');
+  };
 
   const activeWorkspace = useMemo(
     () => realWorkspaces.find((workspace) => workspace.id === activeWorkspaceId),
     [activeWorkspaceId],
   );
+
+  const workspaceContent = useMemo(() => {
+    if (activeWorkspaceId === 'my-projects') {
+      return (
+        <MyProjectsWorkspace
+          projects={projects}
+          isLoading={isLoadingProjects}
+          onSelectProject={(project) => navigate(`/workspace/${project.project_type}/${project.id}`)}
+          onRefresh={fetchProjects}
+        />
+      );
+    }
+
+    if (activeWorkspaceId === 'playground') {
+      return <p className="muted">Experiment with ideas here. Add tools or widgets as they are built.</p>;
+    }
+
+    return <p className="muted">Choose a workspace from the sidebar to get started.</p>;
+  }, [activeWorkspaceId, fetchProjects, isLoadingProjects, navigate, projects]);
 
   return (
     <div className="app-layout">
@@ -94,7 +150,7 @@ function AppLayout() {
         onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
       />
 
-      <WorkspaceArea activeWorkspace={activeWorkspace} />
+      <WorkspaceArea activeWorkspace={activeWorkspace} content={workspaceContent} />
 
       <NewProjectPanel
         isOpen={isNewProjectPanelOpen}
@@ -102,6 +158,7 @@ function AppLayout() {
         projectTypes={projectTypes}
         selectedProjectTypeId={selectedProjectTypeId}
         onSelectProjectType={setSelectedProjectTypeId}
+        onProjectCreated={handleProjectCreated}
       />
     </div>
   );

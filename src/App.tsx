@@ -8,6 +8,7 @@ import SettingsLayout from './pages/settings/SettingsLayout';
 import SettingsNotificationsPage from './pages/settings/SettingsNotificationsPage';
 import SettingsProfilePage from './pages/settings/SettingsProfilePage';
 import SettingsAccountPage from './pages/settings/SettingsAccountPage';
+import WorkspacePage from './pages/workspace/WorkspacePage';
 import './App.css';
 
 type GuardedRouteProps = {
@@ -82,6 +83,15 @@ function App() {
         <Route path="themes" element={<SettingsAppearancePage />} />
         <Route path="*" element={<Navigate to="profile" replace />} />
       </Route>
+
+      <Route
+        path="/workspace/:projectType/:projectId"
+        element={
+          <ProtectedRoute>
+            <WorkspacePage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/login"
