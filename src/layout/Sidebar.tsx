@@ -37,6 +37,12 @@ function Sidebar({
   return (
     <aside className={`sidebar ${isCollapsed ? 'sidebar--collapsed' : ''}`}>
       <div className="sidebar__header">
+        <span
+          className={`sidebar__title ${isCollapsed ? 'sidebar__title--hidden' : ''}`}
+          aria-hidden={isCollapsed}
+        >
+          Action Menu
+        </span>
         <button
           className={`sidebar__collapse-button ${isCollapsed ? 'sidebar__collapse-button--collapsed' : ''}`}
           onClick={onToggleCollapse}
@@ -47,6 +53,8 @@ function Sidebar({
           <span className="sidebar__collapse-icon sidebar__collapse-icon--collapsed">{collapsedIcon}</span>
         </button>
       </div>
+
+      <div className="sidebar__divider" aria-hidden />
 
       <nav className="workspace-list" aria-label="Workspaces">
         {workspaces.map((workspace) => {
@@ -74,6 +82,8 @@ function Sidebar({
       </nav>
 
       <div className="sidebar__spacer" aria-hidden />
+
+      <div className="sidebar__divider" aria-hidden />
 
       <ProfileMenu isCollapsed={isCollapsed} items={profileMenuItems} />
     </aside>
