@@ -41,7 +41,7 @@ function Sidebar({
           className={`sidebar__title ${isCollapsed ? 'sidebar__title--hidden' : ''}`}
           aria-hidden={isCollapsed}
         >
-          Action Menu
+          Bean App
         </span>
         <button
           className={`sidebar__collapse-button ${isCollapsed ? 'sidebar__collapse-button--collapsed' : ''}`}
