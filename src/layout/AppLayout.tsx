@@ -2,6 +2,8 @@ import { ReactNode, useMemo, useState } from 'react';
 import MyProjectsIcon from '../icons/MyProjectsIcon';
 import NewProjectIcon from '../icons/NewProjectIcon';
 import PlaygroundIcon from '../icons/PlaygroundIcon';
+import NewProjectPanel from '../components/NewProjectPanel/NewProjectPanel';
+import { ScrollableListItem } from '../components/ScrollableList/ScrollableList';
 import Sidebar from './Sidebar';
 import WorkspaceArea from './WorkspaceArea';
 
@@ -19,6 +21,17 @@ const workspaces: Workspace[] = [
   { id: 'new-project', title: 'New Project', icon: <NewProjectIcon />, source: 'workspace' },
   { id: 'my-projects', title: 'My Projects', icon: <MyProjectsIcon />, source: 'workspace' },
   { id: 'playground', title: 'Playground', icon: <PlaygroundIcon />, source: 'workspace' },
+];
+
+const realWorkspaces = workspaces.filter((workspace) => workspace.id !== 'new-project');
+
+const projectTypes: ScrollableListItem[] = [
+  { id: 'canvas', label: 'Canvas' },
+  { id: 'battle-maps', label: 'Battle Maps' },
+  { id: 'character-sheets', label: 'Character Sheets' },
+  { id: 'item-cards', label: 'Item Cards' },
+  { id: 'game-boards', label: 'Game Boards' },
+  { id: 'campaign-journal', label: 'Campaign Journal' },
 ];
 
 const profileIcon = (
@@ -54,10 +67,12 @@ const profileMenuItems: Workspace[] = [
 
 function AppLayout() {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState(workspaces[0]?.id);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(realWorkspaces[0]?.id ?? workspaces[0]?.id);
+  const [isNewProjectPanelOpen, setIsNewProjectPanelOpen] = useState(false);
+  const [selectedProjectTypeId, setSelectedProjectTypeId] = useState(projectTypes[0]?.id ?? '');
 
   const activeWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId),
+    () => realWorkspaces.find((workspace) => workspace.id === activeWorkspaceId),
     [activeWorkspaceId],
   );
 
@@ -68,11 +83,25 @@ function AppLayout() {
         profileMenuItems={profileMenuItems}
         isCollapsed={isCollapsed}
         activeWorkspaceId={activeWorkspaceId}
-        onSelectWorkspace={setActiveWorkspaceId}
+        onSelectWorkspace={(workspaceId) => {
+          if (workspaceId === 'new-project') {
+            setIsNewProjectPanelOpen(true);
+            return;
+          }
+          setActiveWorkspaceId(workspaceId);
+        }}
         onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
       />
 
       <WorkspaceArea activeWorkspace={activeWorkspace} />
+
+      <NewProjectPanel
+        isOpen={isNewProjectPanelOpen}
+        onClose={() => setIsNewProjectPanelOpen(false)}
+        projectTypes={projectTypes}
+        selectedProjectTypeId={selectedProjectTypeId}
+        onSelectProjectType={setSelectedProjectTypeId}
+      />
     </div>
   );
 }
