@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,11 +20,18 @@ function AppSidebar({
   activeWorkspaceId,
   onSelectWorkspace,
 }: AppSidebarProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => {
+    const saved = localStorage.getItem('sidebar-expanded');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { profile, avatarUrl, isLoading } = useProfile();
+
+  useEffect(() => {
+    localStorage.setItem('sidebar-expanded', JSON.stringify(open));
+  }, [open]);
 
   const resolvedName = useMemo(() => {
     return profile?.displayName || profile?.emailFallback || user?.email || 'Profile';
@@ -104,7 +111,7 @@ function AppSidebar({
             {/* Collapse/Expand Button */}
             <button
               onClick={() => setOpen(!open)}
-              className="w-[40px] h-[40px] flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all duration-50 flex-shrink-0"
+              className="w-[40px] h-[40px] flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600"
               aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
               title={open ? 'Collapse sidebar' : 'Expand sidebar'}
             >
@@ -217,7 +224,29 @@ const Logo = () => {
       transition={{ duration: 0.2, ease: "easeInOut" }}
       className="font-normal flex space-x-2 items-center text-sm text-black dark:text-white absolute left-2"
     >
-      <div className="h-5 w-6 bg-black dark:bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
+      <svg
+        fill="currentColor"
+        width="30px"
+        height="30px"
+        viewBox="0 0 64 64"
+        version="1.1"
+        xmlns="http://www.w3.org/2000/svg"
+        xmlnsXlink="http://www.w3.org/1999/xlink"
+        xmlSpace="preserve"
+        className="flex-shrink-0"
+        style={{ fillRule: "evenodd", clipRule: "evenodd", strokeLinejoin: "round", strokeMiterlimit: 2 }}
+      >
+        <g transform="matrix(1,0,0,1,-1152,-256)">
+          <g id="coffee-bean-filled" transform="matrix(0.866025,0.5,-0.5,0.866025,717.879,-387.292)">
+            <g transform="matrix(1,0,0,1,0,-0.699553)">
+              <path d="M737.673,328.231C738.494,328.056 739.334,328.427 739.757,329.152C739.955,329.463 740.106,329.722 740.106,329.722C740.106,329.722 745.206,338.581 739.429,352.782C737.079,358.559 736.492,366.083 738.435,371.679C738.697,372.426 738.482,373.258 737.89,373.784C737.298,374.31 736.447,374.426 735.735,374.077C730.192,371.375 722.028,365.058 722.021,352C722.015,340.226 728.812,330.279 737.673,328.231Z"/>
+            </g>
+            <g transform="matrix(-1,0,0,-1,1483.03,703.293)">
+              <path d="M737.609,328.246C738.465,328.06 739.344,328.446 739.785,329.203C739.97,329.49 740.106,329.722 740.106,329.722C740.106,329.722 745.206,338.581 739.429,352.782C737.1,358.507 736.503,365.948 738.383,371.527C738.646,372.304 738.415,373.164 737.796,373.703C737.177,374.243 736.294,374.356 735.56,373.989C730.02,371.241 722.028,364.92 722.021,352C722.016,340.255 728.779,330.328 737.609,328.246Z"/>
+            </g>
+          </g>
+        </g>
+      </svg>
       <span className="font-medium text-black dark:text-white whitespace-pre">
         Bean App
       </span>
