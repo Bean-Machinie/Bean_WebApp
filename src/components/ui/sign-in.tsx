@@ -69,11 +69,11 @@ export const SignInPage: React.FC<SignInPageProps> = ({
       <section className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="flex flex-col gap-6">
-            <h1 className="animate-element animate-delay-100 text-4xl md:text-5xl font-semibold leading-tight">{title}</h1>
-            <p className="animate-element animate-delay-200 text-muted-foreground">{description}</p>
+            <h1 className="text-4xl md:text-5xl font-semibold leading-tight">{title}</h1>
+            <p className="text-muted-foreground">{description}</p>
 
             <form className="space-y-5" onSubmit={onSignIn}>
-              <div className="animate-element animate-delay-300">
+              <div>
                 <label className="text-sm font-medium text-muted-foreground">Email Address</label>
                 <GlassInputWrapper>
                   <input
@@ -88,7 +88,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 </GlassInputWrapper>
               </div>
 
-              <div className="animate-element animate-delay-400">
+              <div>
                 <label className="text-sm font-medium text-muted-foreground">Password</label>
                 <GlassInputWrapper>
                   <div className="relative">
@@ -108,7 +108,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 </GlassInputWrapper>
               </div>
 
-              <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" name="rememberMe" className="custom-checkbox" />
                   <span className="text-foreground/90">Keep me signed in</span>
@@ -118,11 +118,11 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 )}
               </div>
 
-              {error && <p className="animate-element text-red-500 text-sm">{error}</p>}
+              {error && <p className="text-red-500 text-sm">{error}</p>}
 
               <button
                 type="submit"
-                className="animate-element animate-delay-600 w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded-2xl bg-primary py-4 font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={submitting}
               >
                 {submitting ? 'Please wait...' : submitButtonText}
@@ -131,12 +131,12 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 
             {onGoogleSignIn && (
               <>
-                <div className="animate-element animate-delay-700 relative flex items-center justify-center">
+                <div className="relative flex items-center justify-center">
                   <span className="w-full border-t border-border"></span>
                   <span className="px-4 text-sm text-muted-foreground bg-background absolute">Or continue with</span>
                 </div>
 
-                <button onClick={onGoogleSignIn} className="animate-element animate-delay-800 w-full flex items-center justify-center gap-3 border border-border rounded-2xl py-4 hover:bg-secondary transition-colors">
+                <button onClick={onGoogleSignIn} className="w-full flex items-center justify-center gap-3 border border-border rounded-2xl py-4 hover:bg-secondary transition-colors">
                   <GoogleIcon />
                   Continue with Google
                 </button>
@@ -144,7 +144,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             )}
 
             {onCreateAccount && (
-              <p className="animate-element animate-delay-900 text-center text-sm text-muted-foreground">
+              <p className="text-center text-sm text-muted-foreground">
                 {alternateActionText} <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount(); }} className="text-violet-400 hover:underline transition-colors">{alternateActionLinkText}</a>
               </p>
             )}
@@ -155,7 +155,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
       {/* Right column: hero image only (no testimonials) */}
       {heroImageSrc && (
         <section className="hidden md:block flex-1 relative p-4">
-          <div className="animate-slide-right animate-delay-300 absolute inset-4 rounded-3xl bg-cover bg-center" style={{ backgroundImage: `url(${heroImageSrc})` }}></div>
+          <div className="absolute inset-4 rounded-3xl bg-cover bg-center" style={{ backgroundImage: `url(${heroImageSrc})` }}></div>
         </section>
       )}
     </div>
