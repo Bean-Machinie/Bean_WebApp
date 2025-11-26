@@ -91,7 +91,7 @@ export const DesktopSidebar = ({
         className
       )}
       animate={{
-        width: animate ? (open ? "300px" : "72px") : "300px",
+        width: animate ? (open ? "250px" : "72px") : "300px",
       }}
       transition={{
         duration: 0.35,
