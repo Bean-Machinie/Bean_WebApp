@@ -20,7 +20,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.9.6",
-    "react-sketch-canvas": "^6.2.0",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

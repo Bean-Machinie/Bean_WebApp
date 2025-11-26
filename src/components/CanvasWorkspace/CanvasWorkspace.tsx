@@ -1,25 +1,22 @@
 import {
-  DragEvent,
   MouseEvent as ReactMouseEvent,
   WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
-import { ReactSketchCanvas, type CanvasPath, type ReactSketchCanvasRef } from 'react-sketch-canvas';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types/project';
+import {
+  CanvasConfig,
+  CanvasLayer,
+  CanvasStroke,
+  StrokeData,
+} from '../../types/canvas';
+import * as canvasService from '../../services/canvasService';
 
 export type EditorTool = 'move' | 'brush' | 'eraser' | 'select';
-
-export type Layer = {
-  id: string;
-  name: string;
-  visible: boolean;
-  locked: boolean;
-};
 
 export type SelectionBox = {
   x: number;
@@ -32,156 +29,302 @@ type CanvasWorkspaceProps = {
   project: Project;
 };
 
-type CanvasSettings = {
-  zoom?: number;
-  pan?: { x: number; y: number };
-  activeTool?: EditorTool;
-  activeLayerId?: string;
-  layers?: Layer[];
-  brush?: { color: string; width: number };
-  eraser?: { width: number };
+type DrawingState = {
+  isDrawing: boolean;
+  currentPath: Array<{ x: number; y: number; pressure?: number }>;
 };
-
-const defaultLayer: Layer = {
-  id: 'layer-1',
-  name: 'Layer 1',
-  visible: true,
-  locked: false,
-};
-
-const defaultBrush = { color: '#ffffff', width: 6 };
-const defaultEraser = { width: 24 };
 
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
-  const canvasRef = useRef<ReactSketchCanvasRef | null>(null);
+  const mainCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const layerCanvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+
+  const [config, setConfig] = useState<CanvasConfig | null>(null);
+  const [layers, setLayers] = useState<CanvasLayer[]>([]);
+  const [layerStrokes, setLayerStrokes] = useState<Map<string, CanvasStroke[]>>(new Map());
+  const [loading, setLoading] = useState(true);
+
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [drawingState, setDrawingState] = useState<DrawingState>({
+    isDrawing: false,
+    currentPath: [],
+  });
+
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const [selection, setSelection] = useState<SelectionBox | null>(null);
-  const saveTimeoutRef = useRef<number | null>(null);
-  const hasLoadedPathsRef = useRef(false);
   const previousToolRef = useRef<EditorTool | null>(null);
   const dragLayerIdRef = useRef<string | null>(null);
-  const selectionRect = useMemo(() => {
-    if (!selection) return null;
-    const left = Math.min(selection.x, selection.x + selection.width);
-    const top = Math.min(selection.y, selection.y + selection.height);
-    const width = Math.abs(selection.width);
-    const height = Math.abs(selection.height);
-    return { left, top, width, height };
-  }, [selection]);
+  const strokeOrderRef = useRef<number>(0);
 
-  const canvasSettings = useMemo(() => {
-    const config = (project.config ?? {}) as Record<string, unknown>;
-    return (config.canvasSettings as CanvasSettings | undefined) ?? {};
-  }, [project.config]);
+  const [editorState, setEditorState] = useState({
+    zoom: 1,
+    pan: { x: 0, y: 0 },
+    activeTool: 'brush' as EditorTool,
+    activeLayerId: null as string | null,
+    brush: { color: '#ffffff', width: 6 },
+    eraser: { width: 24 },
+  });
 
-  const [editorState, setEditorState] = useState(() => ({
-    zoom: canvasSettings.zoom ?? 1,
-    pan: canvasSettings.pan ?? { x: 0, y: 0 },
-    activeTool: canvasSettings.activeTool ?? ('brush' as EditorTool),
-    activeLayerId: canvasSettings.activeLayerId ?? defaultLayer.id,
-    layers: canvasSettings.layers ?? [defaultLayer],
-    selection: null as SelectionBox | null,
-    brush: canvasSettings.brush ?? defaultBrush,
-    eraser: canvasSettings.eraser ?? defaultEraser,
-  }));
+  // =============================================
+  // INITIALIZATION & DATA LOADING
+  // =============================================
 
   useEffect(() => {
-    const config = (project.config ?? {}) as Record<string, unknown>;
-    const settings = (config.canvasSettings as CanvasSettings | undefined) ?? {};
-    const layers = settings.layers ?? [defaultLayer];
-    setEditorState((prev) => ({
+    async function initializeCanvas() {
+      try {
+        setLoading(true);
+
+        // Check if canvas config exists
+        const existsConfig = await canvasService.canvasConfigExists(project.id);
+
+        if (!existsConfig) {
+          // Initialize new canvas for this project
+          const { config: newConfig, defaultLayer } = await canvasService.initializeCanvasForProject(project.id);
+          setConfig(newConfig);
+          setLayers([defaultLayer]);
+          setEditorState(prev => ({
+            ...prev,
+            zoom: newConfig.zoom,
+            pan: { x: newConfig.pan_x, y: newConfig.pan_y },
+            activeLayerId: defaultLayer.id,
+          }));
+        } else {
+          // Load existing canvas
+          const canvasData = await canvasService.getCanvasConfigWithLayers(project.id);
+          if (canvasData) {
+            setConfig(canvasData);
+            setLayers(canvasData.canvas_layers);
+            setEditorState(prev => ({
+              ...prev,
+              zoom: canvasData.zoom,
+              pan: { x: canvasData.pan_x, y: canvasData.pan_y },
+              activeLayerId: canvasData.canvas_layers[0]?.id ?? null,
+            }));
+
+            // Load strokes for all layers
+            await loadAllLayerStrokes(canvasData.canvas_layers);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize canvas:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    initializeCanvas();
+  }, [project.id]);
+
+  const loadAllLayerStrokes = async (layersToLoad: CanvasLayer[]) => {
+    const strokesMap = new Map<string, CanvasStroke[]>();
+
+    for (const layer of layersToLoad) {
+      try {
+        const { strokes } = await canvasService.getStrokesByLayer(layer.id, { limit: 1000 });
+        strokesMap.set(layer.id, strokes);
+
+        // Update stroke order ref to highest value
+        if (strokes.length > 0) {
+          const maxOrder = Math.max(...strokes.map(s => s.stroke_order));
+          if (maxOrder >= strokeOrderRef.current) {
+            strokeOrderRef.current = maxOrder + 1;
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to load strokes for layer ${layer.id}:`, error);
+        strokesMap.set(layer.id, []);
+      }
+    }
+
+    setLayerStrokes(strokesMap);
+  };
+
+  // =============================================
+  // CANVAS RENDERING
+  // =============================================
+
+  useEffect(() => {
+    if (!config || layers.length === 0) return;
+
+    renderAllLayers();
+  }, [config, layers, layerStrokes, editorState.zoom, editorState.pan]);
+
+  const renderAllLayers = useCallback(() => {
+    const mainCanvas = mainCanvasRef.current;
+    if (!mainCanvas || !config) return;
+
+    const ctx = mainCanvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    mainCanvas.width = config.width;
+    mainCanvas.height = config.height;
+
+    // Clear main canvas
+    ctx.fillStyle = config.background_color;
+    ctx.fillRect(0, 0, config.width, config.height);
+
+    // Render each layer in order
+    for (const layer of layers) {
+      if (!layer.visible) continue;
+
+      const strokes = layerStrokes.get(layer.id) ?? [];
+      if (strokes.length === 0) continue;
+
+      // Create or get layer canvas
+      let layerCanvas = layerCanvasRefs.current.get(layer.id);
+      if (!layerCanvas) {
+        layerCanvas = document.createElement('canvas');
+        layerCanvas.width = config.width;
+        layerCanvas.height = config.height;
+        layerCanvasRefs.current.set(layer.id, layerCanvas);
+      }
+
+      const layerCtx = layerCanvas.getContext('2d');
+      if (!layerCtx) continue;
+
+      // Clear layer canvas
+      layerCtx.clearRect(0, 0, config.width, config.height);
+
+      // Draw all strokes on this layer
+      for (const stroke of strokes) {
+        drawStroke(layerCtx, stroke.stroke_data);
+      }
+
+      // Composite layer onto main canvas with layer settings
+      ctx.save();
+      ctx.globalAlpha = layer.opacity;
+      ctx.globalCompositeOperation = layer.blend_mode as GlobalCompositeOperation;
+      ctx.drawImage(layerCanvas, 0, 0);
+      ctx.restore();
+    }
+  }, [config, layers, layerStrokes]);
+
+  const drawStroke = (ctx: CanvasRenderingContext2D, strokeData: StrokeData) => {
+    const { points, color, width, tool, opacity = 1 } = strokeData;
+
+    if (points.length === 0) return;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = opacity;
+
+    if (tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 1; i < points.length; i++) {
+      const point = points[i];
+      ctx.lineTo(point.x, point.y);
+    }
+
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  // =============================================
+  // DRAWING INTERACTION
+  // =============================================
+
+  const startDrawing = (event: ReactMouseEvent<HTMLCanvasElement>) => {
+    if (editorState.activeTool !== 'brush' && editorState.activeTool !== 'eraser') return;
+    if (!editorState.activeLayerId) return;
+
+    const activeLayer = layers.find(l => l.id === editorState.activeLayerId);
+    if (!activeLayer || activeLayer.locked) return;
+
+    const canvas = mainCanvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left - editorState.pan.x) / editorState.zoom;
+    const y = (event.clientY - rect.top - editorState.pan.y) / editorState.zoom;
+
+    setDrawingState({
+      isDrawing: true,
+      currentPath: [{ x, y }],
+    });
+  };
+
+  const continueDrawing = (event: ReactMouseEvent<HTMLCanvasElement>) => {
+    if (!drawingState.isDrawing) return;
+
+    const canvas = mainCanvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left - editorState.pan.x) / editorState.zoom;
+    const y = (event.clientY - rect.top - editorState.pan.y) / editorState.zoom;
+
+    setDrawingState(prev => ({
       ...prev,
-      zoom: settings.zoom ?? prev.zoom,
-      pan: settings.pan ?? prev.pan,
-      activeTool: settings.activeTool ?? prev.activeTool,
-      activeLayerId: settings.activeLayerId ?? layers[0]?.id ?? prev.activeLayerId,
-      layers,
-      brush: settings.brush ?? prev.brush,
-      eraser: settings.eraser ?? prev.eraser,
+      currentPath: [...prev.currentPath, { x, y }],
     }));
-    hasLoadedPathsRef.current = false;
-  }, [project.id, project.config]);
 
-  useEffect(() => {
-    if (!project || !canvasRef.current || hasLoadedPathsRef.current) {
+    // Draw preview on main canvas
+    renderAllLayers();
+    const ctx = mainCanvasRef.current?.getContext('2d');
+    if (ctx) {
+      const strokeData: StrokeData = {
+        points: [...drawingState.currentPath, { x, y }],
+        color: editorState.brush.color,
+        width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
+        tool: editorState.activeTool,
+      };
+      drawStroke(ctx, strokeData);
+    }
+  };
+
+  const finishDrawing = async () => {
+    if (!drawingState.isDrawing || drawingState.currentPath.length < 2) {
+      setDrawingState({ isDrawing: false, currentPath: [] });
       return;
     }
 
-    const config = (project.config ?? {}) as Record<string, unknown>;
-    const paths = config.canvasPaths as CanvasPath[] | undefined;
+    if (!editorState.activeLayerId) return;
 
-    if (paths) {
-      try {
-        canvasRef.current.loadPaths(paths);
-      } catch (err) {
-        console.error('Failed to load canvas paths', err);
-      }
+    try {
+      const strokeData: StrokeData = {
+        points: drawingState.currentPath,
+        color: editorState.brush.color,
+        width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
+        tool: editorState.activeTool,
+      };
+
+      // Save stroke to database
+      const newStroke = await canvasService.createStroke({
+        layer_id: editorState.activeLayerId,
+        stroke_data: strokeData,
+        stroke_order: strokeOrderRef.current++,
+      });
+
+      // Update local state
+      setLayerStrokes(prev => {
+        const newMap = new Map(prev);
+        const currentStrokes = newMap.get(editorState.activeLayerId!) ?? [];
+        newMap.set(editorState.activeLayerId!, [...currentStrokes, newStroke]);
+        return newMap;
+      });
+
+      // TODO: Create version snapshot for undo
+
+    } catch (error) {
+      console.error('Failed to save stroke:', error);
+    } finally {
+      setDrawingState({ isDrawing: false, currentPath: [] });
     }
+  };
 
-    hasLoadedPathsRef.current = true;
-  }, [project]);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    canvasRef.current.eraseMode(editorState.activeTool === 'eraser');
-  }, [editorState.activeTool]);
-
-  const persistCanvas = useCallback(async () => {
-    if (!project || !canvasRef.current) return;
-
-    const paths = await canvasRef.current.exportPaths();
-    const newConfig = {
-      ...(project.config ?? {}),
-      canvasPaths: paths ?? [],
-      canvasSettings: {
-        zoom: editorState.zoom,
-        pan: editorState.pan,
-        activeTool: editorState.activeTool,
-        activeLayerId: editorState.activeLayerId,
-        layers: editorState.layers,
-        brush: editorState.brush,
-        eraser: editorState.eraser,
-      },
-    };
-
-    const { error } = await supabase
-      .from('projects')
-      .update({
-        config: newConfig,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', project.id);
-
-    if (error) {
-      console.error('Failed to persist canvas', error.message);
-    }
-  }, [editorState.activeLayerId, editorState.activeTool, editorState.brush, editorState.eraser, editorState.layers, editorState.pan, editorState.zoom, project]);
-
-  const schedulePersist = useCallback(() => {
-    if (saveTimeoutRef.current) {
-      window.clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = window.setTimeout(() => {
-      persistCanvas();
-    }, 800);
-  }, [persistCanvas]);
-
-  const handleStroke = useCallback(() => {
-    schedulePersist();
-  }, [schedulePersist]);
-
-  useEffect(() => {
-    schedulePersist();
-    return () => {
-      if (saveTimeoutRef.current) {
-        window.clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [editorState.zoom, editorState.pan, editorState.brush, editorState.eraser, editorState.layers, editorState.activeLayerId, editorState.activeTool, schedulePersist]);
+  // =============================================
+  // PAN & ZOOM
+  // =============================================
 
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -214,37 +357,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     panStartRef.current = null;
   };
 
-  const startSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (editorState.activeTool !== 'select' || isSpacePressed) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const startX = (event.clientX - rect.left - editorState.pan.x) / editorState.zoom;
-    const startY = (event.clientY - rect.top - editorState.pan.y) / editorState.zoom;
-    selectionStartRef.current = { x: startX, y: startY };
-    setSelection({ x: startX, y: startY, width: 0, height: 0 });
-  };
-
-  const updateSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!selectionStartRef.current || editorState.activeTool !== 'select' || isSpacePressed) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const currentX = (event.clientX - rect.left - editorState.pan.x) / editorState.zoom;
-    const currentY = (event.clientY - rect.top - editorState.pan.y) / editorState.zoom;
-    const width = currentX - selectionStartRef.current.x;
-    const height = currentY - selectionStartRef.current.y;
-    setSelection({
-      x: selectionStartRef.current.x,
-      y: selectionStartRef.current.y,
-      width,
-      height,
-    });
-  };
-
-  const stopSelection = () => {
-    selectionStartRef.current = null;
-  };
-
-  const handleToolbarToolChange = (tool: EditorTool) => {
-    setEditorState((state) => ({ ...state, activeTool: tool }));
-  };
+  // =============================================
+  // KEYBOARD SHORTCUTS
+  // =============================================
 
   const handleKeydown = useCallback(
     (event: KeyboardEvent) => {
@@ -260,13 +375,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       }
 
       if (event.key.toLowerCase() === 'v') {
-        handleToolbarToolChange('move');
+        setEditorState((state) => ({ ...state, activeTool: 'move' }));
       } else if (event.key.toLowerCase() === 'b') {
-        handleToolbarToolChange('brush');
+        setEditorState((state) => ({ ...state, activeTool: 'brush' }));
       } else if (event.key.toLowerCase() === 'e') {
-        handleToolbarToolChange('eraser');
-      } else if (event.key.toLowerCase() === 'm') {
-        handleToolbarToolChange('select');
+        setEditorState((state) => ({ ...state, activeTool: 'eraser' }));
       }
 
       if ((event.ctrlKey || event.metaKey) && (event.key === '+' || event.key === '=')) {
@@ -301,79 +414,128 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     };
   }, [handleKeydown, handleKeyup]);
 
-  const undo = () => canvasRef.current?.undo();
-  const redo = () => canvasRef.current?.redo();
-  const clear = () => {
-    canvasRef.current?.clearCanvas();
-    schedulePersist();
+  // =============================================
+  // LAYER OPERATIONS
+  // =============================================
+
+  const addLayer = async () => {
+    if (!config) return;
+
+    try {
+      const newLayer = await canvasService.createLayer({
+        canvas_config_id: config.id,
+        name: `Layer ${layers.length + 1}`,
+        order_index: layers.length,
+      });
+
+      setLayers(prev => [...prev, newLayer]);
+      setEditorState(state => ({ ...state, activeLayerId: newLayer.id }));
+      setLayerStrokes(prev => {
+        const newMap = new Map(prev);
+        newMap.set(newLayer.id, []);
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to add layer:', error);
+    }
   };
 
-  const exportImage = async () => {
-    const image = await canvasRef.current?.exportImage('png');
-    if (!image) return;
-    const link = document.createElement('a');
-    link.href = image;
-    link.download = `${project.name}-canvas.png`;
-    link.click();
+  const deleteLayer = async (layerId: string) => {
+    if (layers.length === 1) return;
+
+    try {
+      await canvasService.deleteLayer(layerId);
+
+      const remaining = layers.filter((layer) => layer.id !== layerId);
+      setLayers(remaining);
+
+      if (editorState.activeLayerId === layerId) {
+        setEditorState((state) => ({
+          ...state,
+          activeLayerId: remaining[0]?.id ?? null,
+        }));
+      }
+
+      setLayerStrokes(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(layerId);
+        return newMap;
+      });
+
+      layerCanvasRefs.current.delete(layerId);
+    } catch (error) {
+      console.error('Failed to delete layer:', error);
+    }
   };
 
-  const addLayer = () => {
-    const newLayer: Layer = {
-      id: `layer-${Date.now()}`,
-      name: `Layer ${editorState.layers.length + 1}`,
-      visible: true,
-      locked: false,
-    };
-    setEditorState((state) => ({ ...state, layers: [newLayer, ...state.layers], activeLayerId: newLayer.id }));
+  const toggleVisibility = async (layerId: string) => {
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return;
+
+    try {
+      await canvasService.updateLayer(layerId, { visible: !layer.visible });
+
+      setLayers(prev =>
+        prev.map((l) => (l.id === layerId ? { ...l, visible: !l.visible } : l))
+      );
+    } catch (error) {
+      console.error('Failed to toggle visibility:', error);
+    }
   };
 
-  const deleteLayer = (layerId: string) => {
-    if (editorState.layers.length === 1) return;
-    const remaining = editorState.layers.filter((layer) => layer.id !== layerId);
-    setEditorState((state) => ({
-      ...state,
-      layers: remaining,
-      activeLayerId: remaining[0]?.id ?? state.activeLayerId,
-    }));
+  const toggleLock = async (layerId: string) => {
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return;
+
+    try {
+      await canvasService.updateLayer(layerId, { locked: !layer.locked });
+
+      setLayers(prev =>
+        prev.map((l) => (l.id === layerId ? { ...l, locked: !l.locked } : l))
+      );
+    } catch (error) {
+      console.error('Failed to toggle lock:', error);
+    }
   };
 
-  const toggleVisibility = (layerId: string) => {
-    setEditorState((state) => ({
-      ...state,
-      layers: state.layers.map((layer) => (layer.id === layerId ? { ...layer, visible: !layer.visible } : layer)),
-    }));
+  // =============================================
+  // UTILITIES
+  // =============================================
+
+  const clear = async () => {
+    if (!editorState.activeLayerId) return;
+
+    try {
+      await canvasService.deleteStrokesByLayer(editorState.activeLayerId);
+
+      setLayerStrokes(prev => {
+        const newMap = new Map(prev);
+        newMap.set(editorState.activeLayerId!, []);
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to clear layer:', error);
+    }
   };
 
-  const toggleLock = (layerId: string) => {
-    setEditorState((state) => ({
-      ...state,
-      layers: state.layers.map((layer) => (layer.id === layerId ? { ...layer, locked: !layer.locked } : layer)),
-    }));
+  const exportImage = () => {
+    const canvas = mainCanvasRef.current;
+    if (!canvas) return;
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${project.name}-canvas.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
   };
 
-  const handleLayerDragStart = (event: DragEvent<HTMLButtonElement>, layerId: string) => {
-    dragLayerIdRef.current = layerId;
-    event.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleLayerDrop = (event: DragEvent<HTMLDivElement>, targetId: string) => {
-    event.preventDefault();
-    const sourceId = dragLayerIdRef.current;
-    if (!sourceId || sourceId === targetId) return;
-
-    const updated = [...editorState.layers];
-    const sourceIndex = updated.findIndex((layer) => layer.id === sourceId);
-    const targetIndex = updated.findIndex((layer) => layer.id === targetId);
-    if (sourceIndex === -1 || targetIndex === -1) return;
-
-    const [moved] = updated.splice(sourceIndex, 1);
-    updated.splice(targetIndex, 0, moved);
-    setEditorState((state) => ({ ...state, layers: updated }));
-  };
-
-  const handleLayerDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-  };
+  if (loading) {
+    return <div className="canvas-workspace"><p>Loading canvas...</p></div>;
+  }
 
   return (
     <div className="canvas-workspace">
@@ -381,7 +543,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         <div className="canvas-toolbar__group">
           <button
             className={`canvas-tool ${editorState.activeTool === 'move' ? 'canvas-tool--active' : ''}`}
-            onClick={() => handleToolbarToolChange('move')}
+            onClick={() => setEditorState(s => ({ ...s, activeTool: 'move' }))}
             title="Move (V)"
             type="button"
           >
@@ -389,7 +551,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           </button>
           <button
             className={`canvas-tool ${editorState.activeTool === 'brush' ? 'canvas-tool--active' : ''}`}
-            onClick={() => handleToolbarToolChange('brush')}
+            onClick={() => setEditorState(s => ({ ...s, activeTool: 'brush' }))}
             title="Brush (B)"
             type="button"
           >
@@ -397,19 +559,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           </button>
           <button
             className={`canvas-tool ${editorState.activeTool === 'eraser' ? 'canvas-tool--active' : ''}`}
-            onClick={() => handleToolbarToolChange('eraser')}
+            onClick={() => setEditorState(s => ({ ...s, activeTool: 'eraser' }))}
             title="Eraser (E)"
             type="button"
           >
             ⌫
-          </button>
-          <button
-            className={`canvas-tool ${editorState.activeTool === 'select' ? 'canvas-tool--active' : ''}`}
-            onClick={() => handleToolbarToolChange('select')}
-            title="Select (M)"
-            type="button"
-          >
-            ▭
           </button>
         </div>
 
@@ -423,12 +577,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         </div>
 
         <div className="canvas-toolbar__group">
-          <button className="canvas-tool" onClick={undo} type="button">
-            ↶
-          </button>
-          <button className="canvas-tool" onClick={redo} type="button">
-            ↷
-          </button>
           <button className="canvas-tool" onClick={clear} type="button">
             ⌦
           </button>
@@ -441,52 +589,28 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       <section className="canvas-center" onWheel={handleWheel}>
         <div
           className={`canvas-viewport ${isPanning ? 'canvas-viewport--panning' : ''}`}
-          onMouseDown={(e) => {
-            startPan(e);
-            startSelection(e);
-          }}
-          onMouseMove={(e) => {
-            updatePan(e);
-            updateSelection(e);
-          }}
-          onMouseUp={() => {
-            stopPan();
-            stopSelection();
-          }}
-          onMouseLeave={() => {
-            stopPan();
-            stopSelection();
-          }}
+          onMouseDown={startPan}
+          onMouseMove={updatePan}
+          onMouseUp={stopPan}
+          onMouseLeave={stopPan}
         >
           <div
             className="canvas-stage"
             style={{ transform: `translate3d(${editorState.pan.x}px, ${editorState.pan.y}px, 0) scale(${editorState.zoom})` }}
           >
             <div className="canvas-stage__surface">
-              <ReactSketchCanvas
-                ref={canvasRef}
+              <canvas
+                ref={mainCanvasRef}
                 style={{
                   width: '100%',
                   height: '100%',
-                  pointerEvents: editorState.activeTool === 'brush' || editorState.activeTool === 'eraser' ? 'auto' : 'none',
+                  cursor: editorState.activeTool === 'move' || isSpacePressed ? 'grab' : 'crosshair',
                 }}
-                strokeColor={editorState.brush.color}
-                strokeWidth={editorState.brush.width}
-                eraserWidth={editorState.eraser.width}
-                canvasColor="transparent"
-                onStroke={handleStroke}
+                onMouseDown={startDrawing}
+                onMouseMove={continueDrawing}
+                onMouseUp={finishDrawing}
+                onMouseLeave={finishDrawing}
               />
-              {selectionRect && (
-                <div
-                  className="canvas-selection"
-                  style={{
-                    left: `${selectionRect.left}px`,
-                    top: `${selectionRect.top}px`,
-                    width: `${selectionRect.width}px`,
-                    height: `${selectionRect.height}px`,
-                  }}
-                />
-              )}
             </div>
           </div>
         </div>
@@ -508,23 +632,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             </div>
           </div>
           <div className="canvas-layers">
-            {editorState.layers.map((layer) => (
+            {layers.map((layer) => (
               <div
                 key={layer.id}
                 className={`canvas-layer ${editorState.activeLayerId === layer.id ? 'canvas-layer--active' : ''}`}
                 onClick={() => setEditorState((state) => ({ ...state, activeLayerId: layer.id }))}
-                onDragOver={handleLayerDragOver}
-                onDrop={(event) => handleLayerDrop(event, layer.id)}
               >
                 <div className="canvas-layer__main">
-                  <button
-                    className="canvas-layer__drag"
-                    draggable
-                    onDragStart={(event) => handleLayerDragStart(event, layer.id)}
-                    type="button"
-                  >
-                    ☰
-                  </button>
                   <div className="canvas-layer__meta">
                     <p className="canvas-layer__name">{layer.name}</p>
                     <div className="canvas-layer__toggles">
@@ -560,7 +674,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                     deleteLayer(layer.id);
                   }}
                   type="button"
-                  disabled={editorState.layers.length === 1}
+                  disabled={layers.length === 1}
                 >
                   Delete
                 </button>
@@ -622,17 +736,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           {editorState.activeTool === 'move' && (
             <div className="canvas-props">
               <p className="muted">Move tool active. Hold space to pan.</p>
-            </div>
-          )}
-
-          {editorState.activeTool === 'select' && (
-            <div className="canvas-props">
-              <p className="muted">Selection size:</p>
-              <p>
-                {selection
-                  ? `${Math.abs(Math.round(selection.width))} × ${Math.abs(Math.round(selection.height))} px`
-                  : 'No selection'}
-              </p>
             </div>
           )}
         </div>
