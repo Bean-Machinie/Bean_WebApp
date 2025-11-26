@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import { Workspace } from './AppLayout';
+import { cn } from '@/lib/utils';
 
 type AppSidebarProps = {
   workspaces: Workspace[];
@@ -94,7 +95,7 @@ function AppSidebar({
       <SidebarBody className="justify-between gap-10">
         <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
           {/* Header with Logo and Collapse Button */}
-          <div className="px-2 mb-2 flex items-center justify-end relative" style={{ height: '42px' }}>
+          <div className={cn("mb-2 flex items-center justify-end relative", open ? "px-2" : "px-0")} style={{ height: '42px' }}>
             {/* Logo - only show when expanded */}
             <AnimatePresence mode="wait">
               {open && <Logo />}
@@ -103,7 +104,7 @@ function AppSidebar({
             {/* Collapse/Expand Button */}
             <button
               onClick={() => setOpen(!open)}
-              className="w-[42px] h-[42px] flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all duration-150 flex-shrink-0"
+              className="w-[40px] h-[40px] flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all duration-50 flex-shrink-0"
               aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
               title={open ? 'Collapse sidebar' : 'Expand sidebar'}
             >
@@ -152,7 +153,7 @@ function AppSidebar({
         <div className="relative">
           <div
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-            className="flex items-center justify-start gap-2 group/sidebar py-2 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md px-2"
+            className="flex items-center justify-start gap-2 group/sidebar px-1.5 py-2.5 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md px-2"
           >
             <div className="h-7 w-7 flex-shrink-0 rounded-full overflow-hidden bg-neutral-300 dark:bg-neutral-600 flex items-center justify-center">
               {isLoading ? (
