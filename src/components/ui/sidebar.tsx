@@ -94,7 +94,7 @@ export const DesktopSidebar = ({
         width: animate ? (open ? "300px" : "72px") : "300px",
       }}
       transition={{
-        duration: 0.3,
+        duration: 0.35,
         ease: "easeInOut",
       }}
       {...props}

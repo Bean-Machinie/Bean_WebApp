@@ -102,7 +102,7 @@ function AppSidebar({
       <SidebarBody className="justify-between gap-10">
         <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
           {/* Header with Logo and Collapse Button */}
-          <div className={cn("mb-2 flex items-center justify-end relative", open ? "px-2" : "px-0")} style={{ height: '42px' }}>
+          <div className="mb-2 flex items-center justify-end relative" style={{ height: '42px' }}>
             {/* Logo - only show when expanded */}
             <AnimatePresence mode="wait">
               {open && <Logo />}
