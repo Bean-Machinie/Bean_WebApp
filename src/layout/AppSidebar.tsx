@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useProfile } from '../context/ProfileContext';
 import { Workspace } from './AppLayout';
@@ -93,8 +93,37 @@ function AppSidebar({
     <Sidebar open={open} setOpen={setOpen}>
       <SidebarBody className="justify-between gap-10">
         <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          {/* Logo */}
-          {open ? <Logo /> : <LogoIcon />}
+          {/* Collapse/Expand Button */}
+          <div className="px-2 mb-2 flex justify-end">
+            <button
+              onClick={() => setOpen(!open)}
+              className="w-[42px] h-[42px] flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all duration-150 flex-shrink-0"
+              aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+              title={open ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="flex-shrink-0"
+              >
+                <path
+                  d="M10 4H6C4.89543 4 4 4.89543 4 6V18C4 19.1046 4.89543 20 6 20H10M10 4H18C19.1046 4 20 4.89543 20 6V18C20 19.1046 19.1046 20 18 20H10M10 4V20"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+
+          {/* Logo - only show when expanded */}
+          <AnimatePresence>
+            {open && <Logo />}
+          </AnimatePresence>
 
           {/* Workspace Links */}
           <div className="mt-8 flex flex-col gap-2">
@@ -138,6 +167,10 @@ function AppSidebar({
                 display: open ? 'inline-block' : 'none',
                 opacity: open ? 1 : 0,
               }}
+              transition={{
+                duration: 0.2,
+                ease: "easeInOut",
+              }}
               className="text-neutral-700 dark:text-neutral-200 text-sm whitespace-pre inline-block !p-0 !m-0"
             >
               {isLoading ? 'Loading...' : resolvedName}
@@ -175,16 +208,18 @@ function AppSidebar({
 
 const Logo = () => {
   return (
-    <div className="font-normal flex space-x-2 items-center text-sm text-black dark:text-white py-1 relative z-20">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: "easeInOut" }}
+      className="font-normal flex space-x-2 items-center text-sm text-black dark:text-white py-1 relative z-20"
+    >
       <div className="h-5 w-6 bg-black dark:bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
-      <motion.span
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="font-medium text-black dark:text-white whitespace-pre"
-      >
+      <span className="font-medium text-black dark:text-white whitespace-pre">
         Bean App
-      </motion.span>
-    </div>
+      </span>
+    </motion.div>
   );
 };
 

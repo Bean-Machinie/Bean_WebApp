@@ -93,8 +93,10 @@ export const DesktopSidebar = ({
       animate={{
         width: animate ? (open ? "300px" : "72px") : "300px",
       }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      transition={{
+        duration: 0.2,
+        ease: "easeInOut",
+      }}
       {...props}
     >
       {children}
@@ -176,6 +178,10 @@ export const SidebarLink = ({
         animate={{
           display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
+        }}
+        transition={{
+          duration: 0.2,
+          ease: "easeInOut",
         }}
         className="text-neutral-700 dark:text-neutral-200 text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
       >
