@@ -9,7 +9,7 @@ import MyProjectsWorkspace from '../components/MyProjectsWorkspace/MyProjectsWor
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import type { Project } from '../types/project';
-import Sidebar from './Sidebar';
+import AppSidebar from './AppSidebar';
 import WorkspaceArea from './WorkspaceArea';
 
 export type Workspace = {
@@ -74,7 +74,6 @@ const profileMenuItems: Workspace[] = [
 function AppLayout() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(realWorkspaces[0]?.id ?? workspaces[0]?.id);
   const [isNewProjectPanelOpen, setIsNewProjectPanelOpen] = useState(false);
   const [selectedProjectTypeId, setSelectedProjectTypeId] = useState(projectTypes[0]?.id ?? '');
@@ -135,10 +134,9 @@ function AppLayout() {
 
   return (
     <div className="app-layout">
-      <Sidebar
+      <AppSidebar
         workspaces={workspaces}
         profileMenuItems={profileMenuItems}
-        isCollapsed={isCollapsed}
         activeWorkspaceId={activeWorkspaceId}
         onSelectWorkspace={(workspaceId) => {
           if (workspaceId === 'new-project') {
@@ -147,7 +145,6 @@ function AppLayout() {
           }
           setActiveWorkspaceId(workspaceId);
         }}
-        onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
       />
 
       <WorkspaceArea activeWorkspace={activeWorkspace} content={workspaceContent} />
