@@ -93,8 +93,14 @@ function AppSidebar({
     <Sidebar open={open} setOpen={setOpen}>
       <SidebarBody className="justify-between gap-10">
         <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
-          {/* Collapse/Expand Button */}
-          <div className="px-2 mb-2 flex justify-end">
+          {/* Header with Logo and Collapse Button */}
+          <div className="px-2 mb-2 flex items-center justify-end relative" style={{ height: '42px' }}>
+            {/* Logo - only show when expanded */}
+            <AnimatePresence mode="wait">
+              {open && <Logo />}
+            </AnimatePresence>
+
+            {/* Collapse/Expand Button */}
             <button
               onClick={() => setOpen(!open)}
               className="w-[42px] h-[42px] flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-200 rounded-xl hover:bg-neutral-200 dark:hover:bg-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all duration-150 flex-shrink-0"
@@ -119,11 +125,6 @@ function AppSidebar({
               </svg>
             </button>
           </div>
-
-          {/* Logo - only show when expanded */}
-          <AnimatePresence>
-            {open && <Logo />}
-          </AnimatePresence>
 
           {/* Workspace Links */}
           <div className="mt-8 flex flex-col gap-2">
@@ -213,7 +214,7 @@ const Logo = () => {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2, ease: "easeInOut" }}
-      className="font-normal flex space-x-2 items-center text-sm text-black dark:text-white py-1 relative z-20"
+      className="font-normal flex space-x-2 items-center text-sm text-black dark:text-white absolute left-2"
     >
       <div className="h-5 w-6 bg-black dark:bg-white rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
       <span className="font-medium text-black dark:text-white whitespace-pre">
