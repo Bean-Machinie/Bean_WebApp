@@ -587,10 +587,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             draggable={editorState.activeTool === 'move' || isSpacePressed}
             onWheel={handleWheel}
             onDragEnd={handleStageDragEnd}
-            onMouseDown={handleStageMouseDown}
-            onMouseMove={handleStageMouseMove}
-            onMouseUp={handleStageMouseUp}
-            onMouseLeave={handleStageMouseUp}
             onPointerDown={handleStageMouseDown}
             onPointerMove={handleStageMouseMove}
             onPointerUp={handleStageMouseUp}
