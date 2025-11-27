@@ -1363,6 +1363,195 @@
   background: transparent;
 }
 
+/* === New canvas shell layout === */
+.canvas-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+}
+
+.canvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem;
+  background: #0f172a;
+  border-radius: 12px;
+  color: #e2e8f0;
+}
+
+.canvas-header__title h2 {
+  margin: 0;
+}
+
+.canvas-header__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.canvas-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.canvas-control select {
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #1f2937;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.canvas-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.canvas-header__actions button {
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #1f2937;
+  background: #1f2937;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.canvas-header__actions button:hover {
+  background: #111827;
+}
+
+.canvas-body {
+  display: grid;
+  grid-template-columns: 2fr 320px;
+  gap: 1rem;
+  height: calc(100vh - 160px);
+}
+
+.canvas-stage-wrapper {
+  position: relative;
+  background: #0b1021;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.canvas-stage-wrapper canvas {
+  border-radius: 12px;
+}
+
+.canvas-status {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.55);
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.canvas-sidepanel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.canvas-panel {
+  background: #0f172a;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 1rem;
+  color: #e2e8f0;
+}
+
+.canvas-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.canvas-panel__header h3 {
+  margin: 0;
+}
+
+.canvas-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.canvas-layer {
+  padding: 0.75rem;
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  background: #111827;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.canvas-layer--active {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #6366f1;
+}
+
+.canvas-layer__info {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.canvas-layer__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.canvas-layer__toggles {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.canvas-layer__icon {
+  background: #0f172a;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  width: 36px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.canvas-layer__icon--muted {
+  opacity: 0.6;
+}
+
+.canvas-layer__delete {
+  background: #7f1d1d;
+  border: 1px solid #ef4444;
+  color: #fee2e2;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+}
+
+.canvas-props {
+  display: grid;
+  gap: 0.5rem;
+}
+
 @media (max-width: 1200px) {
   .canvas-workspace {
     grid-template-columns: 70px 1fr 280px;
