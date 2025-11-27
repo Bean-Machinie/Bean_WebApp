@@ -29,14 +29,20 @@ type CanvasWorkspaceProps = {
   project: Project;
 };
 
+type Point = { x: number; y: number; pressure?: number };
+
 type DrawingState = {
   isDrawing: boolean;
-  currentPath: Array<{ x: number; y: number; pressure?: number }>;
+  currentPath: Point[];
 };
 
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const currentLineRef = useRef<Konva.Line | null>(null);
+  const lastPointRef = useRef<Point | null>(null);
+  const currentPathRef = useRef<Point[]>([]);
+  const isDrawingRef = useRef<boolean>(false);
 
   const [config, setConfig] = useState<CanvasConfig | null>(null);
   const [layers, setLayers] = useState<CanvasLayer[]>([]);
@@ -159,7 +165,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   // HELPER: Convert points to Konva Line format
   // =============================================
 
-  const pointsToArray = (points: Array<{ x: number; y: number }>): number[] => {
+  const pointsToArray = (points: Point[]): number[] => {
     const arr: number[] = [];
     for (const point of points) {
       arr.push(point.x, point.y);
@@ -168,10 +174,39 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   // =============================================
-  // DRAWING INTERACTION
+  // HELPER: Interpolate points for smooth lines
   // =============================================
 
-  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+  const interpolatePoints = (p1: Point, p2: Point): Point[] => {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Add intermediate points for distances > 2 pixels
+    if (distance <= 2) {
+      return [p2];
+    }
+
+    const steps = Math.ceil(distance / 2);
+    const interpolated: Point[] = [];
+
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      interpolated.push({
+        x: p1.x + dx * t,
+        y: p1.y + dy * t,
+        pressure: p2.pressure,
+      });
+    }
+
+    return interpolated;
+  };
+
+  // =============================================
+  // DRAWING INTERACTION - OPTIMIZED
+  // =============================================
+
+  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
     if (editorState.activeTool !== 'brush' && editorState.activeTool !== 'eraser') return;
     if (!editorState.activeLayerId) return;
 
@@ -188,14 +223,34 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const transform = stage.getAbsoluteTransform().copy().invert();
     const canvasPos = transform.point(pos);
 
+    // Get pressure from pointer event if available
+    const pointerEvent = e.evt as PointerEvent;
+    const pressure = pointerEvent.pressure ?? 0.5;
+
+    const initialPoint = { x: canvasPos.x, y: canvasPos.y, pressure };
+
+    lastPointRef.current = initialPoint;
+    currentPathRef.current = [initialPoint];
+    isDrawingRef.current = true;
+
     setDrawingState({
       isDrawing: true,
-      currentPath: [{ x: canvasPos.x, y: canvasPos.y }],
+      currentPath: [initialPoint],
     });
+
+    // Immediately render the initial point as a dot
+    if (currentLineRef.current) {
+      const dotPath = [
+        initialPoint,
+        { x: initialPoint.x + 0.1, y: initialPoint.y + 0.1, pressure: initialPoint.pressure }
+      ];
+      currentLineRef.current.points(pointsToArray(dotPath));
+      currentLineRef.current.getLayer()?.batchDraw();
+    }
   };
 
-  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
-    if (!drawingState.isDrawing) return;
+  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
+    if (!isDrawingRef.current) return;
 
     const stage = e.target.getStage();
     if (!stage) return;
@@ -206,23 +261,56 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const transform = stage.getAbsoluteTransform().copy().invert();
     const canvasPos = transform.point(pos);
 
-    setDrawingState(prev => ({
-      ...prev,
-      currentPath: [...prev.currentPath, { x: canvasPos.x, y: canvasPos.y }],
-    }));
+    // Get pressure from pointer event if available
+    const pointerEvent = e.evt as PointerEvent;
+    const pressure = pointerEvent.pressure ?? 0.5;
+
+    const newPoint = { x: canvasPos.x, y: canvasPos.y, pressure };
+
+    // Interpolate points for smooth lines
+    let pointsToAdd: Point[] = [newPoint];
+    if (lastPointRef.current) {
+      pointsToAdd = interpolatePoints(lastPointRef.current, newPoint);
+    }
+
+    lastPointRef.current = newPoint;
+
+    // Add points to ref (no re-render)
+    currentPathRef.current = [...currentPathRef.current, ...pointsToAdd];
+
+    // Force immediate render of current line
+    if (currentLineRef.current) {
+      currentLineRef.current.points(pointsToArray(currentPathRef.current));
+      currentLineRef.current.getLayer()?.batchDraw();
+    }
   };
 
   const handleStageMouseUp = async () => {
-    if (!drawingState.isDrawing || drawingState.currentPath.length < 2) {
+    if (!isDrawingRef.current || currentPathRef.current.length < 1) {
+      isDrawingRef.current = false;
+      currentPathRef.current = [];
       setDrawingState({ isDrawing: false, currentPath: [] });
+      lastPointRef.current = null;
       return;
     }
 
     if (!editorState.activeLayerId) return;
 
+    const finalPath = [...currentPathRef.current];
+
+    // For single-click dots, duplicate the point to create a visible stroke
+    if (finalPath.length === 1) {
+      const singlePoint = finalPath[0];
+      finalPath.push({
+        x: singlePoint.x + 0.1,
+        y: singlePoint.y + 0.1,
+        pressure: singlePoint.pressure
+      });
+    }
+
     try {
       const strokeData: StrokeData = {
-        points: drawingState.currentPath,
+        points: finalPath,
         color: editorState.brush.color,
         width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
         tool: editorState.activeTool === 'eraser' ? 'eraser' : 'brush',
@@ -246,9 +334,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     } catch (error) {
       console.error('Failed to save stroke:', error);
     } finally {
+      isDrawingRef.current = false;
+      currentPathRef.current = [];
       setDrawingState({ isDrawing: false, currentPath: [] });
+      lastPointRef.current = null;
     }
   };
+
 
   // =============================================
   // PAN & ZOOM
@@ -535,6 +627,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             onMouseDown={handleStageMouseDown}
             onMouseMove={handleStageMouseMove}
             onMouseUp={handleStageMouseUp}
+            onMouseLeave={handleStageMouseUp}
+            onPointerDown={handleStageMouseDown}
+            onPointerMove={handleStageMouseMove}
+            onPointerUp={handleStageMouseUp}
+            onPointerCancel={handleStageMouseUp}
+            onPointerLeave={handleStageMouseUp}
             style={{
               cursor: editorState.activeTool === 'move' || isSpacePressed ? 'grab' : 'crosshair',
             }}
@@ -577,6 +675,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                         opacity={opacity}
                         globalCompositeOperation={tool === 'eraser' ? 'destination-out' : 'source-over'}
                         perfectDrawEnabled={false}
+                        shadowForStrokeEnabled={false}
+                        hitStrokeWidth={0}
                       />
                     );
                   })}
@@ -584,11 +684,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               );
             })}
 
-            {/* Current drawing preview */}
-            {drawingState.isDrawing && drawingState.currentPath.length > 0 && (
+            {/* Current drawing preview - optimized for performance */}
+            {drawingState.isDrawing && (
               <Layer listening={false}>
                 <Line
-                  points={pointsToArray(drawingState.currentPath)}
+                  ref={currentLineRef}
+                  points={[]}
                   stroke={editorState.brush.color}
                   strokeWidth={editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width}
                   tension={0.5}
@@ -596,6 +697,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                   lineJoin="round"
                   globalCompositeOperation={editorState.activeTool === 'eraser' ? 'destination-out' : 'source-over'}
                   perfectDrawEnabled={false}
+                  shadowForStrokeEnabled={false}
+                  hitStrokeWidth={0}
+                  listening={false}
                 />
               </Layer>
             )}
