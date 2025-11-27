@@ -1,4 +1,5 @@
 import type { Project } from '../../types/project';
+import Folder from '../Folder/Folder';
 import './MyProjectsWorkspace.css';
 
 type MyProjectsWorkspaceProps = {
@@ -9,6 +10,18 @@ type MyProjectsWorkspaceProps = {
 };
 
 function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onRefresh }: MyProjectsWorkspaceProps) {
+  const getProjectColor = (projectType: string): string => {
+    const colorMap: Record<string, string> = {
+      'canvas': '#5227FF',
+      'battle-maps': '#FF6B35',
+      'character-sheets': '#4ECDC4',
+      'item-cards': '#FFD93D',
+      'game-boards': '#95E1D3',
+      'campaign-journal': '#F38181',
+    };
+    return colorMap[projectType] || '#5227FF';
+  };
+
   return (
     <div className="my-projects">
       <div className="my-projects__toolbar">
@@ -33,20 +46,23 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onRefresh }
       ) : (
         <div className="my-projects__grid">
           {projects.map((project) => (
-            <button
-              key={project.id}
-              className="my-projects__card"
-              onClick={() => onSelectProject(project)}
-            >
-              <div className="my-projects__card-header">
-                <span className="my-projects__type">{project.project_type}</span>
-                <span className="my-projects__date">
-                  {project.created_at ? new Date(project.created_at).toLocaleDateString() : ''}
-                </span>
+            <div key={project.id} className="my-projects__folder-wrapper">
+              <Folder
+                color={getProjectColor(project.project_type)}
+                size={1.2}
+                onClick={() => onSelectProject(project)}
+              />
+              <div className="my-projects__folder-info">
+                <h3 className="my-projects__title">{project.name}</h3>
+                <div className="my-projects__meta">
+                  <span className="my-projects__type">{project.project_type}</span>
+                  <span className="my-projects__date">
+                    {project.created_at ? new Date(project.created_at).toLocaleDateString() : ''}
+                  </span>
+                </div>
+                {project.description ? <p className="my-projects__description">{project.description}</p> : null}
               </div>
-              <h3 className="my-projects__title">{project.name}</h3>
-              {project.description ? <p className="muted">{project.description}</p> : null}
-            </button>
+            </div>
           ))}
         </div>
       )}

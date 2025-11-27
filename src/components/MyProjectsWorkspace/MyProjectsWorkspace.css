@@ -20,52 +20,76 @@
 
 .my-projects__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  padding: 20px 0;
 }
 
-.my-projects__card {
-  text-align: left;
-  border: 1px solid var(--border);
+.my-projects__folder-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
   border-radius: 14px;
   background: var(--bg);
-  padding: 14px;
+  transition: background 0.2s ease, transform 0.2s ease;
+  position: relative;
+}
+
+.my-projects__folder-wrapper:hover {
+  background: var(--bg-secondary);
+  transform: translateY(-4px);
+}
+
+.my-projects__folder-info {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  width: 100%;
+  text-align: center;
 }
 
-.my-projects__card:hover {
-  border-color: var(--border-strong);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--bg-secondary) 30%, transparent);
+.my-projects__title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
 }
 
-.my-projects__card-header {
+.my-projects__meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .my-projects__type {
-  padding: 4px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--primary) 10%, var(--bg-secondary));
   color: var(--primary);
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-transform: capitalize;
 }
 
 .my-projects__date {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
-.my-projects__title {
+.my-projects__description {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .my-projects__empty {
