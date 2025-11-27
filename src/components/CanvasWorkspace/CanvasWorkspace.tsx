@@ -55,10 +55,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     currentPath: [],
   });
 
-  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const [stageSize, setStageSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   const previousToolRef = useRef<EditorTool | null>(null);
   const strokeOrderRef = useRef<number>(0);
 
+  // Initialize pan to center the canvas
   const [editorState, setEditorState] = useState({
     zoom: 1,
     pan: { x: 0, y: 0 },
@@ -143,16 +144,25 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   // =============================================
-  // STAGE RESIZE
+  // STAGE RESIZE & INITIAL CENTERING
   // =============================================
 
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
-        setStageSize({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-        });
+        const width = containerRef.current.offsetWidth;
+        const height = containerRef.current.offsetHeight;
+        setStageSize({ width, height });
+
+        // Center the canvas on first load if pan is at 0,0
+        if (config && editorState.pan.x === 0 && editorState.pan.y === 0) {
+          const centerX = (width - config.width) / 2;
+          const centerY = (height - config.height) / 2;
+          setEditorState(prev => ({
+            ...prev,
+            pan: { x: centerX, y: centerY },
+          }));
+        }
       }
     };
 
@@ -168,7 +178,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       window.removeEventListener('resize', updateSize);
       observer.disconnect();
     };
-  }, []);
+  }, [config]);
 
   // =============================================
   // HELPER: Convert points to Konva Line format
