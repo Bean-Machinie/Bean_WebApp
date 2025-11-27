@@ -52,7 +52,7 @@ export async function getCanvasConfigWithLayers(projectId: string): Promise<Canv
 
   // Sort layers by order_index
   if (data.canvas_layers) {
-    data.canvas_layers.sort((a, b) => a.order_index - b.order_index);
+    data.canvas_layers.sort((a: CanvasLayer, b: CanvasLayer) => a.order_index - b.order_index);
   }
 
   return data as CanvasConfigWithLayers;
@@ -134,7 +134,7 @@ export async function getLayerWithStrokes(layerId: string): Promise<CanvasLayerW
 
   // Sort strokes by stroke_order
   if (data.canvas_strokes) {
-    data.canvas_strokes.sort((a, b) => a.stroke_order - b.stroke_order);
+    data.canvas_strokes.sort((a: CanvasStroke, b: CanvasStroke) => a.stroke_order - b.stroke_order);
   }
 
   return data as CanvasLayerWithStrokes;

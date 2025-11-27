@@ -1,12 +1,12 @@
 import {
-  MouseEvent as ReactMouseEvent,
-  WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from 'react';
-import { supabase } from '../../lib/supabaseClient';
+import { Stage, Layer, Line } from 'react-konva';
+import Konva from 'konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import type { Project } from '../../types/project';
 import {
   CanvasConfig,
@@ -35,8 +35,8 @@ type DrawingState = {
 };
 
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
-  const mainCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const layerCanvasRefs = useRef<Map<string, HTMLCanvasElement>>(new Map());
+  const stageRef = useRef<Konva.Stage | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [config, setConfig] = useState<CanvasConfig | null>(null);
   const [layers, setLayers] = useState<CanvasLayer[]>([]);
@@ -44,17 +44,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [loading, setLoading] = useState(true);
 
   const [isSpacePressed, setIsSpacePressed] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
   const [drawingState, setDrawingState] = useState<DrawingState>({
     isDrawing: false,
     currentPath: [],
   });
 
-  const panStartRef = useRef<{ x: number; y: number } | null>(null);
-  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [selection, setSelection] = useState<SelectionBox | null>(null);
+  const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const previousToolRef = useRef<EditorTool | null>(null);
-  const dragLayerIdRef = useRef<string | null>(null);
   const strokeOrderRef = useRef<number>(0);
 
   const [editorState, setEditorState] = useState({
@@ -141,148 +137,82 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   // =============================================
-  // CANVAS RENDERING
+  // STAGE RESIZE
   // =============================================
 
   useEffect(() => {
-    if (!config || layers.length === 0) return;
-
-    renderAllLayers();
-  }, [config, layers, layerStrokes, editorState.zoom, editorState.pan]);
-
-  const renderAllLayers = useCallback(() => {
-    const mainCanvas = mainCanvasRef.current;
-    if (!mainCanvas || !config) return;
-
-    const ctx = mainCanvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas size
-    mainCanvas.width = config.width;
-    mainCanvas.height = config.height;
-
-    // Clear main canvas
-    ctx.fillStyle = config.background_color;
-    ctx.fillRect(0, 0, config.width, config.height);
-
-    // Render each layer in order
-    for (const layer of layers) {
-      if (!layer.visible) continue;
-
-      const strokes = layerStrokes.get(layer.id) ?? [];
-      if (strokes.length === 0) continue;
-
-      // Create or get layer canvas
-      let layerCanvas = layerCanvasRefs.current.get(layer.id);
-      if (!layerCanvas) {
-        layerCanvas = document.createElement('canvas');
-        layerCanvas.width = config.width;
-        layerCanvas.height = config.height;
-        layerCanvasRefs.current.set(layer.id, layerCanvas);
+    const updateSize = () => {
+      if (containerRef.current) {
+        setStageSize({
+          width: containerRef.current.offsetWidth,
+          height: containerRef.current.offsetHeight,
+        });
       }
+    };
 
-      const layerCtx = layerCanvas.getContext('2d');
-      if (!layerCtx) continue;
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
 
-      // Clear layer canvas
-      layerCtx.clearRect(0, 0, config.width, config.height);
+  // =============================================
+  // HELPER: Convert points to Konva Line format
+  // =============================================
 
-      // Draw all strokes on this layer
-      for (const stroke of strokes) {
-        drawStroke(layerCtx, stroke.stroke_data);
-      }
-
-      // Composite layer onto main canvas with layer settings
-      ctx.save();
-      ctx.globalAlpha = layer.opacity;
-      ctx.globalCompositeOperation = layer.blend_mode as GlobalCompositeOperation;
-      ctx.drawImage(layerCanvas, 0, 0);
-      ctx.restore();
+  const pointsToArray = (points: Array<{ x: number; y: number }>): number[] => {
+    const arr: number[] = [];
+    for (const point of points) {
+      arr.push(point.x, point.y);
     }
-  }, [config, layers, layerStrokes]);
-
-  const drawStroke = (ctx: CanvasRenderingContext2D, strokeData: StrokeData) => {
-    const { points, color, width, tool, opacity = 1 } = strokeData;
-
-    if (points.length === 0) return;
-
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.globalAlpha = opacity;
-
-    if (tool === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-
-    for (let i = 1; i < points.length; i++) {
-      const point = points[i];
-      ctx.lineTo(point.x, point.y);
-    }
-
-    ctx.stroke();
-    ctx.restore();
+    return arr;
   };
 
   // =============================================
   // DRAWING INTERACTION
   // =============================================
 
-  const startDrawing = (event: ReactMouseEvent<HTMLCanvasElement>) => {
+  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     if (editorState.activeTool !== 'brush' && editorState.activeTool !== 'eraser') return;
     if (!editorState.activeLayerId) return;
 
     const activeLayer = layers.find(l => l.id === editorState.activeLayerId);
     if (!activeLayer || activeLayer.locked) return;
 
-    const canvas = mainCanvasRef.current;
-    if (!canvas) return;
+    const stage = e.target.getStage();
+    if (!stage) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left - editorState.pan.x) / editorState.zoom;
-    const y = (event.clientY - rect.top - editorState.pan.y) / editorState.zoom;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+
+    // Convert to canvas coordinates (accounting for zoom/pan)
+    const transform = stage.getAbsoluteTransform().copy().invert();
+    const canvasPos = transform.point(pos);
 
     setDrawingState({
       isDrawing: true,
-      currentPath: [{ x, y }],
+      currentPath: [{ x: canvasPos.x, y: canvasPos.y }],
     });
   };
 
-  const continueDrawing = (event: ReactMouseEvent<HTMLCanvasElement>) => {
+  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
     if (!drawingState.isDrawing) return;
 
-    const canvas = mainCanvasRef.current;
-    if (!canvas) return;
+    const stage = e.target.getStage();
+    if (!stage) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left - editorState.pan.x) / editorState.zoom;
-    const y = (event.clientY - rect.top - editorState.pan.y) / editorState.zoom;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+
+    const transform = stage.getAbsoluteTransform().copy().invert();
+    const canvasPos = transform.point(pos);
 
     setDrawingState(prev => ({
       ...prev,
-      currentPath: [...prev.currentPath, { x, y }],
+      currentPath: [...prev.currentPath, { x: canvasPos.x, y: canvasPos.y }],
     }));
-
-    // Draw preview on main canvas
-    renderAllLayers();
-    const ctx = mainCanvasRef.current?.getContext('2d');
-    if (ctx) {
-      const strokeData: StrokeData = {
-        points: [...drawingState.currentPath, { x, y }],
-        color: editorState.brush.color,
-        width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
-        tool: editorState.activeTool,
-      };
-      drawStroke(ctx, strokeData);
-    }
   };
 
-  const finishDrawing = async () => {
+  const handleStageMouseUp = async () => {
     if (!drawingState.isDrawing || drawingState.currentPath.length < 2) {
       setDrawingState({ isDrawing: false, currentPath: [] });
       return;
@@ -295,7 +225,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         points: drawingState.currentPath,
         color: editorState.brush.color,
         width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
-        tool: editorState.activeTool,
+        tool: editorState.activeTool === 'eraser' ? 'eraser' : 'brush',
       };
 
       // Save stroke to database
@@ -313,8 +243,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         return newMap;
       });
 
-      // TODO: Create version snapshot for undo
-
     } catch (error) {
       console.error('Failed to save stroke:', error);
     } finally {
@@ -326,35 +254,42 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   // PAN & ZOOM
   // =============================================
 
-  const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    if (event.ctrlKey || event.metaKey) {
-      event.preventDefault();
-      const delta = event.deltaY > 0 ? -0.1 : 0.1;
-      setEditorState((state) => {
-        const nextZoom = Math.min(4, Math.max(0.2, state.zoom + delta));
-        return { ...state, zoom: nextZoom };
-      });
-    }
+  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const oldScale = stage.scaleX();
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    };
+
+    const direction = e.evt.deltaY > 0 ? -1 : 1;
+    const newScale = Math.max(0.2, Math.min(4, oldScale + direction * 0.1));
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    };
+
+    setEditorState(prev => ({
+      ...prev,
+      zoom: newScale,
+      pan: newPos,
+    }));
   };
 
-  const startPan = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!isSpacePressed && editorState.activeTool !== 'move') {
-      return;
-    }
-    event.preventDefault();
-    setIsPanning(true);
-    panStartRef.current = { x: event.clientX - editorState.pan.x, y: event.clientY - editorState.pan.y };
-  };
-
-  const updatePan = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!isPanning || !panStartRef.current) return;
-    const newPan = { x: event.clientX - panStartRef.current.x, y: event.clientY - panStartRef.current.y };
-    setEditorState((state) => ({ ...state, pan: newPan }));
-  };
-
-  const stopPan = () => {
-    setIsPanning(false);
-    panStartRef.current = null;
+  const handleStageDragEnd = (e: KonvaEventObject<DragEvent>) => {
+    const stage = e.target;
+    setEditorState(prev => ({
+      ...prev,
+      pan: { x: stage.x(), y: stage.y() },
+    }));
   };
 
   // =============================================
@@ -461,8 +396,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         newMap.delete(layerId);
         return newMap;
       });
-
-      layerCanvasRefs.current.delete(layerId);
     } catch (error) {
       console.error('Failed to delete layer:', error);
     }
@@ -519,18 +452,14 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   const exportImage = () => {
-    const canvas = mainCanvasRef.current;
-    if (!canvas) return;
+    const stage = stageRef.current;
+    if (!stage) return;
 
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${project.name}-canvas.png`;
-      link.click();
-      URL.revokeObjectURL(url);
-    });
+    const uri = stage.toDataURL({ pixelRatio: 2 });
+    const link = document.createElement('a');
+    link.download = `${project.name}-canvas.png`;
+    link.href = uri;
+    link.click();
   };
 
   if (loading) {
@@ -586,33 +515,91 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         </div>
       </aside>
 
-      <section className="canvas-center" onWheel={handleWheel}>
+      <section className="canvas-center">
         <div
-          className={`canvas-viewport ${isPanning ? 'canvas-viewport--panning' : ''}`}
-          onMouseDown={startPan}
-          onMouseMove={updatePan}
-          onMouseUp={stopPan}
-          onMouseLeave={stopPan}
+          ref={containerRef}
+          className="canvas-viewport"
+          style={{ width: '100%', height: '100%' }}
         >
-          <div
-            className="canvas-stage"
-            style={{ transform: `translate3d(${editorState.pan.x}px, ${editorState.pan.y}px, 0) scale(${editorState.zoom})` }}
+          <Stage
+            ref={stageRef}
+            width={stageSize.width}
+            height={stageSize.height}
+            scaleX={editorState.zoom}
+            scaleY={editorState.zoom}
+            x={editorState.pan.x}
+            y={editorState.pan.y}
+            draggable={editorState.activeTool === 'move' || isSpacePressed}
+            onWheel={handleWheel}
+            onDragEnd={handleStageDragEnd}
+            onMouseDown={handleStageMouseDown}
+            onMouseMove={handleStageMouseMove}
+            onMouseUp={handleStageMouseUp}
+            style={{
+              cursor: editorState.activeTool === 'move' || isSpacePressed ? 'grab' : 'crosshair',
+            }}
           >
-            <div className="canvas-stage__surface">
-              <canvas
-                ref={mainCanvasRef}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  cursor: editorState.activeTool === 'move' || isSpacePressed ? 'grab' : 'crosshair',
-                }}
-                onMouseDown={startDrawing}
-                onMouseMove={continueDrawing}
-                onMouseUp={finishDrawing}
-                onMouseLeave={finishDrawing}
+            {/* Background layer */}
+            <Layer listening={false}>
+              <Line
+                points={[0, 0, config?.width ?? 1920, 0, config?.width ?? 1920, config?.height ?? 1080, 0, config?.height ?? 1080]}
+                closed
+                fill={config?.background_color ?? '#0f172a'}
               />
-            </div>
-          </div>
+            </Layer>
+
+            {/* Render each canvas layer */}
+            {layers.map((layer) => {
+              if (!layer.visible) return null;
+
+              const strokes = layerStrokes.get(layer.id) ?? [];
+
+              return (
+                <Layer
+                  key={layer.id}
+                  opacity={layer.opacity}
+                  listening={!layer.locked}
+                  globalCompositeOperation={layer.blend_mode as GlobalCompositeOperation}
+                >
+                  {strokes.map((stroke) => {
+                    const { points, color, width, tool, opacity = 1 } = stroke.stroke_data;
+                    const pointsArray = pointsToArray(points);
+
+                    return (
+                      <Line
+                        key={stroke.id}
+                        points={pointsArray}
+                        stroke={color}
+                        strokeWidth={width}
+                        tension={0.5}
+                        lineCap="round"
+                        lineJoin="round"
+                        opacity={opacity}
+                        globalCompositeOperation={tool === 'eraser' ? 'destination-out' : 'source-over'}
+                        perfectDrawEnabled={false}
+                      />
+                    );
+                  })}
+                </Layer>
+              );
+            })}
+
+            {/* Current drawing preview */}
+            {drawingState.isDrawing && drawingState.currentPath.length > 0 && (
+              <Layer listening={false}>
+                <Line
+                  points={pointsToArray(drawingState.currentPath)}
+                  stroke={editorState.brush.color}
+                  strokeWidth={editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width}
+                  tension={0.5}
+                  lineCap="round"
+                  lineJoin="round"
+                  globalCompositeOperation={editorState.activeTool === 'eraser' ? 'destination-out' : 'source-over'}
+                  perfectDrawEnabled={false}
+                />
+              </Layer>
+            )}
+          </Stage>
         </div>
         <div className="canvas-status">
           <p>Zoom: {(editorState.zoom * 100).toFixed(0)}%</p>
