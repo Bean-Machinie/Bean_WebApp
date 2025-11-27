@@ -296,6 +296,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
     if (!editorState.activeLayerId) return;
 
+    // Capture the final path immediately
     const finalPath = [...currentPathRef.current];
 
     // For single-click dots, duplicate the point to create a visible stroke
@@ -307,6 +308,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         pressure: singlePoint.pressure
       });
     }
+
+    // Stop accepting new points immediately
+    isDrawingRef.current = false;
 
     try {
       const strokeData: StrokeData = {
@@ -323,7 +327,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         stroke_order: strokeOrderRef.current++,
       });
 
-      // Update local state
+      // Update local state with the new stroke
       setLayerStrokes(prev => {
         const newMap = new Map(prev);
         const currentStrokes = newMap.get(editorState.activeLayerId!) ?? [];
@@ -331,10 +335,17 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         return newMap;
       });
 
+      // Only clear the drawing state AFTER the stroke is added to the permanent layers
+      // This prevents the preview from disappearing before the permanent stroke renders
+      requestAnimationFrame(() => {
+        currentPathRef.current = [];
+        setDrawingState({ isDrawing: false, currentPath: [] });
+        lastPointRef.current = null;
+      });
+
     } catch (error) {
       console.error('Failed to save stroke:', error);
-    } finally {
-      isDrawingRef.current = false;
+      // Clean up even on error
       currentPathRef.current = [];
       setDrawingState({ isDrawing: false, currentPath: [] });
       lastPointRef.current = null;
