@@ -312,43 +312,65 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     // Stop accepting new points immediately
     isDrawingRef.current = false;
 
-    try {
-      const strokeData: StrokeData = {
-        points: finalPath,
-        color: editorState.brush.color,
-        width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
-        tool: editorState.activeTool === 'eraser' ? 'eraser' : 'brush',
-      };
+    const strokeData: StrokeData = {
+      points: finalPath,
+      color: editorState.brush.color,
+      width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
+      tool: editorState.activeTool === 'eraser' ? 'eraser' : 'brush',
+    };
 
-      // Save stroke to database
+    // Create optimistic stroke with temporary ID
+    const tempId = `temp-${Date.now()}-${Math.random()}`;
+    const optimisticStroke: CanvasStroke = {
+      id: tempId,
+      layer_id: editorState.activeLayerId,
+      stroke_data: strokeData,
+      stroke_order: strokeOrderRef.current++,
+      created_at: new Date().toISOString(),
+    };
+
+    // Immediately add optimistic stroke to UI (no flash!)
+    const currentLayerId = editorState.activeLayerId;
+    setLayerStrokes(prev => {
+      const newMap = new Map(prev);
+      const currentStrokes = newMap.get(currentLayerId) ?? [];
+      newMap.set(currentLayerId, [...currentStrokes, optimisticStroke]);
+      return newMap;
+    });
+
+    // Clear drawing state immediately since we have the optimistic stroke
+    currentPathRef.current = [];
+    setDrawingState({ isDrawing: false, currentPath: [] });
+    lastPointRef.current = null;
+
+    // Save to database in background and replace temp ID with real ID
+    try {
       const newStroke = await canvasService.createStroke({
-        layer_id: editorState.activeLayerId,
+        layer_id: currentLayerId,
         stroke_data: strokeData,
-        stroke_order: strokeOrderRef.current++,
+        stroke_order: optimisticStroke.stroke_order,
       });
 
-      // Update local state with the new stroke
+      // Replace optimistic stroke with real stroke from database
       setLayerStrokes(prev => {
         const newMap = new Map(prev);
-        const currentStrokes = newMap.get(editorState.activeLayerId!) ?? [];
-        newMap.set(editorState.activeLayerId!, [...currentStrokes, newStroke]);
+        const currentStrokes = newMap.get(currentLayerId) ?? [];
+        const updatedStrokes = currentStrokes.map(s =>
+          s.id === tempId ? newStroke : s
+        );
+        newMap.set(currentLayerId, updatedStrokes);
         return newMap;
-      });
-
-      // Only clear the drawing state AFTER the stroke is added to the permanent layers
-      // This prevents the preview from disappearing before the permanent stroke renders
-      requestAnimationFrame(() => {
-        currentPathRef.current = [];
-        setDrawingState({ isDrawing: false, currentPath: [] });
-        lastPointRef.current = null;
       });
 
     } catch (error) {
       console.error('Failed to save stroke:', error);
-      // Clean up even on error
-      currentPathRef.current = [];
-      setDrawingState({ isDrawing: false, currentPath: [] });
-      lastPointRef.current = null;
+      // Remove optimistic stroke on error
+      setLayerStrokes(prev => {
+        const newMap = new Map(prev);
+        const currentStrokes = newMap.get(currentLayerId) ?? [];
+        newMap.set(currentLayerId, currentStrokes.filter(s => s.id !== tempId));
+        return newMap;
+      });
     }
   };
 
