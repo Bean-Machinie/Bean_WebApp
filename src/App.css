@@ -1153,12 +1153,12 @@
 
 .canvas-workspace {
   display: grid;
-  grid-template-columns: 80px 1fr 340px;
+  grid-template-columns: 80px minmax(0, 1fr) 340px;
   gap: 12px;
-  min-height: 70vh;
+  min-height: calc(100vh - 170px);
   background: var(--bg-secondary);
-  border-radius: 14px;
-  border: 1px solid var(--border);
+  border-radius: 0;
+  border: none;
   color: var(--text);
 }
 
@@ -1169,8 +1169,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-top-left-radius: 14px;
-  border-bottom-left-radius: 14px;
+  border-radius: 0;
 }
 
 .canvas-toolbar__group {
@@ -1203,24 +1202,27 @@
 
 .canvas-center {
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  height: 100%;
+  border-radius: 0;
+  border: none;
 }
 
 .canvas-viewport {
   flex: 1;
+  min-height: 0;
+  height: 100%;
   position: relative;
   background: repeating-conic-gradient(
       color-mix(in srgb, var(--bg) 92%, var(--text) 8%) 0% 25%,
       color-mix(in srgb, var(--bg) 96%, var(--text) 4%) 0% 50%
     )
     50% / 24px 24px;
-  border-bottom: 1px solid var(--border);
   overflow: hidden;
 }
 
