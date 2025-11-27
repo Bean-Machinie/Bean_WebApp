@@ -157,8 +157,17 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     };
 
     updateSize();
+
+    const observer = new ResizeObserver(updateSize);
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      observer.disconnect();
+    };
   }, []);
 
   // =============================================
