@@ -50,7 +50,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   const [isSpacePressed, setIsSpacePressed] = useState(false);
 
-  // Simple drawing state like the example
+  // Simple drawing state EXACTLY like the example
   const [lines, setLines] = useState<Line[]>([]);
 
   const [stageSize, setStageSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -191,7 +191,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   // =============================================
-  // DRAWING INTERACTION - SIMPLE & ELEGANT (like the example!)
+  // DRAWING INTERACTION - EXACTLY LIKE THE EXAMPLE
   // =============================================
 
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
@@ -213,16 +213,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
     isDrawingRef.current = true;
 
-    // Start a new line with the initial point
-    setLines([
-      ...lines,
-      {
-        tool: editorState.activeTool === 'eraser' ? 'eraser' : 'brush',
-        points: [canvasPos.x, canvasPos.y],
-        color: editorState.brush.color,
-        width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
-      },
-    ]);
+    // EXACTLY like the example - just add a new line to state
+    setLines([...lines, {
+      tool: editorState.activeTool === 'eraser' ? 'eraser' : 'brush',
+      points: [canvasPos.x, canvasPos.y],
+      color: editorState.brush.color,
+      width: editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width,
+    }]);
   };
 
   const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
@@ -241,13 +238,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const transform = stage.getAbsoluteTransform().copy().invert();
     const canvasPos = transform.point(point);
 
-    const lastLine = lines[lines.length - 1];
+    let lastLine = lines[lines.length - 1];
     if (!lastLine) return;
 
-    // add point
+    // add point - EXACTLY like the example
     lastLine.points = lastLine.points.concat([canvasPos.x, canvasPos.y]);
 
-    // replace last
+    // replace last - EXACTLY like the example
     lines.splice(lines.length - 1, 1, lastLine);
     setLines(lines.concat());
   };
@@ -261,7 +258,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
     const completedLine = lines[lines.length - 1];
 
-    // Convert flat points array back to Point objects for database
+    // Convert flat points array to Point objects for database
     const pointObjects: Point[] = [];
     for (let i = 0; i < completedLine.points.length; i += 2) {
       pointObjects.push({
@@ -295,11 +292,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         return newMap;
       });
 
-      // Clear the temporary lines array after successful save
+      // Clear temporary lines after save
       setLines([]);
     } catch (error) {
       console.error('Failed to save stroke:', error);
-      // On error, still clear the line since we can't retry
       setLines([]);
     }
   };
@@ -504,6 +500,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
       // Also clear temporary lines
       setLines([]);
+      isDrawingRef.current = false;
     } catch (error) {
       console.error('Failed to clear layer:', error);
     }
@@ -648,7 +645,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                     );
                   })}
 
-                  {/* Render temporary lines being drawn (like the example!) */}
+                  {/* Render temporary lines being drawn - EXACTLY like the example */}
                   {layer.id === editorState.activeLayerId && lines.map((line, i) => (
                     <Line
                       key={i}
@@ -658,9 +655,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                       tension={0.5}
                       lineCap="round"
                       lineJoin="round"
-                      globalCompositeOperation={
-                        line.tool === 'eraser' ? 'destination-out' : 'source-over'
-                      }
+                      globalCompositeOperation={line.tool === 'eraser' ? 'destination-out' : 'source-over'}
                       perfectDrawEnabled={false}
                       shadowForStrokeEnabled={false}
                       hitStrokeWidth={0}
