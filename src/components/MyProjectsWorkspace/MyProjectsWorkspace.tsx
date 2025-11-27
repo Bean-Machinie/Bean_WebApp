@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import type { Project } from '../../types/project';
 import Folder from '../Folder/Folder';
 import './MyProjectsWorkspace.css';
@@ -6,10 +7,16 @@ type MyProjectsWorkspaceProps = {
   projects: Project[];
   isLoading: boolean;
   onSelectProject: (project: Project) => void;
+  onUpdateProject?: (projectId: string, newName: string) => Promise<void>;
   onRefresh?: () => void;
 };
 
-function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onRefresh }: MyProjectsWorkspaceProps) {
+function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdateProject, onRefresh }: MyProjectsWorkspaceProps) {
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   const getProjectColor = (projectType: string): string => {
     const colorMap: Record<string, string> = {
       'canvas': '#5227FF',
@@ -20,6 +27,49 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onRefresh }
       'campaign-journal': '#F38181',
     };
     return colorMap[projectType] || '#5227FF';
+  };
+
+  useEffect(() => {
+    if (editingProjectId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingProjectId]);
+
+  const handleStartEdit = (project: Project, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingProjectId(project.id);
+    setEditingName(project.name);
+  };
+
+  const handleSaveEdit = async (projectId: string) => {
+    if (!onUpdateProject || !editingName.trim() || editingName === projects.find(p => p.id === projectId)?.name) {
+      setEditingProjectId(null);
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await onUpdateProject(projectId, editingName.trim());
+      setEditingProjectId(null);
+    } catch (error) {
+      console.error('Failed to update project name:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProjectId(null);
+    setEditingName('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, projectId: string) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit(projectId);
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
   };
 
   return (
@@ -53,7 +103,27 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onRefresh }
                 onClick={() => onSelectProject(project)}
               />
               <div className="my-projects__folder-info">
-                <h3 className="my-projects__title">{project.name}</h3>
+                {editingProjectId === project.id ? (
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    className="my-projects__title my-projects__title--editing"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onBlur={() => handleSaveEdit(project.id)}
+                    onKeyDown={(e) => handleKeyDown(e, project.id)}
+                    disabled={isUpdating}
+                    maxLength={100}
+                  />
+                ) : (
+                  <h3
+                    className="my-projects__title"
+                    onClick={(e) => handleStartEdit(project, e)}
+                    title={project.name}
+                  >
+                    {project.name}
+                  </h3>
+                )}
                 <div className="my-projects__meta">
                   <span className="my-projects__type">{project.project_type}</span>
                   <span className="my-projects__date">

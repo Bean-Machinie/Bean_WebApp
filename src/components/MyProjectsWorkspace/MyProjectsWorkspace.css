@@ -44,6 +44,32 @@
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.my-projects__title:hover {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+
+.my-projects__title--editing {
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  outline: none;
+  cursor: text;
+  padding: 4px 8px;
+}
+
+.my-projects__title--editing:focus {
+  background: var(--bg);
+  border-color: var(--primary);
 }
 
 .my-projects__meta {

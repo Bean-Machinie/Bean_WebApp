@@ -15,15 +15,13 @@ function WorkspaceArea({ activeWorkspace, content }: WorkspaceAreaProps) {
         <h1>{activeWorkspace ? activeWorkspace.title : 'Select a workspace'}</h1>
       </div>
 
-      <div className="workspace-area__body">
-        {content ?? (
-          <p>
-            {activeWorkspace
-              ? 'Page content goes here. Swap this section out for your real feature area.'
-              : 'Choose a workspace from the sidebar to get started.'}
-          </p>
-        )}
-      </div>
+      {content ?? (
+        <p>
+          {activeWorkspace
+            ? 'Page content goes here. Swap this section out for your real feature area.'
+            : 'Choose a workspace from the sidebar to get started.'}
+        </p>
+      )}
     </main>
   );
 }

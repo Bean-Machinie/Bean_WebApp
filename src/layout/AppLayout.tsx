@@ -108,6 +108,27 @@ function AppLayout() {
     setActiveWorkspaceId('my-projects');
   };
 
+  const handleUpdateProject = async (projectId: string, newName: string) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('projects')
+      .update({ name: newName })
+      .eq('id', projectId)
+      .eq('user_id', user.id);
+
+    if (!error) {
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === projectId ? { ...project, name: newName } : project
+        )
+      );
+    } else {
+      console.error('Failed to update project:', error);
+      throw error;
+    }
+  };
+
   const activeWorkspace = useMemo(
     () => realWorkspaces.find((workspace) => workspace.id === activeWorkspaceId),
     [activeWorkspaceId],
@@ -120,6 +141,7 @@ function AppLayout() {
           projects={projects}
           isLoading={isLoadingProjects}
           onSelectProject={(project) => navigate(`/workspace/${project.project_type}/${project.id}`)}
+          onUpdateProject={handleUpdateProject}
           onRefresh={fetchProjects}
         />
       );
