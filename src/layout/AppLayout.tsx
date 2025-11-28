@@ -31,13 +31,12 @@ const workspaces: Workspace[] = [
 const realWorkspaces = workspaces.filter((workspace) => workspace.id !== 'new-project');
 
 const projectTypes: ScrollableListItem[] = [
-  { id: 'canvas', label: 'Canvas' },
   { id: 'battle-maps', label: 'Battle Maps' },
   { id: 'character-sheets', label: 'Character Sheets' },
   { id: 'item-cards', label: 'Item Cards' },
   { id: 'game-boards', label: 'Game Boards' },
   { id: 'campaign-journal', label: 'Campaign Journal' },
-  
+
 ];
 
 const profileIcon = (

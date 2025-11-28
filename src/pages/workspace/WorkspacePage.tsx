@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types/project';
-import CanvasWorkspace from '../../components/CanvasWorkspace/CanvasWorkspace';
 
 function WorkspacePage() {
   const { projectId, projectType } = useParams();
@@ -40,12 +39,6 @@ function WorkspacePage() {
     loadProject();
   }, [projectId, user]);
 
-  const config = useMemo(() => (project?.config ?? {}) as Record<string, unknown>, [project]);
-  const width = config.width as number | undefined;
-  const height = config.height as number | undefined;
-  const backgroundColor = (config.backgroundColor as string | undefined) ?? '#0f172a';
-  const projectTypeValue = project?.project_type ?? projectType;
-  const isCanvasProject = projectTypeValue === 'canvas';
 
   return (
     <div className="page">
@@ -73,21 +66,7 @@ function WorkspacePage() {
       ) : project ? (
         <div className="card">
           <div className="card__body">
-            {isCanvasProject ? (
-              <CanvasWorkspace project={project} />
-            ) : (
-              <div className="workspace-preview" style={{ backgroundColor }}>
-                <div className="workspace-preview__meta">
-                  <p>
-                    Canvas Size: {width ?? 'auto'} × {height ?? 'auto'}
-                  </p>
-                  <p className="muted">Configured background applies to the canvas workspace.</p>
-                </div>
-                <div className="workspace-preview__canvas" style={{ backgroundColor }}>
-                  <p className="muted">Canvas workspace is available for canvas projects.</p>
-                </div>
-              </div>
-            )}
+            <p className="muted">Workspace content will appear here.</p>
           </div>
         </div>
       ) : null}

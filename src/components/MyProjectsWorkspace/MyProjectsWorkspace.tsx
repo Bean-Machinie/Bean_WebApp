@@ -19,14 +19,13 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdatePro
 
   const getProjectColor = (projectType: string): string => {
     const colorMap: Record<string, string> = {
-      'canvas': '#5227FF',
       'battle-maps': '#FF6B35',
       'character-sheets': '#4ECDC4',
       'item-cards': '#FFD93D',
       'game-boards': '#95E1D3',
       'campaign-journal': '#F38181',
     };
-    return colorMap[projectType] || '#5227FF';
+    return colorMap[projectType] || '#FF6B35';
   };
 
   useEffect(() => {

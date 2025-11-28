@@ -7,7 +7,8 @@
       "Bash(npm run dev)",
       "Bash(npm uninstall:*)",
       "Bash(find:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
