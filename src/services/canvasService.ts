@@ -398,18 +398,32 @@ export async function cleanupOldVersions(projectId: string): Promise<void> {
 // INITIALIZATION & MIGRATION HELPERS
 // =============================================
 
-export async function initializeCanvasForProject(projectId: string): Promise<{
+export async function initializeCanvasForProject(
+  projectId: string,
+  backgroundColor?: string
+): Promise<{
   config: CanvasConfig;
   defaultLayer: CanvasLayer;
 }> {
-  // Create canvas config
-  const config = await createCanvasConfig({ project_id: projectId });
+  // Create canvas config with specified background color
+  const config = await createCanvasConfig({
+    project_id: projectId,
+    background_color: backgroundColor,
+  });
 
-  // Create default layer
+  // Create base canvas layer (locked, filled with background color)
+  await createLayer({
+    canvas_config_id: config.id,
+    name: 'Canvas',
+    order_index: 0,
+    locked: true,
+  });
+
+  // Create default drawing layer (transparent)
   const defaultLayer = await createLayer({
     canvas_config_id: config.id,
     name: 'Layer 1',
-    order_index: 0,
+    order_index: 1,
   });
 
   return { config, defaultLayer };

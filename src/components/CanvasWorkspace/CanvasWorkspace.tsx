@@ -15,6 +15,21 @@ import {
   StrokeData,
 } from '../../types/canvas';
 import * as canvasService from '../../services/canvasService';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 export type EditorTool = 'move' | 'brush' | 'eraser' | 'select';
 
@@ -37,6 +52,123 @@ type Line = {
   color: string;
   width: number;
 };
+
+// Sortable Layer Card Component
+function SortableLayerCard({
+  layer,
+  isActive,
+  onSelect,
+  onToggleVisibility,
+  onRename,
+}: {
+  layer: CanvasLayer;
+  isActive: boolean;
+  onSelect: () => void;
+  onToggleVisibility: (e: React.MouseEvent) => void;
+  onRename: (newName: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(layer.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: layer.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const handleDoubleClick = () => {
+    setIsEditing(true);
+  };
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (editValue.trim() && editValue !== layer.name) {
+      onRename(editValue.trim());
+    } else {
+      setEditValue(layer.name);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleBlur();
+    } else if (e.key === 'Escape') {
+      setEditValue(layer.name);
+      setIsEditing(false);
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`canvas-layer ${isActive ? 'canvas-layer--active' : ''}`}
+      onClick={onSelect}
+    >
+      <div className="canvas-layer__content">
+        <button
+          className={`canvas-layer__eye ${layer.visible ? '' : 'canvas-layer__eye--hidden'}`}
+          onClick={onToggleVisibility}
+          type="button"
+          aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+        >
+          {layer.visible ? '👁' : '👁‍🗨'}
+        </button>
+
+        <div className="canvas-layer__preview">
+          {/* Preview square - will be implemented later with actual layer thumbnail */}
+          <div className="canvas-layer__preview-inner" />
+        </div>
+
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className="canvas-layer__name-input"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            className="canvas-layer__name"
+            onDoubleClick={handleDoubleClick}
+          >
+            {layer.name}
+          </span>
+        )}
+      </div>
+
+      <div
+        {...attributes}
+        {...listeners}
+        className="canvas-layer__drag-handle"
+        title="Drag to reorder"
+      >
+        ⋮⋮
+      </div>
+    </div>
+  );
+}
 
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -70,6 +202,15 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     eraser: { width: 24 },
   });
 
+  // Setup drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px movement before starting drag
+      },
+    })
+  );
+
   // =============================================
   // INITIALIZATION & DATA LOADING
   // =============================================
@@ -84,9 +225,15 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
         if (!existsConfig) {
           // Initialize new canvas for this project
-          const { config: newConfig, defaultLayer } = await canvasService.initializeCanvasForProject(project.id);
+          // Extract background color from project config if available
+          const bgColor = project.config?.backgroundColor as string | undefined;
+          const { config: newConfig, defaultLayer } = await canvasService.initializeCanvasForProject(project.id, bgColor);
+
+          // Load both the base layer and Layer 1
+          const allLayers = await canvasService.getLayersByCanvasConfig(newConfig.id);
+
           setConfig(newConfig);
-          setLayers([defaultLayer]);
+          setLayers(allLayers);
           setEditorState(prev => ({
             ...prev,
             zoom: newConfig.zoom,
@@ -509,29 +656,24 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   };
 
-  const deleteLayer = async (layerId: string) => {
-    if (layers.length === 1) return;
+  const addFolderLayer = async () => {
+    if (!config) return;
 
     try {
-      await canvasService.deleteLayer(layerId);
+      const newLayer = await canvasService.createLayer({
+        canvas_config_id: config.id,
+        name: `Folder ${layers.filter(l => l.name.startsWith('Folder')).length + 1}`,
+        order_index: layers.length,
+      });
 
-      const remaining = layers.filter((layer) => layer.id !== layerId);
-      setLayers(remaining);
-
-      if (editorState.activeLayerId === layerId) {
-        setEditorState((state) => ({
-          ...state,
-          activeLayerId: remaining[0]?.id ?? null,
-        }));
-      }
-
+      setLayers(prev => [...prev, newLayer]);
       setLayerStrokes(prev => {
         const newMap = new Map(prev);
-        newMap.delete(layerId);
+        newMap.set(newLayer.id, []);
         return newMap;
       });
     } catch (error) {
-      console.error('Failed to delete layer:', error);
+      console.error('Failed to add folder layer:', error);
     }
   };
 
@@ -550,18 +692,48 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   };
 
-  const toggleLock = async (layerId: string) => {
-    const layer = layers.find(l => l.id === layerId);
-    if (!layer) return;
+  // Note: Delete and Lock layer functionality are kept in canvasService
+  // but not exposed in the UI as per requirements
 
+  const renameLayer = async (layerId: string, newName: string) => {
     try {
-      await canvasService.updateLayer(layerId, { locked: !layer.locked });
+      await canvasService.updateLayer(layerId, { name: newName });
 
       setLayers(prev =>
-        prev.map((l) => (l.id === layerId ? { ...l, locked: !l.locked } : l))
+        prev.map((l) => (l.id === layerId ? { ...l, name: newName } : l))
       );
     } catch (error) {
-      console.error('Failed to toggle lock:', error);
+      console.error('Failed to rename layer:', error);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = layers.findIndex((l) => l.id === active.id);
+    const newIndex = layers.findIndex((l) => l.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Reorder layers locally
+    const reorderedLayers = arrayMove(layers, oldIndex, newIndex);
+    setLayers(reorderedLayers);
+
+    // Update order_index for all layers in the database
+    try {
+      const updates = reorderedLayers.map((layer, index) => ({
+        id: layer.id,
+        order_index: index,
+      }));
+      await canvasService.reorderLayers(updates);
+    } catch (error) {
+      console.error('Failed to reorder layers:', error);
+      // Revert on error
+      setLayers(layers);
     }
   };
 
@@ -676,7 +848,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             onPointerUp={handleStageMouseUp}
             onPointerCancel={handleStageMouseUp}
             onPointerEnter={handleStageMouseEnter}
-            onPointerLeave={(e) => {
+            onPointerLeave={() => {
               handleStageMouseLeave();
               handleStageMouseUp();
             }}
@@ -784,67 +956,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       <aside className="canvas-sidepanel">
         <div className="canvas-panel">
           <div className="canvas-panel__header">
-            <h3>Layers</h3>
-            <div className="canvas-panel__actions">
-              <button className="button button--ghost" onClick={addLayer} type="button">
-                Add
-              </button>
-            </div>
-          </div>
-          <div className="canvas-layers">
-            {layers.map((layer) => (
-              <div
-                key={layer.id}
-                className={`canvas-layer ${editorState.activeLayerId === layer.id ? 'canvas-layer--active' : ''}`}
-                onClick={() => setEditorState((state) => ({ ...state, activeLayerId: layer.id }))}
-              >
-                <div className="canvas-layer__main">
-                  <div className="canvas-layer__meta">
-                    <p className="canvas-layer__name">{layer.name}</p>
-                    <div className="canvas-layer__toggles">
-                      <button
-                        className={`canvas-layer__icon ${layer.visible ? '' : 'canvas-layer__icon--muted'}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleVisibility(layer.id);
-                        }}
-                        type="button"
-                        aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
-                      >
-                        👁
-                      </button>
-                      <button
-                        className={`canvas-layer__icon ${layer.locked ? 'canvas-layer__icon--muted' : ''}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleLock(layer.id);
-                        }}
-                        type="button"
-                        aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
-                      >
-                        🔒
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  className="canvas-layer__delete"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    deleteLayer(layer.id);
-                  }}
-                  type="button"
-                  disabled={layers.length === 1}
-                >
-                  Delete
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="canvas-panel">
-          <div className="canvas-panel__header">
             <h3>Properties</h3>
           </div>
           {editorState.activeTool === 'brush' && (
@@ -898,6 +1009,67 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               <p className="muted">Move tool active. Hold space to pan.</p>
             </div>
           )}
+        </div>
+
+        <div className="canvas-panel canvas-panel--layers">
+          <div className="canvas-panel__header">
+            <h3>Layers</h3>
+          </div>
+          <div className="canvas-layers">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={layers.map(l => l.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {layers.map((layer) => (
+                  <SortableLayerCard
+                    key={layer.id}
+                    layer={layer}
+                    isActive={editorState.activeLayerId === layer.id}
+                    onSelect={() => setEditorState((state) => ({ ...state, activeLayerId: layer.id }))}
+                    onToggleVisibility={(e) => {
+                      e.stopPropagation();
+                      toggleVisibility(layer.id);
+                    }}
+                    onRename={(newName) => renameLayer(layer.id, newName)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+          <div className="canvas-layer-actions">
+            <button
+              className="canvas-layer-action"
+              onClick={addLayer}
+              type="button"
+              title="Add new layer"
+            >
+              <span className="canvas-layer-action__icon">+</span>
+              <span className="canvas-layer-action__label">New Layer</span>
+            </button>
+            <button
+              className="canvas-layer-action canvas-layer-action--disabled"
+              type="button"
+              title="Import image (coming soon)"
+              disabled
+            >
+              <span className="canvas-layer-action__icon">🖼</span>
+              <span className="canvas-layer-action__label">Import Image</span>
+            </button>
+            <button
+              className="canvas-layer-action"
+              onClick={addFolderLayer}
+              type="button"
+              title="Add folder layer"
+            >
+              <span className="canvas-layer-action__icon">📁</span>
+              <span className="canvas-layer-action__label">Folder</span>
+            </button>
+          </div>
         </div>
       </aside>
     </div>
