@@ -189,19 +189,32 @@ export async function deleteLayer(layerId: string): Promise<void> {
 }
 
 export async function reorderLayers(layerUpdates: Array<{ id: string; order_index: number }>): Promise<void> {
-  // Update multiple layers in a transaction-like manner
-  const promises = layerUpdates.map(({ id, order_index }) =>
-    supabase
+  // Step 1: Set all layers to temporary negative indices to avoid unique constraint violations
+  // This is necessary because the database has a unique constraint on order_index
+  for (let i = 0; i < layerUpdates.length; i++) {
+    const { id } = layerUpdates[i];
+    const tempIndex = -(i + 1); // Use negative numbers: -1, -2, -3, etc.
+
+    const { error } = await supabase
+      .from('canvas_layers')
+      .update({ order_index: tempIndex })
+      .eq('id', id);
+
+    if (error) {
+      throw new Error(`Failed to reorder layers (temp): ${error.message}`);
+    }
+  }
+
+  // Step 2: Now set the actual final indices
+  for (const { id, order_index } of layerUpdates) {
+    const { error } = await supabase
       .from('canvas_layers')
       .update({ order_index })
-      .eq('id', id)
-  );
+      .eq('id', id);
 
-  const results = await Promise.all(promises);
-
-  const errors = results.filter(r => r.error);
-  if (errors.length > 0) {
-    throw new Error(`Failed to reorder layers: ${errors[0].error?.message}`);
+    if (error) {
+      throw new Error(`Failed to reorder layers: ${error.message}`);
+    }
   }
 }
 

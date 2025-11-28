@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -630,6 +631,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   }, [editorState.activeTool, editorState.brush.width, editorState.eraser.width, editorState.zoom, isSpacePressed]);
 
+  // Memoize reversed layers for display (top layer shown first in UI)
+  const displayLayers = useMemo(() => [...layers].reverse(), [layers]);
+
   // =============================================
   // LAYER OPERATIONS
   // =============================================
@@ -707,35 +711,46 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
       return;
     }
 
-    const oldIndex = layers.findIndex((l) => l.id === active.id);
-    const newIndex = layers.findIndex((l) => l.id === over.id);
+    // Get current layers at time of drag
+    setLayers(currentLayers => {
+      const currentDisplayLayers = [...currentLayers].reverse();
 
-    if (oldIndex === -1 || newIndex === -1) return;
+      const oldDisplayIndex = currentDisplayLayers.findIndex((l) => l.id === active.id);
+      const newDisplayIndex = currentDisplayLayers.findIndex((l) => l.id === over.id);
 
-    // Reorder layers locally
-    const reorderedLayers = arrayMove(layers, oldIndex, newIndex);
-    setLayers(reorderedLayers);
+      if (oldDisplayIndex === -1 || newDisplayIndex === -1) return currentLayers;
 
-    // Update order_index for all layers in the database
-    try {
+      // Move in the display order
+      const reorderedDisplayLayers = arrayMove(currentDisplayLayers, oldDisplayIndex, newDisplayIndex);
+
+      // Reverse back to get the actual layer order (for rendering and database)
+      const reorderedLayers = [...reorderedDisplayLayers].reverse();
+
+      // Update order_index for all layers in the database (async, non-blocking)
       const updates = reorderedLayers.map((layer, index) => ({
         id: layer.id,
         order_index: index,
       }));
-      await canvasService.reorderLayers(updates);
-    } catch (error) {
-      console.error('Failed to reorder layers:', error);
-      // Revert on error
-      setLayers(layers);
-    }
-  };
+
+      canvasService.reorderLayers(updates)
+        .catch(error => {
+          console.error('Failed to reorder layers:', error);
+          // On error, reload from database
+          canvasService.getLayersByCanvasConfig(config?.id ?? '').then(freshLayers => {
+            setLayers(freshLayers);
+          });
+        });
+
+      return reorderedLayers;
+    });
+  }, [config?.id]);
 
   // =============================================
   // UTILITIES
@@ -937,12 +952,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               position: 'fixed',
               left: 0,
               top: 0,
-              border: '1px solid rgba(255, 255, 255, 0.8)',
+              border: '2px solid white',
               borderRadius: '50%',
               pointerEvents: 'none',
               transform: 'translate(-50%, -50%)',
               zIndex: 9999,
               display: 'none',
+              mixBlendMode: 'difference',
             }}
           />
         </div>
@@ -1022,10 +1038,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={layers.map(l => l.id)}
+                items={displayLayers.map(l => l.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {layers.map((layer) => (
+                {displayLayers.map((layer) => (
                   <SortableLayerCard
                     key={layer.id}
                     layer={layer}
