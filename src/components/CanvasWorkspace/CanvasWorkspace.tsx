@@ -41,6 +41,7 @@ type Line = {
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const cursorRef = useRef<HTMLDivElement | null>(null);
   const isDrawingRef = useRef<boolean>(false);
 
   const [config, setConfig] = useState<CanvasConfig | null>(null);
@@ -223,16 +224,28 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
-    // no drawing - skipping
-    if (!isDrawingRef.current) {
-      return;
-    }
-
     const stage = e.target.getStage();
     if (!stage) return;
 
     const point = stage.getPointerPosition();
     if (!point) return;
+
+    // Update cursor position using direct DOM manipulation for performance
+    if (cursorRef.current) {
+      // Use clientX/Y directly since container is positioned at viewport
+      cursorRef.current.style.left = `${e.evt.clientX}px`;
+      cursorRef.current.style.top = `${e.evt.clientY}px`;
+
+      // Make sure cursor is visible when moving with brush/eraser
+      if ((editorState.activeTool === 'brush' || editorState.activeTool === 'eraser') && !isSpacePressed) {
+        cursorRef.current.style.display = 'block';
+      }
+    }
+
+    // no drawing - skipping
+    if (!isDrawingRef.current) {
+      return;
+    }
 
     // Convert to canvas coordinates (accounting for zoom/pan)
     const transform = stage.getAbsoluteTransform().copy().invert();
@@ -247,6 +260,18 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     // replace last - EXACTLY like the example
     lines.splice(lines.length - 1, 1, lastLine);
     setLines(lines.concat());
+  };
+
+  const handleStageMouseLeave = () => {
+    if (cursorRef.current) {
+      cursorRef.current.style.display = 'none';
+    }
+  };
+
+  const handleStageMouseEnter = () => {
+    if (cursorRef.current && (editorState.activeTool === 'brush' || editorState.activeTool === 'eraser') && !isSpacePressed) {
+      cursorRef.current.style.display = 'block';
+    }
   };
 
   const handleStageMouseUp = async () => {
@@ -399,6 +424,20 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       window.removeEventListener('keyup', handleKeyup);
     };
   }, [handleKeydown, handleKeyup]);
+
+  // Update cursor visibility and size when tool, size, or space state changes
+  useEffect(() => {
+    if (cursorRef.current) {
+      const shouldShow = (editorState.activeTool === 'brush' || editorState.activeTool === 'eraser') && !isSpacePressed;
+      cursorRef.current.style.display = shouldShow ? 'block' : 'none';
+
+      // Update cursor size
+      const size = editorState.activeTool === 'brush' ? editorState.brush.width : editorState.eraser.width;
+      const scaledSize = size * editorState.zoom;
+      cursorRef.current.style.width = `${scaledSize}px`;
+      cursorRef.current.style.height = `${scaledSize}px`;
+    }
+  }, [editorState.activeTool, editorState.brush.width, editorState.eraser.width, editorState.zoom, isSpacePressed]);
 
   // =============================================
   // LAYER OPERATIONS
@@ -591,9 +630,17 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             onPointerMove={handleStageMouseMove}
             onPointerUp={handleStageMouseUp}
             onPointerCancel={handleStageMouseUp}
-            onPointerLeave={handleStageMouseUp}
+            onPointerEnter={handleStageMouseEnter}
+            onPointerLeave={(e) => {
+              handleStageMouseLeave();
+              handleStageMouseUp();
+            }}
             style={{
-              cursor: editorState.activeTool === 'move' || isSpacePressed ? 'grab' : 'crosshair',
+              cursor: editorState.activeTool === 'move' || isSpacePressed
+                ? 'grab'
+                : (editorState.activeTool === 'brush' || editorState.activeTool === 'eraser')
+                  ? 'none'
+                  : 'crosshair',
             }}
           >
             {/* Background layer */}
@@ -661,6 +708,22 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               );
             })}
           </Stage>
+
+          {/* Custom circular cursor for brush/eraser */}
+          <div
+            ref={cursorRef}
+            style={{
+              position: 'fixed',
+              left: 0,
+              top: 0,
+              border: '1px solid rgba(255, 255, 255, 0.8)',
+              borderRadius: '50%',
+              pointerEvents: 'none',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 9999,
+              display: 'none',
+            }}
+          />
         </div>
         <div className="canvas-status">
           <p>Zoom: {(editorState.zoom * 100).toFixed(0)}%</p>
