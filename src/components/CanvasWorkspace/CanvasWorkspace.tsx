@@ -195,7 +195,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   // DRAWING INTERACTION - EXACTLY LIKE THE EXAMPLE
   // =============================================
 
-  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
+  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | PointerEvent | TouchEvent>) => {
+    // Prevent default behaviors to avoid interference with drawing
+    if (e.evt.type.startsWith('touch') || e.evt.type.startsWith('pointer')) {
+      e.evt.preventDefault();
+    }
+
     if (editorState.activeTool !== 'brush' && editorState.activeTool !== 'eraser') return;
     if (!editorState.activeLayerId) return;
 
@@ -223,7 +228,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }]);
   };
 
-  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | PointerEvent>) => {
+  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | PointerEvent | TouchEvent>) => {
+    // Prevent default behaviors to avoid interference with drawing
+    if (e.evt.type.startsWith('touch') || e.evt.type.startsWith('pointer')) {
+      e.evt.preventDefault();
+    }
+
     const stage = e.target.getStage();
     if (!stage) return;
 
@@ -231,10 +241,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     if (!point) return;
 
     // Update cursor position using direct DOM manipulation for performance
-    if (cursorRef.current) {
-      // Use clientX/Y directly since container is positioned at viewport
-      cursorRef.current.style.left = `${e.evt.clientX}px`;
-      cursorRef.current.style.top = `${e.evt.clientY}px`;
+    // Only for mouse/pointer events (not touch, as touch doesn't need cursor)
+    if (cursorRef.current && e.evt.type !== 'touchmove') {
+      const clientX = 'clientX' in e.evt ? e.evt.clientX : 0;
+      const clientY = 'clientY' in e.evt ? e.evt.clientY : 0;
+
+      cursorRef.current.style.left = `${clientX}px`;
+      cursorRef.current.style.top = `${clientY}px`;
 
       // Make sure cursor is visible when moving with brush/eraser
       if ((editorState.activeTool === 'brush' || editorState.activeTool === 'eraser') && !isSpacePressed) {
@@ -635,12 +648,16 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               handleStageMouseLeave();
               handleStageMouseUp();
             }}
+            onTouchStart={handleStageMouseDown}
+            onTouchMove={handleStageMouseMove}
+            onTouchEnd={handleStageMouseUp}
             style={{
               cursor: editorState.activeTool === 'move' || isSpacePressed
                 ? 'grab'
                 : (editorState.activeTool === 'brush' || editorState.activeTool === 'eraser')
                   ? 'none'
                   : 'crosshair',
+              touchAction: 'none',
             }}
           >
             {/* Background layer */}
