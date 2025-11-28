@@ -43,6 +43,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cursorRef = useRef<HTMLDivElement | null>(null);
   const isDrawingRef = useRef<boolean>(false);
+  const isDraggingRef = useRef<boolean>(false);
 
   const [config, setConfig] = useState<CanvasConfig | null>(null);
   const [layers, setLayers] = useState<CanvasLayer[]>([]);
@@ -50,6 +51,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [loading, setLoading] = useState(true);
 
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Simple drawing state EXACTLY like the example
   const [lines, setLines] = useState<Line[]>([]);
@@ -196,13 +198,15 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   // =============================================
 
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent | PointerEvent | TouchEvent>) => {
+    // Only handle brush/eraser tool events
+    if (editorState.activeTool !== 'brush' && editorState.activeTool !== 'eraser') return;
+    if (!editorState.activeLayerId) return;
+
     // Prevent default behaviors to avoid interference with drawing
+    // Only do this for drawing tools, not for panning
     if (e.evt.type.startsWith('touch') || e.evt.type.startsWith('pointer')) {
       e.evt.preventDefault();
     }
-
-    if (editorState.activeTool !== 'brush' && editorState.activeTool !== 'eraser') return;
-    if (!editorState.activeLayerId) return;
 
     const activeLayer = layers.find(l => l.id === editorState.activeLayerId);
     if (!activeLayer || activeLayer.locked) return;
@@ -229,11 +233,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   };
 
   const handleStageMouseMove = (e: KonvaEventObject<MouseEvent | PointerEvent | TouchEvent>) => {
-    // Prevent default behaviors to avoid interference with drawing
-    if (e.evt.type.startsWith('touch') || e.evt.type.startsWith('pointer')) {
-      e.evt.preventDefault();
-    }
-
     const stage = e.target.getStage();
     if (!stage) return;
 
@@ -258,6 +257,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     // no drawing - skipping
     if (!isDrawingRef.current) {
       return;
+    }
+
+    // Prevent default behaviors ONLY when actively drawing
+    if (e.evt.type.startsWith('touch') || e.evt.type.startsWith('pointer')) {
+      e.evt.preventDefault();
     }
 
     // Convert to canvas coordinates (accounting for zoom/pan)
@@ -373,7 +377,14 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }));
   };
 
+  const handleStageDragStart = () => {
+    isDraggingRef.current = true;
+    setIsDragging(true);
+  };
+
   const handleStageDragEnd = (e: KonvaEventObject<DragEvent>) => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
     const stage = e.target;
     setEditorState(prev => ({
       ...prev,
@@ -391,21 +402,37 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       const isInput = target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
       if (isInput) return;
 
+      // Space bar for temporary pan
       if (event.code === 'Space' && !event.repeat) {
         event.preventDefault();
+
+        setEditorState((state) => {
+          // Only store previous tool if we're not already panning
+          if (state.activeTool !== 'move') {
+            previousToolRef.current = state.activeTool;
+          }
+          return { ...state, activeTool: 'move' };
+        });
+
         setIsSpacePressed(true);
-        previousToolRef.current = editorState.activeTool;
-        setEditorState((state) => ({ ...state, activeTool: 'move' }));
+        return;
       }
 
-      if (event.key.toLowerCase() === 'v') {
-        setEditorState((state) => ({ ...state, activeTool: 'move' }));
-      } else if (event.key.toLowerCase() === 'b') {
-        setEditorState((state) => ({ ...state, activeTool: 'brush' }));
-      } else if (event.key.toLowerCase() === 'e') {
-        setEditorState((state) => ({ ...state, activeTool: 'eraser' }));
+      // Tool shortcuts - only when Space is not pressed
+      if (!event.repeat) {
+        if (event.key.toLowerCase() === 'v') {
+          setEditorState((state) => ({ ...state, activeTool: 'move' }));
+          previousToolRef.current = null; // Clear previous tool when explicitly selecting move
+        } else if (event.key.toLowerCase() === 'b') {
+          setEditorState((state) => ({ ...state, activeTool: 'brush' }));
+          previousToolRef.current = null;
+        } else if (event.key.toLowerCase() === 'e') {
+          setEditorState((state) => ({ ...state, activeTool: 'eraser' }));
+          previousToolRef.current = null;
+        }
       }
 
+      // Zoom shortcuts
       if ((event.ctrlKey || event.metaKey) && (event.key === '+' || event.key === '=')) {
         event.preventDefault();
         setEditorState((state) => ({ ...state, zoom: Math.min(4, state.zoom + 0.1) }));
@@ -416,14 +443,18 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         setEditorState((state) => ({ ...state, zoom: Math.max(0.2, state.zoom - 0.1) }));
       }
     },
-    [editorState.activeTool],
+    [],
   );
 
   const handleKeyup = useCallback((event: KeyboardEvent) => {
     if (event.code === 'Space') {
+      event.preventDefault();
       setIsSpacePressed(false);
-      if (previousToolRef.current) {
-        setEditorState((state) => ({ ...state, activeTool: previousToolRef.current as EditorTool }));
+
+      // Restore previous tool if one was stored
+      if (previousToolRef.current && previousToolRef.current !== 'move') {
+        const toolToRestore = previousToolRef.current;
+        setEditorState((state) => ({ ...state, activeTool: toolToRestore }));
         previousToolRef.current = null;
       }
     }
@@ -638,6 +669,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             y={editorState.pan.y}
             draggable={editorState.activeTool === 'move' || isSpacePressed}
             onWheel={handleWheel}
+            onDragStart={handleStageDragStart}
             onDragEnd={handleStageDragEnd}
             onPointerDown={handleStageMouseDown}
             onPointerMove={handleStageMouseMove}
@@ -652,8 +684,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             onTouchMove={handleStageMouseMove}
             onTouchEnd={handleStageMouseUp}
             style={{
-              cursor: editorState.activeTool === 'move' || isSpacePressed
-                ? 'grab'
+              cursor: (editorState.activeTool === 'move' || isSpacePressed)
+                ? (isDragging ? 'grabbing' : 'grab')
                 : (editorState.activeTool === 'brush' || editorState.activeTool === 'eraser')
                   ? 'none'
                   : 'crosshair',
