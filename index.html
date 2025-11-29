@@ -5,8 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/Bean_WebApp/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bean Webapp</title>
-    <script type="module" crossorigin src="/Bean_WebApp/assets/index-7ed3d46d.js"></script>
-    <link rel="stylesheet" href="/Bean_WebApp/assets/index-79fcc9dc.css">
+    <script>
+      (() => {
+        const stored = window.localStorage.getItem('theme-preference');
+        const theme = stored ?? 'system';
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <script type="module" crossorigin src="/Bean_WebApp/assets/index-49b78ab0.js"></script>
+    <link rel="stylesheet" href="/Bean_WebApp/assets/index-abbab021.css">
   </head>
   <body>
     <div id="root"></div>
