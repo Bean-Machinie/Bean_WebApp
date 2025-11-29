@@ -1,17 +1,17 @@
 import React from 'react';
 import { Stage, Layer, Line, Circle } from 'react-konva';
+import type { Project } from '@/types/project';
+import type { Stroke } from '@/types/canvas';
+import { saveStroke, loadStrokes } from '@/services/canvasService';
 import './CanvasWorkspace.css';
 
-type DrawLine = {
-  tool: string;
-  points: number[];
-  color: string;
-  strokeWidth: number;
+type CanvasWorkspaceProps = {
+  project: Project;
 };
 
-function CanvasWorkspace() {
-  const [tool, setTool] = React.useState('pen');
-  const [lines, setLines] = React.useState<DrawLine[]>([]);
+function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
+  const [tool, setTool] = React.useState<'pen' | 'eraser'>('pen');
+  const [lines, setLines] = React.useState<Stroke[]>([]);
   const [brushSize, setBrushSize] = React.useState(5);
   const [brushColor, setBrushColor] = React.useState('#df4b26');
 
@@ -140,6 +140,28 @@ function CanvasWorkspace() {
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
+    // Save stroke asynchronously if we were drawing
+    if (isDrawing.current && lines.length > 0) {
+      const completedStroke = lines[lines.length - 1];
+
+      // Save asynchronously - don't await (non-blocking)
+      saveStroke(project.id, completedStroke).then(strokeId => {
+        // Update stroke with DB ID (for future undo feature)
+        setLines(prev => {
+          const updated = [...prev];
+          const idx = updated.findIndex(s => s === completedStroke);
+          if (idx !== -1) {
+            updated[idx] = { ...updated[idx], id: strokeId };
+          }
+          return updated;
+        });
+      }).catch(error => {
+        console.error('Failed to save stroke:', error);
+        // Could show toast notification to user in future
+      });
+    }
+
+    // Reset drawing state immediately (non-blocking)
     isDrawing.current = false;
     isPanning.current = false;
     lastPanPoint.current = null;
@@ -164,6 +186,16 @@ function CanvasWorkspace() {
     setShowCursor(false);
     setCursorPos(null);
   };
+
+  // Load strokes when project opens
+  React.useEffect(() => {
+    const loadProjectStrokes = async () => {
+      const loadedStrokes = await loadStrokes(project.id);
+      setLines(loadedStrokes);  // Single state update - batch rendering
+    };
+
+    loadProjectStrokes();
+  }, [project.id]);
 
   // Keyboard support for spacebar panning
   React.useEffect(() => {
@@ -208,7 +240,7 @@ function CanvasWorkspace() {
             <label className="canvas-workspace__label">Tool</label>
             <select
               value={tool}
-              onChange={(e) => setTool(e.target.value)}
+              onChange={(e) => setTool(e.target.value as 'pen' | 'eraser')}
               className="canvas-workspace__tool-select"
             >
               <option value="pen">Pen</option>

@@ -45,7 +45,7 @@ function WorkspacePage() {
 
 
   if (isCanvasProject && project) {
-    return <CanvasWorkspace />;
+    return <CanvasWorkspace project={project} />;
   }
 
   return (
