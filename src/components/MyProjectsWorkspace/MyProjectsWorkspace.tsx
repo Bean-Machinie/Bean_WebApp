@@ -19,6 +19,7 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdatePro
 
   const getProjectColor = (projectType: string): string => {
     const colorMap: Record<string, string> = {
+      'canvas': '#df4b26',
       'battle-maps': '#FF6B35',
       'character-sheets': '#4ECDC4',
       'item-cards': '#FFD93D',

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types/project';
+import CanvasWorkspace from '../../components/CanvasWorkspace/CanvasWorkspace';
 
 function WorkspacePage() {
   const { projectId, projectType } = useParams();
@@ -39,6 +40,13 @@ function WorkspacePage() {
     loadProject();
   }, [projectId, user]);
 
+  const projectTypeValue = project?.project_type ?? projectType;
+  const isCanvasProject = projectTypeValue === 'canvas';
+
+
+  if (isCanvasProject && project) {
+    return <CanvasWorkspace />;
+  }
 
   return (
     <div className="page">
