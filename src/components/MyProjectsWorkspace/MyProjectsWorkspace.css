@@ -10,6 +10,12 @@
   align-items: center;
 }
 
+.my-projects__toolbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .my-projects__eyebrow {
   margin: 0;
   text-transform: uppercase;
@@ -113,4 +119,63 @@
   padding: 18px;
   text-align: center;
   background: var(--bg-secondary);
+}
+
+/* Edit Mode Styles */
+.my-projects__folder-container {
+  position: relative;
+  display: inline-block;
+}
+
+.my-projects__folder-wrapper--edit-mode .my-projects__folder-container {
+  cursor: pointer;
+}
+
+.my-projects__folder-wrapper--selected .my-projects__folder-container {
+  transform: scale(0.95);
+  transition: transform 0.2s ease;
+}
+
+.my-projects__folder-wrapper--selected {
+  opacity: 0.8;
+}
+
+.my-projects__delete-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #dc2626;
+  color: white;
+  border: 2px solid white;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  line-height: 1;
+  padding: 0;
+}
+
+.my-projects__delete-btn:hover {
+  background: #b91c1c;
+  transform: scale(1.1);
+}
+
+.my-projects__delete-btn:active {
+  transform: scale(0.95);
+}
+
+.my-projects__folder-wrapper--edit-mode:not(.my-projects__folder-wrapper--selected) .my-projects__folder-container {
+  opacity: 0.6;
+}
+
+.my-projects__folder-wrapper--edit-mode:not(.my-projects__folder-wrapper--selected) .my-projects__folder-container:hover {
+  opacity: 1;
 }

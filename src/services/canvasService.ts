@@ -1,27 +1,51 @@
 import { supabase } from '../lib/supabaseClient';
-import type { Stroke } from '../types/canvas';
+import type { Layer, CanvasData, CanvasDataV1, CanvasDataV2 } from '../types/canvas';
+import { generateClientId } from '../lib/utils';
 
 /**
  * NEW APPROACH: Store entire canvas as single JSON document
  * Much faster than individual stroke rows
  * Follows Konva best practices
+ *
+ * Version 2 adds multi-layer support with automatic migration from V1
  */
 
-type CanvasData = {
-  lines: Array<{
-    tool: 'pen' | 'eraser';
-    points: number[];
-    color: string;
-    strokeWidth: number;
-  }>;
-  version: number;
-};
+/**
+ * Migrate V1 (flat stroke array) to V2 (layer-based)
+ */
+function migrateV1toV2(oldData: CanvasDataV1): CanvasDataV2 {
+  const defaultLayerId = generateClientId();
+
+  return {
+    layers: [{
+      id: defaultLayerId,
+      name: 'Layer 1',
+      visible: true,
+      order: 0,
+      strokes: oldData.lines.map((line, index) => ({
+        clientId: `migrated-${index}`,
+        tool: line.tool,
+        points: line.points,
+        color: line.color,
+        strokeWidth: line.strokeWidth,
+        saveState: 'saved' as const,
+      })),
+    }],
+    activeLayerId: defaultLayerId,
+    version: 2 as const,
+  };
+}
 
 /**
  * Save entire canvas state to database
  * Single write operation - much faster than per-stroke saves
+ * Now supports multi-layer V2 format
  */
-export async function saveCanvas(projectId: string, lines: Stroke[]): Promise<void> {
+export async function saveCanvas(
+  projectId: string,
+  layers: Layer[],
+  activeLayerId: string
+): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -29,15 +53,23 @@ export async function saveCanvas(projectId: string, lines: Stroke[]): Promise<vo
       throw new Error('User not authenticated');
     }
 
-    // Convert Stroke[] to simple format for storage
-    const canvasData: CanvasData = {
-      lines: lines.map(line => ({
-        tool: line.tool,
-        points: line.points,
-        color: line.color,
-        strokeWidth: line.strokeWidth,
+    // Store as V2 format with layers
+    const canvasData: CanvasDataV2 = {
+      layers: layers.map(layer => ({
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        order: layer.order,
+        strokes: layer.strokes.map(stroke => ({
+          clientId: stroke.clientId,
+          tool: stroke.tool,
+          points: stroke.points,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+        })),
       })),
-      version: 1,
+      activeLayerId,
+      version: 2 as const,
     };
 
     // Upsert - insert or update existing canvas
@@ -65,8 +97,12 @@ export async function saveCanvas(projectId: string, lines: Stroke[]): Promise<vo
 /**
  * Load canvas state from database
  * Single read operation - much faster than per-stroke loads
+ * Automatically migrates V1 → V2 if needed
  */
-export async function loadCanvas(projectId: string): Promise<Stroke[]> {
+export async function loadCanvas(projectId: string): Promise<{
+  layers: Layer[];
+  activeLayerId: string;
+}> {
   try {
     const { data, error } = await supabase
       .from('canvases')
@@ -79,27 +115,47 @@ export async function loadCanvas(projectId: string): Promise<Stroke[]> {
       throw error;
     }
 
-    // No canvas saved yet
+    // No canvas saved yet - return empty structure
     if (!data || !data.canvas_data) {
-      return [];
+      return { layers: [], activeLayerId: '' };
     }
 
-    const canvasData = data.canvas_data as CanvasData;
+    const rawData = data.canvas_data as CanvasData;
 
-    // Convert stored format back to Stroke[]
-    // No clientId needed - we don't track individual strokes anymore
-    const strokes: Stroke[] = canvasData.lines.map((line, index) => ({
-      clientId: `loaded-${index}`, // Simple index-based ID
-      tool: line.tool,
-      points: line.points,
-      color: line.color,
-      strokeWidth: line.strokeWidth,
-      saveState: 'saved' as const,
+    // Check version and migrate if needed
+    let canvasData: CanvasDataV2;
+
+    if ('version' in rawData && rawData.version === 2) {
+      // Already V2 format
+      canvasData = rawData;
+    } else {
+      // V1 format or no version - migrate
+      console.log('Migrating canvas from V1 to V2 format');
+      canvasData = migrateV1toV2(rawData as CanvasDataV1);
+    }
+
+    // Convert to Layer[] with full Stroke objects
+    const layers: Layer[] = canvasData.layers.map(layer => ({
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      order: layer.order,
+      strokes: layer.strokes.map((stroke) => ({
+        clientId: stroke.clientId,
+        tool: stroke.tool,
+        points: stroke.points,
+        color: stroke.color,
+        strokeWidth: stroke.strokeWidth,
+        saveState: 'saved' as const,
+      })),
     }));
 
-    return strokes;
+    return {
+      layers,
+      activeLayerId: canvasData.activeLayerId,
+    };
   } catch (error) {
     console.error('Error in loadCanvas:', error);
-    return []; // Return empty array on error - don't crash
+    return { layers: [], activeLayerId: '' }; // Return empty on error - don't crash
   }
 }

@@ -8,13 +8,16 @@ type MyProjectsWorkspaceProps = {
   isLoading: boolean;
   onSelectProject: (project: Project) => void;
   onUpdateProject?: (projectId: string, newName: string) => Promise<void>;
+  onDeleteProject?: (projectId: string) => Promise<void>;
   onRefresh?: () => void;
 };
 
-function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdateProject, onRefresh }: MyProjectsWorkspaceProps) {
+function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdateProject, onDeleteProject, onRefresh }: MyProjectsWorkspaceProps) {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const getProjectColor = (projectType: string): string => {
@@ -72,6 +75,47 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdatePro
     }
   };
 
+  const handleToggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+    setSelectedProjects(new Set());
+  };
+
+  const handleToggleProjectSelection = (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedProjects((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(projectId)) {
+        newSet.delete(projectId);
+      } else {
+        newSet.add(projectId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleDeleteSelected = async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onDeleteProject) return;
+
+    if (window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      try {
+        await onDeleteProject(projectId);
+        setSelectedProjects((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(projectId);
+          return newSet;
+        });
+      } catch (error) {
+        console.error('Failed to delete project:', error);
+      }
+    }
+  };
+
+  const handleFolderClick = (project: Project) => {
+    if (isEditMode) return;
+    onSelectProject(project);
+  };
+
   return (
     <div className="my-projects">
       <div className="my-projects__toolbar">
@@ -80,11 +124,22 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdatePro
           <h2>My Projects</h2>
         </div>
 
-        {onRefresh ? (
-          <button className="button button--ghost" onClick={onRefresh} disabled={isLoading}>
-            Refresh
-          </button>
-        ) : null}
+        <div className="my-projects__toolbar-actions">
+          {onDeleteProject && (
+            <button
+              className={`button ${isEditMode ? 'button--primary' : 'button--ghost'}`}
+              onClick={handleToggleEditMode}
+              disabled={isLoading}
+            >
+              {isEditMode ? 'Done' : 'Edit'}
+            </button>
+          )}
+          {onRefresh ? (
+            <button className="button button--ghost" onClick={onRefresh} disabled={isLoading}>
+              Refresh
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {isLoading ? (
@@ -95,45 +150,65 @@ function MyProjectsWorkspace({ projects, isLoading, onSelectProject, onUpdatePro
         </div>
       ) : (
         <div className="my-projects__grid">
-          {projects.map((project) => (
-            <div key={project.id} className="my-projects__folder-wrapper">
-              <Folder
-                color={getProjectColor(project.project_type)}
-                size={1.2}
-                onClick={() => onSelectProject(project)}
-              />
-              <div className="my-projects__folder-info">
-                {editingProjectId === project.id ? (
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    className="my-projects__title my-projects__title--editing"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onBlur={() => handleSaveEdit(project.id)}
-                    onKeyDown={(e) => handleKeyDown(e, project.id)}
-                    disabled={isUpdating}
-                    maxLength={100}
+          {projects.map((project) => {
+            const isSelected = selectedProjects.has(project.id);
+            return (
+              <div
+                key={project.id}
+                className={`my-projects__folder-wrapper ${isEditMode ? 'my-projects__folder-wrapper--edit-mode' : ''} ${isSelected ? 'my-projects__folder-wrapper--selected' : ''}`}
+              >
+                <div
+                  className="my-projects__folder-container"
+                  onClick={isEditMode ? (e) => handleToggleProjectSelection(project.id, e) : undefined}
+                >
+                  <Folder
+                    color={getProjectColor(project.project_type)}
+                    size={1.2}
+                    onClick={() => handleFolderClick(project)}
                   />
-                ) : (
-                  <h3
-                    className="my-projects__title"
-                    onClick={(e) => handleStartEdit(project, e)}
-                    title={project.name}
-                  >
-                    {project.name}
-                  </h3>
-                )}
-                <div className="my-projects__meta">
-                  <span className="my-projects__type">{project.project_type}</span>
-                  <span className="my-projects__date">
-                    {project.created_at ? new Date(project.created_at).toLocaleDateString() : ''}
-                  </span>
+                  {isEditMode && isSelected && (
+                    <button
+                      className="my-projects__delete-btn"
+                      onClick={(e) => handleDeleteSelected(project.id, e)}
+                      title="Delete project"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
-                {project.description ? <p className="my-projects__description">{project.description}</p> : null}
+                <div className="my-projects__folder-info">
+                  {editingProjectId === project.id ? (
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      className="my-projects__title my-projects__title--editing"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => handleSaveEdit(project.id)}
+                      onKeyDown={(e) => handleKeyDown(e, project.id)}
+                      disabled={isUpdating}
+                      maxLength={100}
+                    />
+                  ) : (
+                    <h3
+                      className="my-projects__title"
+                      onClick={(e) => !isEditMode && handleStartEdit(project, e)}
+                      title={project.name}
+                    >
+                      {project.name}
+                    </h3>
+                  )}
+                  <div className="my-projects__meta">
+                    <span className="my-projects__type">{project.project_type}</span>
+                    <span className="my-projects__date">
+                      {project.created_at ? new Date(project.created_at).toLocaleDateString() : ''}
+                    </span>
+                  </div>
+                  {project.description ? <p className="my-projects__description">{project.description}</p> : null}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

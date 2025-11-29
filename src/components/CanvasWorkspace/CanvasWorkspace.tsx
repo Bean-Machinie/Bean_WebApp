@@ -1,9 +1,10 @@
 import React from 'react';
-import { Stage, Layer, Line, Circle } from 'react-konva';
+import { Stage, Layer as KonvaLayer, Line, Circle } from 'react-konva';
 import type { Project } from '@/types/project';
-import type { Stroke } from '@/types/canvas';
+import type { Stroke, Layer } from '@/types/canvas';
 import { saveCanvas, loadCanvas } from '@/services/canvasService';
 import { generateClientId } from '@/lib/utils';
+import LayerPanel from '@/components/LayerPanel/LayerPanel';
 import './CanvasWorkspace.css';
 
 type CanvasWorkspaceProps = {
@@ -12,7 +13,8 @@ type CanvasWorkspaceProps = {
 
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [tool, setTool] = React.useState<'pen' | 'eraser'>('pen');
-  const [lines, setLines] = React.useState<Stroke[]>([]);
+  const [layers, setLayers] = React.useState<Layer[]>([]);
+  const [activeLayerId, setActiveLayerId] = React.useState<string>('');
   const [brushSize, setBrushSize] = React.useState(5);
   const [brushColor, setBrushColor] = React.useState('#df4b26');
   const [lastSaved, setLastSaved] = React.useState<Date | null>(null);
@@ -100,14 +102,21 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       isPanning.current = false;
       isDrawing.current = true;
       const transformedPos = getTransformedPointerPosition(stage);
-      if (transformedPos) {
-        setLines(prev => [...prev, {
+      if (transformedPos && activeLayerId) {
+        // Add new stroke to the active layer
+        const newStroke: Stroke = {
           clientId: generateClientId(),
           tool,
           points: [transformedPos.x, transformedPos.y],
           color: brushColor,
           strokeWidth: brushSize,
-        }]);
+        };
+
+        setLayers(prev => prev.map(layer =>
+          layer.id === activeLayerId
+            ? { ...layer, strokes: [...layer.strokes, newStroke] }
+            : layer
+        ));
       }
     }
   };
@@ -132,19 +141,23 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         y: prevPosition.y + deltaY,
       }));
       lastPanPoint.current = pointer;
-    } else if (isDrawing.current) {
-      // Continue drawing - immutable update
+    } else if (isDrawing.current && activeLayerId) {
+      // Continue drawing - immutable update to active layer's last stroke
       const transformedPoint = getTransformedPointerPosition(stage);
       if (transformedPoint) {
-        setLines(prev => {
-          const updated = [...prev];
-          const lastIndex = updated.length - 1;
-          updated[lastIndex] = {
-            ...updated[lastIndex],
-            points: [...updated[lastIndex].points, transformedPoint.x, transformedPoint.y]
-          };
-          return updated;
-        });
+        setLayers(prev => prev.map(layer => {
+          if (layer.id !== activeLayerId) return layer;
+
+          const updatedStrokes = [...layer.strokes];
+          const lastIndex = updatedStrokes.length - 1;
+          if (lastIndex >= 0) {
+            updatedStrokes[lastIndex] = {
+              ...updatedStrokes[lastIndex],
+              points: [...updatedStrokes[lastIndex].points, transformedPoint.x, transformedPoint.y]
+            };
+          }
+          return { ...layer, strokes: updatedStrokes };
+        }));
       }
     }
   };
@@ -181,26 +194,43 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   React.useEffect(() => {
     const loadProjectCanvas = async () => {
       console.log('Loading canvas for project:', project.id);
-      const loadedLines = await loadCanvas(project.id);
-      console.log('Loaded', loadedLines.length, 'strokes from database');
-      setLines(loadedLines);
+      const { layers: loadedLayers, activeLayerId: loadedActiveLayerId } = await loadCanvas(project.id);
+      console.log('Loaded', loadedLayers.length, 'layers from database');
+      setLayers(loadedLayers);
+      setActiveLayerId(loadedActiveLayerId);
       setLastSaved(new Date());
     };
 
     loadProjectCanvas();
   }, [project.id]);
 
+  // Initialize default layer if empty
+  React.useEffect(() => {
+    if (layers.length === 0 && !lastSaved) {
+      const defaultLayer: Layer = {
+        id: generateClientId(),
+        name: 'Layer 1',
+        visible: true,
+        order: 0,
+        strokes: [],
+      };
+      setLayers([defaultLayer]);
+      setActiveLayerId(defaultLayer.id);
+    }
+  }, [layers.length, lastSaved]);
+
   // Debounced auto-save - saves 2 seconds after last change
   React.useEffect(() => {
-    // Don't save if no lines or still loading
-    if (lines.length === 0 && !lastSaved) return;
+    // Don't save if no layers or still loading
+    if (layers.length === 0 && !lastSaved) return;
 
     const timeoutId = setTimeout(async () => {
       try {
         setIsSaving(true);
         setSaveError(null);
-        console.log('Attempting to save canvas with', lines.length, 'strokes');
-        await saveCanvas(project.id, lines);
+        const totalStrokes = layers.reduce((sum, layer) => sum + layer.strokes.length, 0);
+        console.log('Attempting to save canvas with', layers.length, 'layers and', totalStrokes, 'strokes');
+        await saveCanvas(project.id, layers, activeLayerId);
         setLastSaved(new Date());
         console.log('Canvas saved successfully');
       } catch (error) {
@@ -212,7 +242,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [lines, project.id]);
+  }, [layers, activeLayerId, project.id]);
 
   // Optimize canvas for frequent getImageData calls (for eraser tool)
   React.useEffect(() => {
@@ -360,33 +390,41 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           y={position.y}
           style={{ cursor: 'none' }}
         >
-          <Layer
+          <KonvaLayer
             ref={layerRef}
             listening={false}
           >
-            {lines.map((line) => (
-              <Line
-                key={line.clientId}
-                points={line.points}
-                stroke={line.color}
-                strokeWidth={line.strokeWidth}
-                tension={0.5}
-                lineCap="round"
-                lineJoin="round"
-                globalCompositeOperation={
-                  line.tool === 'eraser' ? 'destination-out' : 'source-over'
-                }
-                perfectDrawEnabled={false}
-                shadowForStrokeEnabled={false}
-                hitStrokeWidth={0}
-                listening={false}
-              />
-            ))}
-          </Layer>
+            {/* Render layers in order (lowest order first, so higher order appears on top) */}
+            {layers
+              .filter(layer => layer.visible)
+              .sort((a, b) => a.order - b.order)
+              .map(layer => (
+                <React.Fragment key={layer.id}>
+                  {layer.strokes.map((stroke) => (
+                    <Line
+                      key={stroke.clientId}
+                      points={stroke.points}
+                      stroke={stroke.color}
+                      strokeWidth={stroke.strokeWidth}
+                      tension={0.5}
+                      lineCap="round"
+                      lineJoin="round"
+                      globalCompositeOperation={
+                        stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
+                      }
+                      perfectDrawEnabled={false}
+                      shadowForStrokeEnabled={false}
+                      hitStrokeWidth={0}
+                      listening={false}
+                    />
+                  ))}
+                </React.Fragment>
+              ))}
+          </KonvaLayer>
 
           {/* Cursor Overlay - Brush Preview Circle */}
           {showCursor && cursorPos && !isPanning.current && (
-            <Layer listening={false}>
+            <KonvaLayer listening={false}>
               <Circle
                 x={(cursorPos.x - position.x) / scale}
                 y={(cursorPos.y - position.y) / scale}
@@ -396,7 +434,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                 opacity={0.5}
                 dash={[4 / scale, 4 / scale]}
               />
-            </Layer>
+            </KonvaLayer>
           )}
         </Stage>
       </div>
@@ -409,7 +447,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           <div className="canvas-workspace__property-group">
             <label className="canvas-workspace__label">Canvas Info</label>
             <div className="canvas-workspace__info">
-              <p>Strokes: {lines.length}</p>
+              <p>Layers: {layers.length}</p>
+              <p>Total Strokes: {layers.reduce((sum, layer) => sum + layer.strokes.length, 0)}</p>
               <p>Position: ({Math.round(position.x)}, {Math.round(position.y)})</p>
               <p>Scale: {scale.toFixed(2)}x</p>
               <p>
@@ -429,9 +468,15 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             </div>
           </div>
 
-          <p className="canvas-workspace__sidebar-placeholder">
-            Layer management coming in Phase 3
-          </p>
+          <div className="canvas-workspace__divider" />
+
+          {/* Layer Panel Integration */}
+          <LayerPanel
+            layers={layers}
+            activeLayerId={activeLayerId}
+            onLayersChange={setLayers}
+            onActiveLayerChange={setActiveLayerId}
+          />
         </div>
       </div>
     </div>

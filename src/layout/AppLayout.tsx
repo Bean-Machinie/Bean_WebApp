@@ -129,6 +129,23 @@ function AppLayout() {
     }
   };
 
+  const handleDeleteProject = async (projectId: string) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId)
+      .eq('user_id', user.id);
+
+    if (!error) {
+      setProjects((prev) => prev.filter((project) => project.id !== projectId));
+    } else {
+      console.error('Failed to delete project:', error);
+      throw error;
+    }
+  };
+
   const activeWorkspace = useMemo(
     () => realWorkspaces.find((workspace) => workspace.id === activeWorkspaceId),
     [activeWorkspaceId],
@@ -142,6 +159,7 @@ function AppLayout() {
           isLoading={isLoadingProjects}
           onSelectProject={(project) => navigate(`/workspace/${project.project_type}/${project.id}`)}
           onUpdateProject={handleUpdateProject}
+          onDeleteProject={handleDeleteProject}
           onRefresh={fetchProjects}
         />
       );
