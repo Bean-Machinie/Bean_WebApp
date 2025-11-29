@@ -28,6 +28,7 @@ type LayerPanelProps = {
 type SortableLayerItemProps = {
   layer: Layer;
   isActive: boolean;
+  isBackground: boolean;
   onSelect: () => void;
   onToggleVisibility: () => void;
   onRename: (newName: string) => void;
@@ -37,6 +38,7 @@ type SortableLayerItemProps = {
 function SortableLayerItem({
   layer,
   isActive,
+  isBackground,
   onSelect,
   onToggleVisibility,
   onRename,
@@ -82,12 +84,14 @@ function SortableLayerItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`layer-item ${isActive ? 'layer-item--active' : ''}`}
+      className={`layer-item ${isActive ? 'layer-item--active' : ''} ${isBackground ? 'layer-item--background' : ''}`}
       onClick={onSelect}
     >
-      <div className="layer-item__drag-handle" {...attributes} {...listeners}>
-        ⋮⋮
-      </div>
+      {!isBackground && (
+        <div className="layer-item__drag-handle" {...attributes} {...listeners}>
+          ⋮⋮
+        </div>
+      )}
 
       <button
         className="layer-item__visibility"
@@ -100,7 +104,7 @@ function SortableLayerItem({
         {layer.visible ? '👁' : '👁‍🗨'}
       </button>
 
-      {isRenaming ? (
+      {isRenaming && !isBackground ? (
         <input
           className="layer-item__name-input"
           value={editName}
@@ -114,9 +118,12 @@ function SortableLayerItem({
         <div
           className="layer-item__name"
           onDoubleClick={(e) => {
-            e.stopPropagation();
-            setIsRenaming(true);
+            if (!isBackground) {
+              e.stopPropagation();
+              setIsRenaming(true);
+            }
           }}
+          style={isBackground ? { cursor: 'default' } : undefined}
         >
           {layer.name}
         </div>
@@ -124,23 +131,25 @@ function SortableLayerItem({
 
       <span className="layer-item__count">{layer.strokes.length}</span>
 
-      <button
-        className="layer-item__delete"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (
-            layer.strokes.length === 0 ||
-            window.confirm(
-              `Delete "${layer.name}"? This will remove ${layer.strokes.length} strokes.`
-            )
-          ) {
-            onDelete();
-          }
-        }}
-        title="Delete layer"
-      >
-        🗑
-      </button>
+      {!isBackground && (
+        <button
+          className="layer-item__delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (
+              layer.strokes.length === 0 ||
+              window.confirm(
+                `Delete "${layer.name}"? This will remove ${layer.strokes.length} strokes.`
+              )
+            ) {
+              onDelete();
+            }
+          }}
+          title="Delete layer"
+        >
+          🗑
+        </button>
+      )}
     </div>
   );
 }
@@ -251,6 +260,7 @@ export default function LayerPanel({
                 key={layer.id}
                 layer={layer}
                 isActive={layer.id === activeLayerId}
+                isBackground={layer.name === 'Background' && layer.order === 0}
                 onSelect={() => onActiveLayerChange(layer.id)}
                 onToggleVisibility={() => handleToggleVisibility(layer.id)}
                 onRename={(newName) => handleRename(layer.id, newName)}

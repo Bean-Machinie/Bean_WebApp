@@ -12,6 +12,12 @@ type CanvasWorkspaceProps = {
 };
 
 function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
+  // Canvas configuration from project
+  const canvasConfig = project.config as { width?: number; height?: number; backgroundColor?: string } | undefined;
+  const canvasWidth = canvasConfig?.width || 1000;
+  const canvasHeight = canvasConfig?.height || 1000;
+  const canvasBackgroundColor = canvasConfig?.backgroundColor || '#ffffff';
+
   const [tool, setTool] = React.useState<'pen' | 'eraser'>('pen');
   const [layers, setLayers] = React.useState<Layer[]>([]);
   const [activeLayerId, setActiveLayerId] = React.useState<string>('');
@@ -394,6 +400,16 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             ref={layerRef}
             listening={false}
           >
+            {/* Canvas Background Rectangle */}
+            <Line
+              points={[0, 0, canvasWidth, 0, canvasWidth, canvasHeight, 0, canvasHeight]}
+              closed
+              fill={canvasBackgroundColor}
+              stroke={canvasBackgroundColor}
+              strokeWidth={0}
+              listening={false}
+            />
+
             {/* Render layers in order (lowest order first, so higher order appears on top) */}
             {layers
               .filter(layer => layer.visible)

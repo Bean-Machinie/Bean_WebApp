@@ -64,6 +64,19 @@
   border-color: var(--accent-color);
 }
 
+.layer-item--background {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.layer-item--background:hover {
+  background: var(--bg-secondary);
+}
+
+.layer-item--background.layer-item--active {
+  opacity: 1;
+}
+
 .layer-item__drag-handle {
   cursor: grab;
   color: var(--text-secondary);
