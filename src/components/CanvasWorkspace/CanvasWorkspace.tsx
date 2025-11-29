@@ -2,7 +2,7 @@ import React from 'react';
 import { Stage, Layer, Line, Circle } from 'react-konva';
 import type { Project } from '@/types/project';
 import type { Stroke } from '@/types/canvas';
-import { saveStroke, loadStrokes } from '@/services/canvasService';
+import { saveCanvas, loadCanvas } from '@/services/canvasService';
 import { generateClientId } from '@/lib/utils';
 import './CanvasWorkspace.css';
 
@@ -15,6 +15,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [lines, setLines] = React.useState<Stroke[]>([]);
   const [brushSize, setBrushSize] = React.useState(5);
   const [brushColor, setBrushColor] = React.useState('#df4b26');
+  const [lastSaved, setLastSaved] = React.useState<Date | null>(null);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   // Zoom & Pan state
   const [scale, setScale] = React.useState(1);
@@ -29,11 +32,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const isPanning = React.useRef(false);
   const lastPanPoint = React.useRef<{ x: number; y: number } | null>(null);
   const stageRef = React.useRef<any>(null);
+  const layerRef = React.useRef<any>(null);
   const isSpacePressed = React.useRef(false);
-
-  // Save queue state
-  const [saveQueue, setSaveQueue] = React.useState<string[]>([]);
-  const isSavingRef = React.useRef(false);
 
   // Transform pointer position from screen to canvas coordinates
   const getTransformedPointerPosition = (stage: any) => {
@@ -107,7 +107,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           points: [transformedPos.x, transformedPos.y],
           color: brushColor,
           strokeWidth: brushSize,
-          saveState: 'pending' as const
         }]);
       }
     }
@@ -152,21 +151,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
-    // Queue stroke for saving if we were drawing
-    if (isDrawing.current && lines.length > 0) {
-      const completedStroke = lines[lines.length - 1];
-
-      // Add to save queue - non-blocking, returns immediately
-      setSaveQueue(prev => {
-        // Only queue if not already queued
-        if (!prev.includes(completedStroke.clientId)) {
-          return [...prev, completedStroke.clientId];
-        }
-        return prev;
-      });
-    }
-
-    // Reset drawing state immediately (non-blocking)
+    // Reset drawing state
     isDrawing.current = false;
     isPanning.current = false;
     lastPanPoint.current = null;
@@ -192,99 +177,54 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     setCursorPos(null);
   };
 
-  // Load strokes when project opens
+  // Load canvas when project opens
   React.useEffect(() => {
-    const loadProjectStrokes = async () => {
-      const loadedStrokes = await loadStrokes(project.id);
-      setLines(loadedStrokes);  // Single state update - batch rendering
+    const loadProjectCanvas = async () => {
+      console.log('Loading canvas for project:', project.id);
+      const loadedLines = await loadCanvas(project.id);
+      console.log('Loaded', loadedLines.length, 'strokes from database');
+      setLines(loadedLines);
+      setLastSaved(new Date());
     };
 
-    loadProjectStrokes();
+    loadProjectCanvas();
   }, [project.id]);
 
-  // Save queue processor
+  // Debounced auto-save - saves 2 seconds after last change
   React.useEffect(() => {
-    const processSaveQueue = async () => {
-      if (isSavingRef.current || saveQueue.length === 0) return;
+    // Don't save if no lines or still loading
+    if (lines.length === 0 && !lastSaved) return;
 
-      isSavingRef.current = true;
-      const clientIdToSave = saveQueue[0];
-
+    const timeoutId = setTimeout(async () => {
       try {
-        const strokeToSave = lines.find(s => s.clientId === clientIdToSave);
-        if (!strokeToSave || strokeToSave.saveState === 'saved' || strokeToSave.saveState === 'saving') {
-          setSaveQueue(prev => prev.slice(1));
-          isSavingRef.current = false;
-          return;
-        }
-
-        // Mark as saving
-        setLines(prev => prev.map(s =>
-          s.clientId === clientIdToSave
-            ? { ...s, saveState: 'saving' as const, lastSaveAttempt: Date.now() }
-            : s
-        ));
-
-        // Attempt save
-        const strokeId = await saveStroke(project.id, strokeToSave);
-
-        // Mark as saved
-        setLines(prev => prev.map(s =>
-          s.clientId === clientIdToSave
-            ? { ...s, id: strokeId, saveState: 'saved' as const }
-            : s
-        ));
-
-        setSaveQueue(prev => prev.slice(1));
-
+        setIsSaving(true);
+        setSaveError(null);
+        console.log('Attempting to save canvas with', lines.length, 'strokes');
+        await saveCanvas(project.id, lines);
+        setLastSaved(new Date());
+        console.log('Canvas saved successfully');
       } catch (error) {
-        console.error('Failed to save stroke:', error);
-
-        setLines(prev => prev.map(s => {
-          if (s.clientId === clientIdToSave) {
-            const retryCount = (s.retryCount || 0) + 1;
-            if (retryCount >= 3) {
-              return { ...s, saveState: 'error' as const, saveError: 'Failed after 3 attempts', retryCount };
-            }
-            return { ...s, saveState: 'pending' as const, retryCount };
-          }
-          return s;
-        }));
-
-        setSaveQueue(prev => prev.slice(1));
+        console.error('Auto-save failed:', error);
+        setSaveError(error instanceof Error ? error.message : 'Save failed');
       } finally {
-        isSavingRef.current = false;
+        setIsSaving(false);
       }
-    };
+    }, 2000); // 2 second debounce
 
-    processSaveQueue();
-  }, [saveQueue, lines, project.id]);
+    return () => clearTimeout(timeoutId);
+  }, [lines, project.id]);
 
-  // Retry failed saves
+  // Optimize canvas for frequent getImageData calls (for eraser tool)
   React.useEffect(() => {
-    const retryInterval = setInterval(() => {
-      const now = Date.now();
-      const strokesToRetry = lines.filter(s => {
-        if (s.saveState !== 'pending' || !s.retryCount) return false;
-        const backoffDelay = 5000 * Math.pow(2, s.retryCount - 1);
-        return s.lastSaveAttempt && (now - s.lastSaveAttempt) > backoffDelay;
-      });
+    if (stageRef.current && layerRef.current) {
+      const canvas = layerRef.current.getCanvas()._canvas;
+      // Set willReadFrequently hint for better eraser performance
+      canvas.getContext('2d', { willReadFrequently: true });
 
-      if (strokesToRetry.length > 0) {
-        setSaveQueue(prev => {
-          const newQueue = [...prev];
-          strokesToRetry.forEach(stroke => {
-            if (!newQueue.includes(stroke.clientId)) {
-              newQueue.push(stroke.clientId);
-            }
-          });
-          return newQueue;
-        });
-      }
-    }, 2000);
-
-    return () => clearInterval(retryInterval);
-  }, [lines]);
+      // Force re-render with optimized context
+      layerRef.current.batchDraw();
+    }
+  }, []);
 
   // Keyboard support for spacebar panning
   React.useEffect(() => {
@@ -420,10 +360,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           y={position.y}
           style={{ cursor: 'none' }}
         >
-          <Layer>
-            {lines.map((line, i) => (
+          <Layer
+            ref={layerRef}
+            listening={false}
+          >
+            {lines.map((line) => (
               <Line
-                key={i}
+                key={line.clientId}
                 points={line.points}
                 stroke={line.color}
                 strokeWidth={line.strokeWidth}
@@ -433,6 +376,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                 globalCompositeOperation={
                   line.tool === 'eraser' ? 'destination-out' : 'source-over'
                 }
+                perfectDrawEnabled={false}
+                shadowForStrokeEnabled={false}
+                hitStrokeWidth={0}
+                listening={false}
               />
             ))}
           </Layer>
@@ -465,6 +412,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               <p>Strokes: {lines.length}</p>
               <p>Position: ({Math.round(position.x)}, {Math.round(position.y)})</p>
               <p>Scale: {scale.toFixed(2)}x</p>
+              <p>
+                {isSaving ? '💾 Saving...' : saveError ? `❌ Error: ${saveError}` : lastSaved ? `✓ Saved ${lastSaved.toLocaleTimeString()}` : ''}
+              </p>
             </div>
           </div>
 

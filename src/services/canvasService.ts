@@ -1,12 +1,27 @@
 import { supabase } from '../lib/supabaseClient';
-import type { Stroke, StrokeDTO } from '../types/canvas';
+import type { Stroke } from '../types/canvas';
 
 /**
- * Save a stroke to the database
- * Returns the stroke ID from the database
- * Non-blocking - errors are returned, not thrown
+ * NEW APPROACH: Store entire canvas as single JSON document
+ * Much faster than individual stroke rows
+ * Follows Konva best practices
  */
-export async function saveStroke(projectId: string, stroke: Stroke): Promise<string> {
+
+type CanvasData = {
+  lines: Array<{
+    tool: 'pen' | 'eraser';
+    points: number[];
+    color: string;
+    strokeWidth: number;
+  }>;
+  version: number;
+};
+
+/**
+ * Save entire canvas state to database
+ * Single write operation - much faster than per-stroke saves
+ */
+export async function saveCanvas(projectId: string, lines: Stroke[]): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -14,86 +29,77 @@ export async function saveStroke(projectId: string, stroke: Stroke): Promise<str
       throw new Error('User not authenticated');
     }
 
-    const strokeData = {
-      project_id: projectId,
-      user_id: user.id,
-      points: stroke.points,
-      color: stroke.color,
-      stroke_width: stroke.strokeWidth,
-      tool: stroke.tool,
+    // Convert Stroke[] to simple format for storage
+    const canvasData: CanvasData = {
+      lines: lines.map(line => ({
+        tool: line.tool,
+        points: line.points,
+        color: line.color,
+        strokeWidth: line.strokeWidth,
+      })),
+      version: 1,
     };
 
-    const { data, error } = await supabase
-      .from('strokes')
-      .insert([strokeData])
-      .select('id')
-      .single();
+    // Upsert - insert or update existing canvas
+    const { error } = await supabase
+      .from('canvases')
+      .upsert({
+        project_id: projectId,
+        user_id: user.id,
+        canvas_data: canvasData,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'project_id',
+      });
 
     if (error) {
-      console.error('Failed to save stroke:', error);
+      console.error('Failed to save canvas:', error);
       throw error;
     }
-
-    return data.id;
   } catch (error) {
-    console.error('Error in saveStroke:', error);
+    console.error('Error in saveCanvas:', error);
     throw error;
   }
 }
 
 /**
- * Load all strokes for a project
- * Returns strokes in drawing order (oldest first)
- * Single batch query - no per-stroke rendering
+ * Load canvas state from database
+ * Single read operation - much faster than per-stroke loads
  */
-export async function loadStrokes(projectId: string): Promise<Stroke[]> {
+export async function loadCanvas(projectId: string): Promise<Stroke[]> {
   try {
     const { data, error } = await supabase
-      .from('strokes')
-      .select('*')
+      .from('canvases')
+      .select('canvas_data')
       .eq('project_id', projectId)
-      .order('created_at', { ascending: true });
+      .maybeSingle();
 
     if (error) {
-      console.error('Failed to load strokes:', error);
+      console.error('Failed to load canvas:', error);
       throw error;
     }
 
-    // Transform DB format to client format
-    const strokes: Stroke[] = (data as StrokeDTO[]).map(dto => ({
-      clientId: dto.id,  // Use DB ID as clientId for loaded strokes
-      id: dto.id,
-      points: dto.points,
-      color: dto.color,
-      strokeWidth: dto.stroke_width,
-      tool: dto.tool as 'pen' | 'eraser',
-      saveState: 'saved' as const  // Already in DB
+    // No canvas saved yet
+    if (!data || !data.canvas_data) {
+      return [];
+    }
+
+    const canvasData = data.canvas_data as CanvasData;
+
+    // Convert stored format back to Stroke[]
+    // No clientId needed - we don't track individual strokes anymore
+    const strokes: Stroke[] = canvasData.lines.map((line, index) => ({
+      clientId: `loaded-${index}`, // Simple index-based ID
+      tool: line.tool,
+      points: line.points,
+      color: line.color,
+      strokeWidth: line.strokeWidth,
+      saveState: 'saved' as const,
     }));
 
     return strokes;
   } catch (error) {
-    console.error('Error in loadStrokes:', error);
+    console.error('Error in loadCanvas:', error);
     return []; // Return empty array on error - don't crash
-  }
-}
-
-/**
- * Delete a stroke from the database
- * For future undo feature
- */
-export async function deleteStroke(strokeId: string): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from('strokes')
-      .delete()
-      .eq('id', strokeId);
-
-    if (error) {
-      console.error('Failed to delete stroke:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in deleteStroke:', error);
-    throw error;
   }
 }
