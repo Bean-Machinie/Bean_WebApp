@@ -108,6 +108,128 @@
   resize: vertical;
 }
 
+/* Canvas Layout */
+.new-project-canvas-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  flex: 1;
+}
+
+.new-project-canvas-form {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.new-project-canvas-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.new-project-form__input-with-unit {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.new-project-form__input-with-unit input {
+  padding-right: 40px;
+}
+
+.new-project-form__unit {
+  position: absolute;
+  right: 12px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.new-project-form__color-picker {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.new-project-form__color-input {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.new-project-form__color-input:hover {
+  border-color: var(--primary);
+}
+
+.new-project-form__color-text {
+  flex: 1;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+}
+
+/* Canvas Preview */
+.new-project-canvas-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.new-project-canvas-preview__label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.new-project-canvas-preview__container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.new-project-canvas-preview__card {
+  width: 100%;
+  max-width: 280px;
+  max-height: 320px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.new-project-canvas-preview__card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.new-project-canvas-preview__inner {
+  position: absolute;
+  inset: 8px;
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.new-project-canvas-preview__dimensions {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 @media (max-width: 900px) {
   .new-project-panel {
     grid-template-columns: 1fr;
@@ -118,5 +240,9 @@
   .new-project-panel__column--left {
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+
+  .new-project-canvas-layout {
+    grid-template-columns: 1fr;
   }
 }

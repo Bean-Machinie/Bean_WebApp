@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types/project';
 import ScrollableList, { ScrollableListItem } from '../ScrollableList/ScrollableList';
+import PixelCard from '../PixelCard/PixelCard';
+import { generateClientId } from '../../lib/utils';
 import './NewProjectPanel.css';
 
 type NewProjectPanelProps = {
@@ -35,6 +37,11 @@ function NewProjectPanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Canvas-specific configuration
+  const [canvasWidth, setCanvasWidth] = useState(1000);
+  const [canvasHeight, setCanvasHeight] = useState(1000);
+  const [canvasColor, setCanvasColor] = useState('#ffffff');
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -43,7 +50,13 @@ function NewProjectPanel({
     setName('');
     setDescription('');
     setError(null);
+    setCanvasWidth(1000);
+    setCanvasHeight(1000);
+    setCanvasColor('#ffffff');
   }, [isOpen]);
+
+  const isCanvasProject = selectedProjectTypeId === 'canvas';
+  const aspectRatio = canvasWidth / canvasHeight;
 
   if (!isOpen) return null;
 
@@ -54,12 +67,20 @@ function NewProjectPanel({
     setIsSubmitting(true);
     setError(null);
 
+    const config = isCanvasProject
+      ? {
+          width: canvasWidth,
+          height: canvasHeight,
+          backgroundColor: canvasColor,
+        }
+      : {};
+
     const insertPayload = {
       user_id: user.id,
       name: name.trim(),
       project_type: selectedProjectTypeId,
       description: description.trim() || null,
-      config: {},
+      config,
     };
 
     const { data, error: insertError } = await supabase
@@ -75,10 +96,54 @@ function NewProjectPanel({
     }
 
     const createdProject = data as Project;
+
+    // For canvas projects, create the initial canvas with background layer
+    if (isCanvasProject) {
+      await createInitialCanvas(createdProject.id);
+    }
+
     onProjectCreated?.(createdProject);
     setIsSubmitting(false);
     onClose();
     navigate(`/workspace/${selectedProjectTypeId}/${createdProject.id}`);
+  };
+
+  const createInitialCanvas = async (projectId: string) => {
+    if (!user) return;
+
+    try {
+      const backgroundLayerId = generateClientId();
+      const defaultLayerId = generateClientId();
+
+      const initialCanvasData = {
+        layers: [
+          {
+            id: backgroundLayerId,
+            name: 'Background',
+            visible: true,
+            order: 0,
+            strokes: [],
+          },
+          {
+            id: defaultLayerId,
+            name: 'Layer 1',
+            visible: true,
+            order: 1,
+            strokes: [],
+          },
+        ],
+        activeLayerId: defaultLayerId,
+        version: 2,
+      };
+
+      await supabase.from('canvases').insert({
+        project_id: projectId,
+        user_id: user.id,
+        canvas_data: initialCanvasData,
+      });
+    } catch (error) {
+      console.error('Failed to create initial canvas:', error);
+    }
   };
 
   return (
@@ -108,45 +173,159 @@ function NewProjectPanel({
             {selectedProjectType ? selectedProjectType.label : 'Select a project type'}
           </h3>
 
-          <form className="new-project-form" onSubmit={handleSubmit}>
-            <div className="new-project-form__group">
-              <label className="new-project-form__label" htmlFor="project-name">
-                Project Name
-              </label>
-              <input
-                id="project-name"
-                type="text"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Enter a project name"
-                required
-              />
-            </div>
+          {isCanvasProject ? (
+            <div className="new-project-canvas-layout">
+              {/* Left: Form */}
+              <form className="new-project-canvas-form" onSubmit={handleSubmit}>
+                <div className="new-project-form__group">
+                  <label className="new-project-form__label" htmlFor="canvas-name">
+                    Canvas Name
+                  </label>
+                  <input
+                    id="canvas-name"
+                    type="text"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="My Canvas"
+                    required
+                  />
+                </div>
 
-            <div className="new-project-form__group">
-              <label className="new-project-form__label" htmlFor="project-description">
-                Description <span className="muted">(optional)</span>
-              </label>
-              <textarea
-                id="project-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                placeholder="Add a short summary for this project"
-              />
-            </div>
+                <div className="new-project-canvas-divider" />
 
-            {error ? <p className="new-project-form__error">{error}</p> : null}
+                <div className="new-project-form__grid">
+                  <div className="new-project-form__group">
+                    <label className="new-project-form__label" htmlFor="canvas-width">
+                      Width
+                    </label>
+                    <div className="new-project-form__input-with-unit">
+                      <input
+                        id="canvas-width"
+                        type="number"
+                        value={canvasWidth}
+                        onChange={(event) => setCanvasWidth(Number(event.target.value))}
+                        min="100"
+                        max="10000"
+                        required
+                      />
+                      <span className="new-project-form__unit">px</span>
+                    </div>
+                  </div>
 
-            <div className="new-project-form__actions">
-              <button className="button button--ghost" type="button" onClick={onClose} disabled={isSubmitting}>
-                Cancel
-              </button>
-              <button className="button" type="submit" disabled={!name.trim() || isSubmitting}>
-                {isSubmitting ? 'Creating…' : 'Create Project'}
-              </button>
+                  <div className="new-project-form__group">
+                    <label className="new-project-form__label" htmlFor="canvas-height">
+                      Height
+                    </label>
+                    <div className="new-project-form__input-with-unit">
+                      <input
+                        id="canvas-height"
+                        type="number"
+                        value={canvasHeight}
+                        onChange={(event) => setCanvasHeight(Number(event.target.value))}
+                        min="100"
+                        max="10000"
+                        required
+                      />
+                      <span className="new-project-form__unit">px</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="new-project-form__group">
+                  <label className="new-project-form__label" htmlFor="canvas-color">
+                    Canvas Color
+                  </label>
+                  <div className="new-project-form__color-picker">
+                    <input
+                      id="canvas-color"
+                      type="color"
+                      value={canvasColor}
+                      onChange={(event) => setCanvasColor(event.target.value)}
+                      className="new-project-form__color-input"
+                    />
+                    <input
+                      type="text"
+                      value={canvasColor}
+                      onChange={(event) => setCanvasColor(event.target.value)}
+                      className="new-project-form__color-text"
+                      placeholder="#ffffff"
+                    />
+                  </div>
+                </div>
+
+                {error ? <p className="new-project-form__error">{error}</p> : null}
+
+                <div className="new-project-form__actions">
+                  <button className="button button--ghost" type="button" onClick={onClose} disabled={isSubmitting}>
+                    Cancel
+                  </button>
+                  <button className="button" type="submit" disabled={!name.trim() || isSubmitting}>
+                    {isSubmitting ? 'Creating…' : 'Create'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Right: Preview */}
+              <div className="new-project-canvas-preview">
+                <p className="new-project-canvas-preview__label">Preview</p>
+                <div className="new-project-canvas-preview__container">
+                  <PixelCard
+                    variant="default"
+                    aspectRatio={aspectRatio}
+                    className="new-project-canvas-preview__card"
+                  >
+                    <div
+                      className="new-project-canvas-preview__inner"
+                      style={{ backgroundColor: canvasColor }}
+                    />
+                  </PixelCard>
+                  <p className="new-project-canvas-preview__dimensions">
+                    {canvasWidth} × {canvasHeight} px
+                  </p>
+                </div>
+              </div>
             </div>
-          </form>
+          ) : (
+            <form className="new-project-form" onSubmit={handleSubmit}>
+              <div className="new-project-form__group">
+                <label className="new-project-form__label" htmlFor="project-name">
+                  Project Name
+                </label>
+                <input
+                  id="project-name"
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Enter a project name"
+                  required
+                />
+              </div>
+
+              <div className="new-project-form__group">
+                <label className="new-project-form__label" htmlFor="project-description">
+                  Description <span className="muted">(optional)</span>
+                </label>
+                <textarea
+                  id="project-description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={3}
+                  placeholder="Add a short summary for this project"
+                />
+              </div>
+
+              {error ? <p className="new-project-form__error">{error}</p> : null}
+
+              <div className="new-project-form__actions">
+                <button className="button button--ghost" type="button" onClick={onClose} disabled={isSubmitting}>
+                  Cancel
+                </button>
+                <button className="button" type="submit" disabled={!name.trim() || isSubmitting}>
+                  {isSubmitting ? 'Creating…' : 'Create Project'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
