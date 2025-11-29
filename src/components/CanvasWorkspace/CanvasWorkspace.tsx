@@ -3,6 +3,7 @@ import { Stage, Layer, Line, Circle } from 'react-konva';
 import type { Project } from '@/types/project';
 import type { Stroke } from '@/types/canvas';
 import { saveStroke, loadStrokes } from '@/services/canvasService';
+import { generateClientId } from '@/lib/utils';
 import './CanvasWorkspace.css';
 
 type CanvasWorkspaceProps = {
@@ -29,6 +30,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const lastPanPoint = React.useRef<{ x: number; y: number } | null>(null);
   const stageRef = React.useRef<any>(null);
   const isSpacePressed = React.useRef(false);
+
+  // Save queue state
+  const [saveQueue, setSaveQueue] = React.useState<string[]>([]);
+  const isSavingRef = React.useRef(false);
 
   // Transform pointer position from screen to canvas coordinates
   const getTransformedPointerPosition = (stage: any) => {
@@ -96,11 +101,13 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       isDrawing.current = true;
       const transformedPos = getTransformedPointerPosition(stage);
       if (transformedPos) {
-        setLines([...lines, {
+        setLines(prev => [...prev, {
+          clientId: generateClientId(),
           tool,
           points: [transformedPos.x, transformedPos.y],
           color: brushColor,
-          strokeWidth: brushSize
+          strokeWidth: brushSize,
+          saveState: 'pending' as const
         }]);
       }
     }
@@ -127,37 +134,35 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       }));
       lastPanPoint.current = pointer;
     } else if (isDrawing.current) {
-      // Continue drawing
+      // Continue drawing - immutable update
       const transformedPoint = getTransformedPointerPosition(stage);
       if (transformedPoint) {
-        const lastLine = lines[lines.length - 1];
-        lastLine.points = lastLine.points.concat([transformedPoint.x, transformedPoint.y]);
-        lines.splice(lines.length - 1, 1, lastLine);
-        setLines(lines.concat());
+        setLines(prev => {
+          const updated = [...prev];
+          const lastIndex = updated.length - 1;
+          updated[lastIndex] = {
+            ...updated[lastIndex],
+            points: [...updated[lastIndex].points, transformedPoint.x, transformedPoint.y]
+          };
+          return updated;
+        });
       }
     }
   };
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
-    // Save stroke asynchronously if we were drawing
+    // Queue stroke for saving if we were drawing
     if (isDrawing.current && lines.length > 0) {
       const completedStroke = lines[lines.length - 1];
 
-      // Save asynchronously - don't await (non-blocking)
-      saveStroke(project.id, completedStroke).then(strokeId => {
-        // Update stroke with DB ID (for future undo feature)
-        setLines(prev => {
-          const updated = [...prev];
-          const idx = updated.findIndex(s => s === completedStroke);
-          if (idx !== -1) {
-            updated[idx] = { ...updated[idx], id: strokeId };
-          }
-          return updated;
-        });
-      }).catch(error => {
-        console.error('Failed to save stroke:', error);
-        // Could show toast notification to user in future
+      // Add to save queue - non-blocking, returns immediately
+      setSaveQueue(prev => {
+        // Only queue if not already queued
+        if (!prev.includes(completedStroke.clientId)) {
+          return [...prev, completedStroke.clientId];
+        }
+        return prev;
       });
     }
 
@@ -196,6 +201,90 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
     loadProjectStrokes();
   }, [project.id]);
+
+  // Save queue processor
+  React.useEffect(() => {
+    const processSaveQueue = async () => {
+      if (isSavingRef.current || saveQueue.length === 0) return;
+
+      isSavingRef.current = true;
+      const clientIdToSave = saveQueue[0];
+
+      try {
+        const strokeToSave = lines.find(s => s.clientId === clientIdToSave);
+        if (!strokeToSave || strokeToSave.saveState === 'saved' || strokeToSave.saveState === 'saving') {
+          setSaveQueue(prev => prev.slice(1));
+          isSavingRef.current = false;
+          return;
+        }
+
+        // Mark as saving
+        setLines(prev => prev.map(s =>
+          s.clientId === clientIdToSave
+            ? { ...s, saveState: 'saving' as const, lastSaveAttempt: Date.now() }
+            : s
+        ));
+
+        // Attempt save
+        const strokeId = await saveStroke(project.id, strokeToSave);
+
+        // Mark as saved
+        setLines(prev => prev.map(s =>
+          s.clientId === clientIdToSave
+            ? { ...s, id: strokeId, saveState: 'saved' as const }
+            : s
+        ));
+
+        setSaveQueue(prev => prev.slice(1));
+
+      } catch (error) {
+        console.error('Failed to save stroke:', error);
+
+        setLines(prev => prev.map(s => {
+          if (s.clientId === clientIdToSave) {
+            const retryCount = (s.retryCount || 0) + 1;
+            if (retryCount >= 3) {
+              return { ...s, saveState: 'error' as const, saveError: 'Failed after 3 attempts', retryCount };
+            }
+            return { ...s, saveState: 'pending' as const, retryCount };
+          }
+          return s;
+        }));
+
+        setSaveQueue(prev => prev.slice(1));
+      } finally {
+        isSavingRef.current = false;
+      }
+    };
+
+    processSaveQueue();
+  }, [saveQueue, lines, project.id]);
+
+  // Retry failed saves
+  React.useEffect(() => {
+    const retryInterval = setInterval(() => {
+      const now = Date.now();
+      const strokesToRetry = lines.filter(s => {
+        if (s.saveState !== 'pending' || !s.retryCount) return false;
+        const backoffDelay = 5000 * Math.pow(2, s.retryCount - 1);
+        return s.lastSaveAttempt && (now - s.lastSaveAttempt) > backoffDelay;
+      });
+
+      if (strokesToRetry.length > 0) {
+        setSaveQueue(prev => {
+          const newQueue = [...prev];
+          strokesToRetry.forEach(stroke => {
+            if (!newQueue.includes(stroke.clientId)) {
+              newQueue.push(stroke.clientId);
+            }
+          });
+          return newQueue;
+        });
+      }
+    }, 2000);
+
+    return () => clearInterval(retryInterval);
+  }, [lines]);
 
   // Keyboard support for spacebar panning
   React.useEffect(() => {

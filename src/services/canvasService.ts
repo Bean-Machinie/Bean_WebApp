@@ -61,11 +61,13 @@ export async function loadStrokes(projectId: string): Promise<Stroke[]> {
 
     // Transform DB format to client format
     const strokes: Stroke[] = (data as StrokeDTO[]).map(dto => ({
+      clientId: dto.id,  // Use DB ID as clientId for loaded strokes
       id: dto.id,
       points: dto.points,
       color: dto.color,
       strokeWidth: dto.stroke_width,
       tool: dto.tool as 'pen' | 'eraser',
+      saveState: 'saved' as const  // Already in DB
     }));
 
     return strokes;

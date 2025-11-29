@@ -1,16 +1,21 @@
 // Canvas stroke types for persistent storage
 
 export type Stroke = {
-  // Local state (always present)
-  id?: string;              // UUID from DB (undefined until saved)
+  // Identifiers
+  clientId: string;         // Client-generated UUID (ALWAYS present)
+  id?: string;              // DB UUID (undefined until saved)
+
+  // Stroke data
   points: number[];         // [x1, y1, x2, y2, ...] in canvas coordinates
   color: string;            // Hex color
   strokeWidth: number;      // Brush size
   tool: 'pen' | 'eraser';   // Tool type
 
-  // Save tracking (client-side only)
-  isSaving?: boolean;       // Currently being saved
+  // Save state tracking
+  saveState: 'pending' | 'saving' | 'saved' | 'error';
   saveError?: string;       // Error message if save failed
+  lastSaveAttempt?: number; // Timestamp of last save attempt
+  retryCount?: number;      // Number of retry attempts
 };
 
 export type StrokeDTO = {
