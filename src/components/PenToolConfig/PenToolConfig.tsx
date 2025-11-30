@@ -105,17 +105,14 @@ function PenToolConfig({
   const [opacity, setOpacity] = useState(100);
   const wheelRef = useRef<HTMLDivElement>(null);
   const triangleRef = useRef<HTMLDivElement>(null);
-  const lastHueRef = useRef<number>(0);
+  const lastHueRef = useRef<number>(hexToHsva(brushColor).h || 0);
 
   const hsvaRaw: HsvaColor = hexToHsva(brushColor);
+  const effectiveHue = Number.isFinite(lastHueRef.current) ? lastHueRef.current : 0;
   const hsva: HsvaColor = {
     ...hsvaRaw,
-    h: Number.isFinite(hsvaRaw.h) ? hsvaRaw.h : lastHueRef.current,
+    h: effectiveHue,
   };
-
-  if (hsva.s > 0 || hsva.v > 0) {
-    lastHueRef.current = hsva.h;
-  }
 
   const hueColor = `hsl(${hsva.h}, 100%, 50%)`;
   const triangleWeights = svToBarycentric(hsva.s, hsva.v);
@@ -124,11 +121,10 @@ function PenToolConfig({
   const triangleThumbY = trianglePoint.y + TRIANGLE_RADIUS;
 
   const commitColor = (nextHsva: HsvaColor, opts?: { lockHue?: boolean }) => {
-    const hue = opts?.lockHue ? lastHueRef.current : nextHsva.h;
-    const safeHsva = { ...nextHsva, h: hue };
-    if (!opts?.lockHue) {
-      lastHueRef.current = hue;
+    if (!opts?.lockHue && Number.isFinite(nextHsva.h)) {
+      lastHueRef.current = nextHsva.h;
     }
+    const safeHsva = { ...nextHsva, h: lastHueRef.current };
     onBrushColorChange(hsvaToHex(safeHsva));
   };
 
