@@ -201,21 +201,132 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 8px;
+  gap: 14px;
+  padding: 10px 6px 6px;
+  background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.pen-tool-config__wheel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 12px 20px color-mix(in srgb, var(--primary) 12%, transparent));
+  touch-action: none;
+}
+
+.pen-tool-config__wheel-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    #f00,
+    #ff0,
+    #0f0,
+    #0ff,
+    #00f,
+    #f0f,
+    #f00
+  );
+  mask: radial-gradient(circle, transparent calc(50% - var(--wheel-thickness)), black calc(50% - var(--wheel-thickness)));
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - var(--wheel-thickness)), black calc(50% - var(--wheel-thickness)));
+  filter: saturate(1.05);
+}
+
+.pen-tool-config__wheel-ring {
+  position: absolute;
+  inset: calc(var(--wheel-thickness) - 4px);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--bg) 90%, transparent) 0%, transparent 60%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 80%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--bg) 60%, transparent);
+  pointer-events: none;
+}
+
+.pen-tool-config__hue-thumb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 6px 12px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transform-origin: center;
+}
+
+.pen-tool-config__triangle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)),
+    linear-gradient(60deg, rgba(255, 255, 255, 0.85), transparent),
+    linear-gradient(300deg, hsl(var(--triangle-hue), 100%, 50%), transparent 65%);
+  border-radius: 10px;
+  box-shadow:
+    0 16px 28px color-mix(in srgb, var(--text) 10%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 75%, transparent);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.pen-tool-config__triangle-thumb {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  margin-top: -8px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.pen-tool-config__color-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
 .pen-tool-config__color-preview {
-  width: 100%;
-  height: 32px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   border: 2px solid var(--border);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--text) 15%, transparent);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--text) 14%, transparent);
   transition: transform 0.2s ease;
 }
 
 .pen-tool-config__color-preview:hover {
-  transform: scale(1.02);
+  transform: scale(1.03);
+}
+
+.pen-tool-config__color-input-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pen-tool-config__swatch-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .pen-tool-config__color-input {

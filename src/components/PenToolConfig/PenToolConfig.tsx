@@ -1,8 +1,89 @@
-import React, { useState } from 'react';
-import Wheel from '@uiw/react-color-wheel';
+import React, { useRef, useState } from 'react';
 import { hsvaToHex, hexToHsva } from '@uiw/color-convert';
 import type { HsvaColor } from '@uiw/color-convert';
 import './PenToolConfig.css';
+
+type Point = { x: number; y: number };
+type Barycentric = { hue: number; white: number; black: number };
+
+const WHEEL_SIZE = 176; // tighter fit and slimmer ring
+const WHEEL_THICKNESS = 10;
+const INNER_RADIUS = WHEEL_SIZE / 2 - WHEEL_THICKNESS;
+const TRIANGLE_RADIUS = INNER_RADIUS * 0.72;
+const TRIANGLE_SIDE = TRIANGLE_RADIUS * Math.sqrt(3);
+const TRIANGLE_HEIGHT = (Math.sqrt(3) / 2) * TRIANGLE_SIDE;
+const HUE_THUMB_RADIUS = INNER_RADIUS + WHEEL_THICKNESS / 2;
+
+type TriangleVertices = {
+  hue: Point;
+  white: Point;
+  black: Point;
+};
+
+const TRIANGLE_VERTICES: TriangleVertices = {
+  hue: { x: 0, y: -TRIANGLE_RADIUS },
+  white: {
+    x: TRIANGLE_RADIUS * Math.cos(Math.PI / 6),
+    y: TRIANGLE_RADIUS * Math.sin(Math.PI / 6),
+  },
+  black: {
+    x: TRIANGLE_RADIUS * Math.cos((5 * Math.PI) / 6),
+    y: TRIANGLE_RADIUS * Math.sin((5 * Math.PI) / 6),
+  },
+};
+
+const clampBarycentric = ({ hue, white, black }: Barycentric): Barycentric => {
+  const cHue = Math.max(0, hue);
+  const cWhite = Math.max(0, white);
+  const cBlack = Math.max(0, black);
+  const sum = cHue + cWhite + cBlack || 1;
+
+  return {
+    hue: cHue / sum,
+    white: cWhite / sum,
+    black: cBlack / sum,
+  };
+};
+
+const pointToBarycentric = (p: Point, t: TriangleVertices): Barycentric => {
+  const v0 = { x: t.white.x - t.hue.x, y: t.white.y - t.hue.y };
+  const v1 = { x: t.black.x - t.hue.x, y: t.black.y - t.hue.y };
+  const v2 = { x: p.x - t.hue.x, y: p.y - t.hue.y };
+
+  const d00 = v0.x * v0.x + v0.y * v0.y;
+  const d01 = v0.x * v1.x + v0.y * v1.y;
+  const d11 = v1.x * v1.x + v1.y * v1.y;
+  const d20 = v2.x * v0.x + v2.y * v0.y;
+  const d21 = v2.x * v1.x + v2.y * v1.y;
+  const denom = d00 * d11 - d01 * d01 || 1;
+
+  const white = (d11 * d20 - d01 * d21) / denom;
+  const black = (d00 * d21 - d01 * d20) / denom;
+  const hue = 1 - white - black;
+
+  return clampBarycentric({ hue, white, black });
+};
+
+const barycentricToPoint = (b: Barycentric, t: TriangleVertices): Point => ({
+  x: b.hue * t.hue.x + b.white * t.white.x + b.black * t.black.x,
+  y: b.hue * t.hue.y + b.white * t.white.y + b.black * t.black.y,
+});
+
+const barycentricToSV = (b: Barycentric) => {
+  const value = (b.hue + b.white) * 100;
+  const saturation = value === 0 ? 0 : (b.hue / (b.hue + b.white)) * 100;
+  return { saturation, value };
+};
+
+const svToBarycentric = (s: number, v: number): Barycentric => {
+  const value = Math.max(0, Math.min(100, v)) / 100;
+  const saturation = value === 0 ? 0 : Math.max(0, Math.min(100, s)) / 100;
+  const hue = saturation * value;
+  const white = value - hue;
+  const black = 1 - value;
+
+  return { hue, white, black };
+};
 
 type BrushType = 'normal';
 
@@ -21,13 +102,61 @@ function PenToolConfig({
 }: PenToolConfigProps) {
   const [selectedBrushType, setSelectedBrushType] = useState<BrushType>('normal');
   const [opacity, setOpacity] = useState(100);
+  const wheelRef = useRef<HTMLDivElement>(null);
+  const triangleRef = useRef<HTMLDivElement>(null);
 
-  // Convert hex color to HSVA for the color wheel
   const hsva: HsvaColor = hexToHsva(brushColor);
+  const hueColor = `hsl(${hsva.h}, 100%, 50%)`;
+  const triangleWeights = svToBarycentric(hsva.s, hsva.v);
+  const trianglePoint = barycentricToPoint(triangleWeights, TRIANGLE_VERTICES);
+  const triangleThumbX = trianglePoint.x + TRIANGLE_SIDE / 2;
+  const triangleThumbY = trianglePoint.y + TRIANGLE_HEIGHT / 2;
 
-  const handleColorChange = (color: { hsva: HsvaColor }) => {
-    const hexColor = hsvaToHex(color.hsva);
-    onBrushColorChange(hexColor);
+  const commitColor = (nextHsva: HsvaColor) => {
+    onBrushColorChange(hsvaToHex(nextHsva));
+  };
+
+  const handleHuePointer = (clientX: number, clientY: number) => {
+    if (!wheelRef.current) return;
+    const rect = wheelRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const normalizedHue = (angle + 450) % 360; // aligns 0deg to top of the wheel
+    commitColor({ ...hsva, h: normalizedHue });
+  };
+
+  const handleTrianglePointer = (clientX: number, clientY: number) => {
+    if (!triangleRef.current) return;
+    const rect = triangleRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const point = { x: clientX - cx, y: clientY - cy };
+    const bary = pointToBarycentric(point, TRIANGLE_VERTICES);
+    const { saturation, value } = barycentricToSV(bary);
+    commitColor({
+      ...hsva,
+      s: saturation,
+      v: value,
+    });
+  };
+
+  const startPointerTracking = (
+    event: React.PointerEvent,
+    onMove: (clientX: number, clientY: number) => void,
+  ) => {
+    event.preventDefault();
+    const move = (e: PointerEvent) => onMove(e.clientX, e.clientY);
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    onMove(event.clientX, event.clientY);
   };
 
   return (
@@ -112,25 +241,67 @@ function PenToolConfig({
       <div className="pen-tool-config__section">
         <h4 className="pen-tool-config__section-title">Color</h4>
         <div className="pen-tool-config__color-wheel-container">
-          <Wheel
-            color={hsva}
-            onChange={handleColorChange}
-            width={160}
-            height={160}
-          />
-          <div className="pen-tool-config__color-preview" style={{ background: brushColor }} />
-          <input
-            type="text"
-            value={brushColor.toUpperCase()}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (/^#[0-9A-Fa-f]{0,6}$/.test(value)) {
-                onBrushColorChange(value);
-              }
+          <div
+            className="pen-tool-config__wheel"
+            style={{
+              width: `${WHEEL_SIZE}px`,
+              height: `${WHEEL_SIZE}px`,
+              ['--wheel-thickness' as string]: `${WHEEL_THICKNESS}px`,
             }}
-            className="pen-tool-config__color-input"
-            placeholder="#000000"
-          />
+            ref={wheelRef}
+            onPointerDown={(e) => startPointerTracking(e, handleHuePointer)}
+          >
+            <div className="pen-tool-config__wheel-track" />
+            <div className="pen-tool-config__wheel-ring" />
+            <div
+              className="pen-tool-config__hue-thumb"
+              style={{
+                transform: `translate(-50%, -50%) rotate(${hsva.h - 90}deg) translate(${HUE_THUMB_RADIUS}px) rotate(${-hsva.h + 90}deg)`,
+                background: hueColor,
+              }}
+            />
+
+            <div
+              className="pen-tool-config__triangle"
+              style={{
+                width: `${TRIANGLE_SIDE}px`,
+                height: `${TRIANGLE_HEIGHT}px`,
+                ['--triangle-hue' as string]: `${hsva.h}`,
+              }}
+              ref={triangleRef}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                startPointerTracking(e, handleTrianglePointer);
+              }}
+            >
+              <div
+                className="pen-tool-config__triangle-thumb"
+                style={{
+                  transform: `translate(${triangleThumbX}px, ${triangleThumbY}px)`,
+                  background: brushColor,
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="pen-tool-config__color-meta">
+            <div className="pen-tool-config__color-preview" style={{ background: brushColor }} />
+            <div className="pen-tool-config__color-input-wrap">
+              <label className="pen-tool-config__swatch-label">HEX</label>
+              <input
+                type="text"
+                value={brushColor.toUpperCase()}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (/^#[0-9A-Fa-f]{0,6}$/.test(value)) {
+                    onBrushColorChange(value);
+                  }
+                }}
+                className="pen-tool-config__color-input"
+                placeholder="#000000"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
