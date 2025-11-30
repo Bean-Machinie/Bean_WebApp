@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar, SidebarBody, SidebarLink } from '@/components/ui/sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,6 +24,7 @@ function AppSidebar({
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { profile, avatarUrl, isLoading } = useProfile();
@@ -31,6 +32,23 @@ function AppSidebar({
   useEffect(() => {
     localStorage.setItem('sidebar-expanded', JSON.stringify(open));
   }, [open]);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+
+    if (profileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [profileMenuOpen]);
 
   const resolvedName = useMemo(() => {
     return profile?.displayName || profile?.emailFallback || user?.email || 'Profile';
@@ -156,7 +174,7 @@ function AppSidebar({
         </div>
 
         {/* Profile Menu Section */}
-        <div className="relative">
+        <div className="relative" ref={profileMenuRef}>
           <div
             onClick={() => setProfileMenuOpen(!profileMenuOpen)}
             className="flex items-center justify-start gap-2 group/sidebar px-1.5 py-2.5 cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md px-2"
@@ -186,8 +204,16 @@ function AppSidebar({
           </div>
 
           {/* Profile Dropdown Menu */}
-          {profileMenuOpen && open && (
-            <div className="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-md shadow-lg overflow-hidden z-50">
+          {profileMenuOpen && (
+            <div
+              className="fixed bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-md shadow-lg overflow-hidden"
+              style={{
+                bottom: '72px',
+                left: open ? '16px' : '16px',
+                width: open ? 'calc(var(--sidebar-width-expanded) - 32px)' : '200px',
+                zIndex: 9999,
+              }}
+            >
               {profileMenuItems.map((item) => (
                 <button
                   key={item.id}
