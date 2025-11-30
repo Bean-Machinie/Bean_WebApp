@@ -1,0 +1,73 @@
+.tool-selection-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  height: 100vh;
+  width: 60px;
+  box-sizing: border-box;
+}
+
+.tool-selection-panel__button {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text);
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.tool-selection-panel__button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent, color-mix(in srgb, var(--primary) 10%, transparent));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.tool-selection-panel__button:hover {
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.tool-selection-panel__button:hover::before {
+  opacity: 1;
+}
+
+.tool-selection-panel__button--active {
+  background: var(--primary);
+  border-color: var(--primary-strong);
+  color: var(--bg);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.tool-selection-panel__button--active::before {
+  display: none;
+}
+
+.tool-selection-panel__button svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--text) 10%, transparent));
+}
+
+.tool-selection-panel__button--active svg {
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--bg) 20%, transparent));
+}
+
+.tool-selection-panel__button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 20%, transparent);
+}

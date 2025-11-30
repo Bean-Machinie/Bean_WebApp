@@ -1,0 +1,257 @@
+.pen-tool-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 12px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  height: 100vh;
+  width: 220px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pen-tool-config__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pen-tool-config__section-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.pen-tool-config__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+/* Brush Types */
+.pen-tool-config__brush-types {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pen-tool-config__brush-type {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+}
+
+.pen-tool-config__brush-type:hover:not(.pen-tool-config__brush-type--placeholder) {
+  border-color: var(--primary);
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.pen-tool-config__brush-type--active {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  border-color: var(--primary-strong);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.pen-tool-config__brush-type--placeholder {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pen-tool-config__brush-preview {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.pen-tool-config__brush-type--active .pen-tool-config__brush-preview {
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+}
+
+.pen-tool-config__brush-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+.pen-tool-config__brush-circle--disabled {
+  background: var(--text-muted);
+  opacity: 0.3;
+}
+
+.pen-tool-config__brush-type--active .pen-tool-config__brush-circle {
+  background: var(--bg);
+}
+
+.pen-tool-config__brush-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pen-tool-config__brush-label--disabled {
+  color: var(--text-muted);
+}
+
+.pen-tool-config__brush-type--active .pen-tool-config__brush-label {
+  color: var(--bg);
+}
+
+/* Tool Properties */
+.pen-tool-config__property {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pen-tool-config__property-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.pen-tool-config__property-value {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.pen-tool-config__slider-container {
+  position: relative;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.pen-tool-config__slider {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.pen-tool-config__slider-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  border-radius: 3px;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 40%, transparent);
+  pointer-events: none;
+}
+
+.pen-tool-config__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--text) 20%, transparent);
+  position: relative;
+  z-index: 3;
+}
+
+.pen-tool-config__slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+/* Color Wheel */
+.pen-tool-config__color-wheel-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+}
+
+.pen-tool-config__color-preview {
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--text) 15%, transparent);
+  transition: transform 0.2s ease;
+}
+
+.pen-tool-config__color-preview:hover {
+  transform: scale(1.02);
+}
+
+.pen-tool-config__color-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
+  font-family: 'Monaco', 'Courier New', monospace;
+  transition: all 0.2s ease;
+}
+
+.pen-tool-config__color-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Scrollbar Styling */
+.pen-tool-config::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pen-tool-config::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.pen-tool-config::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.pen-tool-config::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}

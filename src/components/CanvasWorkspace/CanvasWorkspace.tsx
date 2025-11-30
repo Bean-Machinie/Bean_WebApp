@@ -5,6 +5,9 @@ import type { Stroke, Layer } from '@/types/canvas';
 import { saveCanvas, loadCanvas } from '@/services/canvasService';
 import { generateClientId } from '@/lib/utils';
 import LayerPanel from '@/components/LayerPanel/LayerPanel';
+import ToolSelectionPanel from '@/components/ToolSelectionPanel/ToolSelectionPanel';
+import PenToolConfig from '@/components/PenToolConfig/PenToolConfig';
+import EraserToolConfig from '@/components/EraserToolConfig/EraserToolConfig';
 import './CanvasWorkspace.css';
 
 type CanvasWorkspaceProps = {
@@ -30,7 +33,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   // Zoom & Pan state
   const [scale, setScale] = React.useState(1);
   // Calculate initial position to center the canvas in the viewport
-  const viewportWidth = window.innerWidth - 400; // Subtract left toolbar (200px) + right sidebar (200px)
+  // Left: Tool Selection (60px) + Tool Config (220px) = 280px
+  // Right: Sidebar (200px)
+  const viewportWidth = window.innerWidth - 480;
   const viewportHeight = window.innerHeight;
   const initialX = (viewportWidth - canvasWidth) / 2;
   const initialY = (viewportHeight - canvasHeight) / 2;
@@ -300,91 +305,20 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   return (
     <div className="canvas-workspace">
-      {/* Left Toolbar */}
-      <div className="canvas-workspace__toolbar">
-        <div className="canvas-workspace__toolbar-content">
-          <h3 className="canvas-workspace__toolbar-title">Tools</h3>
+      {/* Tool Selection Panel */}
+      <ToolSelectionPanel activeTool={tool} onToolChange={setTool} />
 
-          {/* Tool Selection */}
-          <div className="canvas-workspace__tool-group">
-            <label className="canvas-workspace__label">Tool</label>
-            <select
-              value={tool}
-              onChange={(e) => setTool(e.target.value as 'pen' | 'eraser')}
-              className="canvas-workspace__tool-select"
-            >
-              <option value="pen">Pen</option>
-              <option value="eraser">Eraser</option>
-            </select>
-          </div>
-
-          <div className="canvas-workspace__divider" />
-
-          {/* Brush Size Slider */}
-          <div className="canvas-workspace__tool-group">
-            <label className="canvas-workspace__label">
-              Brush Size: {brushSize}px
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="50"
-              value={brushSize}
-              onChange={(e) => setBrushSize(Number(e.target.value))}
-              className="canvas-workspace__slider"
-            />
-          </div>
-
-          {/* Color Picker */}
-          <div className="canvas-workspace__tool-group">
-            <label className="canvas-workspace__label">Color</label>
-            <div className="canvas-workspace__color-picker">
-              <input
-                type="color"
-                value={brushColor}
-                onChange={(e) => setBrushColor(e.target.value)}
-                className="canvas-workspace__color-input"
-              />
-              <input
-                type="text"
-                value={brushColor}
-                onChange={(e) => setBrushColor(e.target.value)}
-                className="canvas-workspace__color-text"
-                placeholder="#000000"
-              />
-            </div>
-          </div>
-
-          <div className="canvas-workspace__divider" />
-
-          {/* Zoom Info */}
-          <div className="canvas-workspace__tool-group">
-            <label className="canvas-workspace__label">
-              Zoom: {Math.round(scale * 100)}%
-            </label>
-            <button
-              onClick={() => {
-                setScale(1);
-                // Reset to centered position
-                const viewportWidth = window.innerWidth - 400;
-                const viewportHeight = window.innerHeight;
-                const centerX = (viewportWidth - canvasWidth) / 2;
-                const centerY = (viewportHeight - canvasHeight) / 2;
-                setPosition({ x: centerX, y: centerY });
-              }}
-              className="canvas-workspace__button"
-            >
-              Reset View
-            </button>
-          </div>
-
-          <div className="canvas-workspace__help-text">
-            <p>• Scroll to zoom</p>
-            <p>• Space + Drag to pan</p>
-            <p>• Middle-click to pan</p>
-          </div>
-        </div>
-      </div>
+      {/* Tool Config Panel */}
+      {tool === 'pen' ? (
+        <PenToolConfig
+          brushSize={brushSize}
+          brushColor={brushColor}
+          onBrushSizeChange={setBrushSize}
+          onBrushColorChange={setBrushColor}
+        />
+      ) : (
+        <EraserToolConfig brushSize={brushSize} onBrushSizeChange={setBrushSize} />
+      )}
 
       {/* Center Canvas Area */}
       <div
@@ -394,7 +328,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       >
         <Stage
           ref={stageRef}
-          width={window.innerWidth - 400}
+          width={window.innerWidth - 480}
           height={window.innerHeight}
           onWheel={handleWheel}
           onMouseDown={handleMouseDown}
@@ -470,27 +404,41 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         <div className="canvas-workspace__sidebar-content">
           <h3 className="canvas-workspace__sidebar-title">Properties</h3>
 
+          {/* Zoom Controls */}
           <div className="canvas-workspace__property-group">
-            <label className="canvas-workspace__label">Canvas Info</label>
-            <div className="canvas-workspace__info">
-              <p>Layers: {layers.length}</p>
-              <p>Total Strokes: {layers.reduce((sum, layer) => sum + layer.strokes.length, 0)}</p>
-              <p>Position: ({Math.round(position.x)}, {Math.round(position.y)})</p>
-              <p>Scale: {scale.toFixed(2)}x</p>
-              <p>
-                {isSaving ? '💾 Saving...' : saveError ? `❌ Error: ${saveError}` : lastSaved ? `✓ Saved ${lastSaved.toLocaleTimeString()}` : ''}
-              </p>
+            <label className="canvas-workspace__label">
+              Zoom: {Math.round(scale * 100)}%
+            </label>
+            <button
+              onClick={() => {
+                setScale(1);
+                const viewportWidth = window.innerWidth - 480;
+                const viewportHeight = window.innerHeight;
+                const centerX = (viewportWidth - canvasWidth) / 2;
+                const centerY = (viewportHeight - canvasHeight) / 2;
+                setPosition({ x: centerX, y: centerY });
+              }}
+              className="canvas-workspace__button"
+            >
+              Reset View
+            </button>
+            <div className="canvas-workspace__help-text">
+              <p>• Scroll to zoom</p>
+              <p>• Space + Drag to pan</p>
+              <p>• Middle-click to pan</p>
             </div>
           </div>
 
           <div className="canvas-workspace__divider" />
 
           <div className="canvas-workspace__property-group">
-            <label className="canvas-workspace__label">Current Tool</label>
+            <label className="canvas-workspace__label">Canvas Info</label>
             <div className="canvas-workspace__info">
-              <p>Type: {tool === 'pen' ? 'Pen' : 'Eraser'}</p>
-              <p>Size: {brushSize}px</p>
-              {tool === 'pen' && <p>Color: {brushColor}</p>}
+              <p>Layers: {layers.length}</p>
+              <p>Total Strokes: {layers.reduce((sum, layer) => sum + layer.strokes.length, 0)}</p>
+              <p>
+                {isSaving ? '💾 Saving...' : saveError ? `❌ Error: ${saveError}` : lastSaved ? `✓ Saved ${lastSaved.toLocaleTimeString()}` : ''}
+              </p>
             </div>
           </div>
 
