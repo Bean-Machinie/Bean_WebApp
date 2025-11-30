@@ -29,7 +29,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   // Zoom & Pan state
   const [scale, setScale] = React.useState(1);
-  const [position, setPosition] = React.useState({ x: 0, y: 0 });
+  // Calculate initial position to center the canvas in the viewport
+  const viewportWidth = window.innerWidth - 400; // Subtract left toolbar (200px) + right sidebar (200px)
+  const viewportHeight = window.innerHeight;
+  const initialX = (viewportWidth - canvasWidth) / 2;
+  const initialY = (viewportHeight - canvasHeight) / 2;
+  const [position, setPosition] = React.useState({ x: initialX, y: initialY });
 
   // Cursor overlay state
   const [cursorPos, setCursorPos] = React.useState<{ x: number; y: number } | null>(null);
@@ -360,7 +365,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             <button
               onClick={() => {
                 setScale(1);
-                setPosition({ x: 0, y: 0 });
+                // Reset to centered position
+                const viewportWidth = window.innerWidth - 400;
+                const viewportHeight = window.innerHeight;
+                const centerX = (viewportWidth - canvasWidth) / 2;
+                const centerY = (viewportHeight - canvasHeight) / 2;
+                setPosition({ x: centerX, y: centerY });
               }}
               className="canvas-workspace__button"
             >

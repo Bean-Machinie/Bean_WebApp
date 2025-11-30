@@ -15,6 +15,7 @@ type NewProjectPanelProps = {
   selectedProjectTypeId: string;
   onSelectProjectType: (id: string) => void;
   onProjectCreated?: (project: Project) => void;
+  existingProjects?: Project[];
 };
 
 function NewProjectPanel({
@@ -24,6 +25,7 @@ function NewProjectPanel({
   selectedProjectTypeId,
   onSelectProjectType,
   onProjectCreated,
+  existingProjects = [],
 }: NewProjectPanelProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -42,6 +44,13 @@ function NewProjectPanel({
   const [canvasHeight, setCanvasHeight] = useState(1000);
   const [canvasColor, setCanvasColor] = useState('#ffffff');
 
+  // Generate auto-placeholder for canvas projects
+  // Count the actual canvas projects from the database
+  const canvasProjectNumber = useMemo(() => {
+    const canvasProjectCount = existingProjects.filter(p => p.project_type === 'canvas').length;
+    return canvasProjectCount + 1;
+  }, [existingProjects]);
+
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -56,7 +65,26 @@ function NewProjectPanel({
   }, [isOpen]);
 
   const isCanvasProject = selectedProjectTypeId === 'canvas';
+
+  // Calculate preview dimensions to fit within a square preview box
+  // The preview box is 280x280px (defined in CSS)
+  const PREVIEW_BOX_SIZE = 280;
   const aspectRatio = canvasWidth / canvasHeight;
+
+  // Calculate preview dimensions based on aspect ratio
+  // The largest canvas dimension should scale to fit the preview box
+  let previewWidth: number;
+  let previewHeight: number;
+
+  if (canvasWidth >= canvasHeight) {
+    // Width is larger - scale width to preview box size
+    previewWidth = PREVIEW_BOX_SIZE;
+    previewHeight = PREVIEW_BOX_SIZE / aspectRatio;
+  } else {
+    // Height is larger - scale height to preview box size
+    previewHeight = PREVIEW_BOX_SIZE;
+    previewWidth = PREVIEW_BOX_SIZE * aspectRatio;
+  }
 
   if (!isOpen) return null;
 
@@ -66,6 +94,15 @@ function NewProjectPanel({
 
     setIsSubmitting(true);
     setError(null);
+
+    // Use auto-generated name if field is empty for canvas projects
+    const finalName = name.trim() || (isCanvasProject ? `Canvas Project #${canvasProjectNumber}` : '');
+
+    if (!finalName) {
+      setError('Project name is required');
+      setIsSubmitting(false);
+      return;
+    }
 
     const config = isCanvasProject
       ? {
@@ -77,7 +114,7 @@ function NewProjectPanel({
 
     const insertPayload = {
       user_id: user.id,
-      name: name.trim(),
+      name: finalName,
       project_type: selectedProjectTypeId,
       description: description.trim() || null,
       config,
@@ -179,15 +216,15 @@ function NewProjectPanel({
               <form className="new-project-canvas-form" onSubmit={handleSubmit}>
                 <div className="new-project-form__group">
                   <label className="new-project-form__label" htmlFor="canvas-name">
-                    Canvas Name
+                    Canvas Name <span className="new-project-form__optional">(optional)</span>
                   </label>
                   <input
                     id="canvas-name"
                     type="text"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder="My Canvas"
-                    required
+                    placeholder={`Canvas Project #${canvasProjectNumber}`}
+                    className="new-project-form__input"
                   />
                 </div>
 
@@ -207,6 +244,7 @@ function NewProjectPanel({
                         min="100"
                         max="10000"
                         required
+                        className="new-project-form__input"
                       />
                       <span className="new-project-form__unit">px</span>
                     </div>
@@ -225,6 +263,7 @@ function NewProjectPanel({
                         min="100"
                         max="10000"
                         required
+                        className="new-project-form__input"
                       />
                       <span className="new-project-form__unit">px</span>
                     </div>
@@ -233,7 +272,7 @@ function NewProjectPanel({
 
                 <div className="new-project-form__group">
                   <label className="new-project-form__label" htmlFor="canvas-color">
-                    Canvas Color
+                    Background Color
                   </label>
                   <div className="new-project-form__color-picker">
                     <input
@@ -259,8 +298,8 @@ function NewProjectPanel({
                   <button className="button button--ghost" type="button" onClick={onClose} disabled={isSubmitting}>
                     Cancel
                   </button>
-                  <button className="button" type="submit" disabled={!name.trim() || isSubmitting}>
-                    {isSubmitting ? 'Creating…' : 'Create'}
+                  <button className="button button--primary" type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Creating…' : 'Create Canvas'}
                   </button>
                 </div>
               </form>
@@ -269,16 +308,17 @@ function NewProjectPanel({
               <div className="new-project-canvas-preview">
                 <p className="new-project-canvas-preview__label">Preview</p>
                 <div className="new-project-canvas-preview__container">
-                  <PixelCard
-                    variant="default"
-                    aspectRatio={aspectRatio}
+                  <div
                     className="new-project-canvas-preview__card"
+                    style={{ width: `${previewWidth}px`, height: `${previewHeight}px` }}
                   >
-                    <div
-                      className="new-project-canvas-preview__inner"
-                      style={{ backgroundColor: canvasColor }}
-                    />
-                  </PixelCard>
+                    <PixelCard variant="default">
+                      <div
+                        className="new-project-canvas-preview__inner"
+                        style={{ backgroundColor: canvasColor }}
+                      />
+                    </PixelCard>
+                  </div>
                   <p className="new-project-canvas-preview__dimensions">
                     {canvasWidth} × {canvasHeight} px
                   </p>

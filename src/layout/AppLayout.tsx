@@ -196,6 +196,7 @@ function AppLayout() {
         selectedProjectTypeId={selectedProjectTypeId}
         onSelectProjectType={setSelectedProjectTypeId}
         onProjectCreated={handleProjectCreated}
+        existingProjects={projects}
       />
     </div>
   );
