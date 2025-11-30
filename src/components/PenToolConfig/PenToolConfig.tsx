@@ -8,7 +8,8 @@ type Barycentric = { hue: number; white: number; black: number };
 
 const WHEEL_SIZE = 176; // tighter fit and slimmer ring
 const WHEEL_THICKNESS = 10;
-const INNER_RADIUS = WHEEL_SIZE / 2 - WHEEL_THICKNESS;
+const OUTER_RADIUS = WHEEL_SIZE / 2;
+const INNER_RADIUS = OUTER_RADIUS - WHEEL_THICKNESS;
 const TRIANGLE_RADIUS = INNER_RADIUS * 0.72;
 const TRIANGLE_SIDE = TRIANGLE_RADIUS * Math.sqrt(3);
 const TRIANGLE_HEIGHT = (Math.sqrt(3) / 2) * TRIANGLE_SIDE;
@@ -104,16 +105,31 @@ function PenToolConfig({
   const [opacity, setOpacity] = useState(100);
   const wheelRef = useRef<HTMLDivElement>(null);
   const triangleRef = useRef<HTMLDivElement>(null);
+  const lastHueRef = useRef<number>(0);
 
-  const hsva: HsvaColor = hexToHsva(brushColor);
+  const hsvaRaw: HsvaColor = hexToHsva(brushColor);
+  const hsva: HsvaColor = {
+    ...hsvaRaw,
+    h: Number.isFinite(hsvaRaw.h) ? hsvaRaw.h : lastHueRef.current,
+  };
+
+  if (hsva.s > 0 || hsva.v > 0) {
+    lastHueRef.current = hsva.h;
+  }
+
   const hueColor = `hsl(${hsva.h}, 100%, 50%)`;
   const triangleWeights = svToBarycentric(hsva.s, hsva.v);
   const trianglePoint = barycentricToPoint(triangleWeights, TRIANGLE_VERTICES);
   const triangleThumbX = trianglePoint.x + TRIANGLE_SIDE / 2;
-  const triangleThumbY = trianglePoint.y + TRIANGLE_HEIGHT / 2;
+  const triangleThumbY = trianglePoint.y + TRIANGLE_RADIUS;
 
-  const commitColor = (nextHsva: HsvaColor) => {
-    onBrushColorChange(hsvaToHex(nextHsva));
+  const commitColor = (nextHsva: HsvaColor, opts?: { lockHue?: boolean }) => {
+    const hue = opts?.lockHue ? lastHueRef.current : nextHsva.h;
+    const safeHsva = { ...nextHsva, h: hue };
+    if (!opts?.lockHue) {
+      lastHueRef.current = hue;
+    }
+    onBrushColorChange(hsvaToHex(safeHsva));
   };
 
   const handleHuePointer = (clientX: number, clientY: number) => {
@@ -140,7 +156,7 @@ function PenToolConfig({
       ...hsva,
       s: saturation,
       v: value,
-    });
+    }, { lockHue: true });
   };
 
   const startPointerTracking = (
@@ -157,6 +173,19 @@ function PenToolConfig({
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     onMove(event.clientX, event.clientY);
+  };
+
+  const handleWheelPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!wheelRef.current) return;
+    const rect = wheelRef.current.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    const isOnRing = r >= INNER_RADIUS && r <= OUTER_RADIUS;
+    if (!isOnRing) return;
+    startPointerTracking(e, handleHuePointer);
   };
 
   return (
@@ -247,12 +276,20 @@ function PenToolConfig({
               width: `${WHEEL_SIZE}px`,
               height: `${WHEEL_SIZE}px`,
               ['--wheel-thickness' as string]: `${WHEEL_THICKNESS}px`,
+              ['--wheel-inner' as string]: `${INNER_RADIUS * 2}px`,
             }}
             ref={wheelRef}
-            onPointerDown={(e) => startPointerTracking(e, handleHuePointer)}
+            onPointerDown={handleWheelPointerDown}
           >
             <div className="pen-tool-config__wheel-track" />
             <div className="pen-tool-config__wheel-ring" />
+            <div
+              className="pen-tool-config__wheel-hole"
+              style={{
+                width: `${INNER_RADIUS * 2}px`,
+                height: `${INNER_RADIUS * 2}px`,
+              }}
+            />
             <div
               className="pen-tool-config__hue-thumb"
               style={{
