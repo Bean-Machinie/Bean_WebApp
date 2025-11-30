@@ -216,7 +216,7 @@ function NewProjectPanel({
               <form className="new-project-canvas-form" onSubmit={handleSubmit}>
                 <div className="new-project-form__group">
                   <label className="new-project-form__label" htmlFor="canvas-name">
-                    Canvas Name <span className="new-project-form__optional">(optional)</span>
+                    Canvas Name
                   </label>
                   <input
                     id="canvas-name"
@@ -274,22 +274,14 @@ function NewProjectPanel({
                   <label className="new-project-form__label" htmlFor="canvas-color">
                     Background Color
                   </label>
-                  <div className="new-project-form__color-picker">
-                    <input
-                      id="canvas-color"
-                      type="color"
-                      value={canvasColor}
-                      onChange={(event) => setCanvasColor(event.target.value)}
-                      className="new-project-form__color-input"
-                    />
-                    <input
-                      type="text"
-                      value={canvasColor}
-                      onChange={(event) => setCanvasColor(event.target.value)}
-                      className="new-project-form__color-text"
-                      placeholder="#ffffff"
-                    />
-                  </div>
+                  <input
+                    id="canvas-color"
+                    type="color"
+                    value={canvasColor}
+                    onChange={(event) => setCanvasColor(event.target.value)}
+                    className="new-project-form__color-input-circle"
+                    title={canvasColor}
+                  />
                 </div>
 
                 {error ? <p className="new-project-form__error">{error}</p> : null}
