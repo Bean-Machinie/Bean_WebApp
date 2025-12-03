@@ -277,36 +277,6 @@
   z-index: 20;
 }
 
-.pen-tool-config__triangle {
-  position: absolute;
-  z-index: 10;
-  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
-  background:
-    radial-gradient(circle at 12% 88%, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0) 60%),
-    radial-gradient(circle at 88% 88%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 60%),
-    hsl(var(--triangle-hue), 100%, 50%);
-  border-radius: 10px;
-  box-shadow:
-    0 16px 28px color-mix(in srgb, var(--text) 10%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--border) 85%, transparent),
-    0 0 0 2px color-mix(in srgb, var(--bg) 90%, transparent);
-  cursor: pointer;
-  touch-action: none;
-}
-
-.pen-tool-config__triangle-thumb {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.35),
-    0 4px 10px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-  z-index: 15;
-}
-
 .pen-tool-config__color-meta {
   display: flex;
   align-items: center;
