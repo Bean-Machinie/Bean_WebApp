@@ -8,7 +8,9 @@
       "Bash(npm uninstall:*)",
       "Bash(find:*)",
       "Bash(tree:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git log:*)",
+      "Bash(timeout 5 bash:*)"
     ],
     "deny": [],
     "ask": []

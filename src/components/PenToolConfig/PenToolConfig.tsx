@@ -134,8 +134,10 @@ function PenToolConfig({
   const hueColor = `hsl(${hsva.h}, 100%, 50%)`;
   const triangleWeights = svToBarycentric(hsva.s, hsva.v);
   const trianglePoint = barycentricToPoint(triangleWeights, TRIANGLE_VERTICES);
-  const triangleThumbX = trianglePoint.x + TRIANGLE_SIDE / 2;
-  const triangleThumbY = trianglePoint.y + TRIANGLE_RADIUS;
+
+  // The triangle element is centered, but its coordinate origin is offset
+  // from the element's geometric center by this amount vertically
+  const triangleOffsetY = TRIANGLE_RADIUS - TRIANGLE_HEIGHT / 2;
 
   const commitColor = (nextHsva: HsvaColor, opts?: { lockHue?: boolean }) => {
     // Determine which hue to use (update if not locked and valid, otherwise keep current)
@@ -334,15 +336,17 @@ function PenToolConfig({
                 e.stopPropagation();
                 startPointerTracking(e, handleTrianglePointer);
               }}
-            >
-              <div
-                className="pen-tool-config__triangle-thumb"
-                style={{
-                  transform: `translate(${triangleThumbX}px, ${triangleThumbY}px)`,
-                  background: brushColor,
-                }}
-              />
-            </div>
+            />
+
+            <div
+              className="pen-tool-config__triangle-thumb"
+              style={{
+                left: '50%',
+                top: '50%',
+                transform: `translate(-50%, -50%) translate(${trianglePoint.x}px, ${trianglePoint.y + triangleOffsetY}px)`,
+                background: brushColor,
+              }}
+            />
           </div>
 
           <div className="pen-tool-config__color-meta">

@@ -292,22 +292,19 @@
     0 0 0 2px color-mix(in srgb, var(--bg) 90%, transparent);
   cursor: pointer;
   touch-action: none;
-  z-index: 2;
 }
 
 .pen-tool-config__triangle-thumb {
   position: absolute;
   width: 16px;
   height: 16px;
-  margin-left: -8px;
-  margin-top: -8px;
   border-radius: 50%;
   border: 2px solid #fff;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.35),
     0 4px 10px rgba(0, 0, 0, 0.3);
   pointer-events: none;
-  z-index: 4;
+  z-index: 15;
 }
 
 .pen-tool-config__color-meta {
