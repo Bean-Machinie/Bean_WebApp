@@ -1,0 +1,64 @@
+/* SV Triangle Container */
+.sv-triangle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 5; /* Above the wheel ring but below thumbs */
+}
+
+/* SVG element for the triangle */
+.sv-triangle__svg {
+  display: block;
+  pointer-events: auto; /* Enable pointer events on the SVG */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* Base triangle with hue-to-white gradient */
+.sv-triangle__base {
+  stroke: none;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
+}
+
+/* Overlay triangle with black gradient */
+.sv-triangle__overlay {
+  stroke: none;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+
+/* Draggable thumb indicator */
+.sv-triangle__thumb {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 4px 10px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+  pointer-events: none; /* Thumb doesn't block pointer events */
+  cursor: grab;
+  z-index: 25; /* Above everything - hue thumb is z-index: 20 */
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+
+/* Thumb active/dragging state */
+.sv-triangle__thumb--dragging {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 6px 16px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* Visual feedback on hover */
+.sv-triangle__svg:hover ~ .sv-triangle__thumb:not(.sv-triangle__thumb--dragging) {
+  transform: translate(-50%, -50%) scale(1.08);
+}

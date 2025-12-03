@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { hsvaToHex, hexToHsva } from '@uiw/color-convert';
 import type { HsvaColor } from '@uiw/color-convert';
+import { SVTriangle } from './SVTriangle';
 import './PenToolConfig.css';
 
 const WHEEL_SIZE = 176;
@@ -55,16 +56,21 @@ function PenToolConfig({
 
   const hueColor = `hsl(${hsva.h}, 100%, 50%)`;
 
-  const commitColor = (hue: number) => {
-    if (Number.isFinite(hue)) {
+  const commitColor = (hue?: number, saturation?: number, value?: number) => {
+    // Use provided values or fall back to current values
+    const h = hue !== undefined ? hue : effectiveHue;
+    const s = saturation !== undefined ? saturation : hsva.s;
+    const v = value !== undefined ? value : hsva.v;
+
+    // Update lastHue if a valid hue is provided
+    if (hue !== undefined && Number.isFinite(hue)) {
       setLastHue(hue);
     }
 
-    // Use the hue with full saturation and mid-brightness for vibrant colors
     const safeHsva: HsvaColor = {
-      h: hue,
-      s: 100,
-      v: 50,
+      h,
+      s,
+      v,
       a: 100
     };
     const newColor = hsvaToHex(safeHsva);
@@ -111,6 +117,10 @@ function PenToolConfig({
     const isOnRing = r >= INNER_RADIUS && r <= OUTER_RADIUS;
     if (!isOnRing) return;
     startPointerTracking(e, handleHuePointer);
+  };
+
+  const handleSVChange = (s: number, v: number) => {
+    commitColor(undefined, s, v);
   };
 
   return (
@@ -221,6 +231,14 @@ function PenToolConfig({
                 transform: `translate(-50%, -50%) rotate(${hsva.h - 90}deg) translate(${HUE_THUMB_RADIUS}px) rotate(${-hsva.h + 90}deg)`,
                 background: hueColor,
               }}
+            />
+            <SVTriangle
+              hue={hsva.h}
+              saturation={hsva.s}
+              value={hsva.v}
+              onChange={handleSVChange}
+              radius={INNER_RADIUS}
+              size={WHEEL_SIZE}
             />
           </div>
 
