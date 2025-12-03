@@ -103,26 +103,29 @@ function PenToolConfig({
 }: PenToolConfigProps) {
   const [selectedBrushType, setSelectedBrushType] = useState<BrushType>('normal');
   const [opacity, setOpacity] = useState(100);
+  const [lastHue, setLastHue] = useState<number>(() => {
+    const hsva = hexToHsva(brushColor);
+    return Number.isFinite(hsva.h) ? hsva.h : 0;
+  });
   const wheelRef = useRef<HTMLDivElement>(null);
   const triangleRef = useRef<HTMLDivElement>(null);
-  const lastHueRef = useRef<number>(hexToHsva(brushColor).h || 0);
   const lastCommittedColorRef = useRef<string>(brushColor);
 
-  // Sync lastHueRef when brushColor changes externally with a valid hue
+  // Sync hue when brushColor changes externally with a valid hue
   useEffect(() => {
     // Only update if the color changed from an external source (not from our own commitColor)
     if (brushColor !== lastCommittedColorRef.current) {
       const hsva = hexToHsva(brushColor);
-      // Only update hue if the new color has a finite, valid hue
+      // Only update hue if the new color has a finite, valid hue (saturation > 0)
       // This preserves the hue when external grey/white/black colors are set
       if (Number.isFinite(hsva.h) && hsva.s > 0) {
-        lastHueRef.current = hsva.h;
+        setLastHue(hsva.h);
       }
     }
   }, [brushColor]);
 
   const hsvaRaw: HsvaColor = hexToHsva(brushColor);
-  const effectiveHue = Number.isFinite(lastHueRef.current) ? lastHueRef.current : 0;
+  const effectiveHue = Number.isFinite(lastHue) ? lastHue : 0;
   const hsva: HsvaColor = {
     ...hsvaRaw,
     h: effectiveHue,
@@ -135,10 +138,15 @@ function PenToolConfig({
   const triangleThumbY = trianglePoint.y + TRIANGLE_RADIUS;
 
   const commitColor = (nextHsva: HsvaColor, opts?: { lockHue?: boolean }) => {
-    if (!opts?.lockHue && Number.isFinite(nextHsva.h)) {
-      lastHueRef.current = nextHsva.h;
+    // Determine which hue to use (update if not locked and valid, otherwise keep current)
+    const hueToUse = (!opts?.lockHue && Number.isFinite(nextHsva.h)) ? nextHsva.h : lastHue;
+
+    // Update state if hue changed (triggers re-render for triangle update)
+    if (hueToUse !== lastHue) {
+      setLastHue(hueToUse);
     }
-    const safeHsva = { ...nextHsva, h: lastHueRef.current };
+
+    const safeHsva = { ...nextHsva, h: hueToUse };
     const newColor = hsvaToHex(safeHsva);
     lastCommittedColorRef.current = newColor;
     onBrushColorChange(newColor);
@@ -352,7 +360,7 @@ function PenToolConfig({
                     // Try to update hue if the new color has a valid hue
                     const hsva = hexToHsva(value);
                     if (Number.isFinite(hsva.h) && hsva.s > 0) {
-                      lastHueRef.current = hsva.h;
+                      setLastHue(hsva.h);
                     }
                     onBrushColorChange(value);
                   }
