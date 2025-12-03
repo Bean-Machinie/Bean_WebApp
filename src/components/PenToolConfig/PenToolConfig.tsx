@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { hsvaToHex, hexToHsva } from '@uiw/color-convert';
 import type { HsvaColor } from '@uiw/color-convert';
 import './PenToolConfig.css';
@@ -7,7 +7,7 @@ type Point = { x: number; y: number };
 type Barycentric = { hue: number; white: number; black: number };
 
 const WHEEL_SIZE = 176; // tighter fit and slimmer ring
-const WHEEL_THICKNESS = 10;
+const WHEEL_THICKNESS = 18;
 const OUTER_RADIUS = WHEEL_SIZE / 2;
 const INNER_RADIUS = OUTER_RADIUS - WHEEL_THICKNESS;
 const TRIANGLE_RADIUS = INNER_RADIUS * 0.72;
@@ -106,6 +106,20 @@ function PenToolConfig({
   const wheelRef = useRef<HTMLDivElement>(null);
   const triangleRef = useRef<HTMLDivElement>(null);
   const lastHueRef = useRef<number>(hexToHsva(brushColor).h || 0);
+  const lastCommittedColorRef = useRef<string>(brushColor);
+
+  // Sync lastHueRef when brushColor changes externally with a valid hue
+  useEffect(() => {
+    // Only update if the color changed from an external source (not from our own commitColor)
+    if (brushColor !== lastCommittedColorRef.current) {
+      const hsva = hexToHsva(brushColor);
+      // Only update hue if the new color has a finite, valid hue
+      // This preserves the hue when external grey/white/black colors are set
+      if (Number.isFinite(hsva.h) && hsva.s > 0) {
+        lastHueRef.current = hsva.h;
+      }
+    }
+  }, [brushColor]);
 
   const hsvaRaw: HsvaColor = hexToHsva(brushColor);
   const effectiveHue = Number.isFinite(lastHueRef.current) ? lastHueRef.current : 0;
@@ -125,7 +139,9 @@ function PenToolConfig({
       lastHueRef.current = nextHsva.h;
     }
     const safeHsva = { ...nextHsva, h: lastHueRef.current };
-    onBrushColorChange(hsvaToHex(safeHsva));
+    const newColor = hsvaToHex(safeHsva);
+    lastCommittedColorRef.current = newColor;
+    onBrushColorChange(newColor);
   };
 
   const handleHuePointer = (clientX: number, clientY: number) => {
@@ -144,7 +160,8 @@ function PenToolConfig({
     if (!triangleRef.current) return;
     const rect = triangleRef.current.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
+    // Use TRIANGLE_RADIUS instead of rect.height / 2 to match the coordinate system
+    const cy = rect.top + TRIANGLE_RADIUS;
     const point = { x: clientX - cx, y: clientY - cy };
     const bary = pointToBarycentric(point, TRIANGLE_VERTICES);
     const { saturation, value } = barycentricToSV(bary);
@@ -299,6 +316,9 @@ function PenToolConfig({
               style={{
                 width: `${TRIANGLE_SIDE}px`,
                 height: `${TRIANGLE_HEIGHT}px`,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
                 ['--triangle-hue' as string]: `${hsva.h}`,
               }}
               ref={triangleRef}
@@ -327,6 +347,13 @@ function PenToolConfig({
                 onChange={(e) => {
                   const value = e.target.value;
                   if (/^#[0-9A-Fa-f]{0,6}$/.test(value)) {
+                    // Update lastCommittedColorRef to track this change
+                    lastCommittedColorRef.current = value;
+                    // Try to update hue if the new color has a valid hue
+                    const hsva = hexToHsva(value);
+                    if (Number.isFinite(hsva.h) && hsva.s > 0) {
+                      lastHueRef.current = hsva.h;
+                    }
                     onBrushColorChange(value);
                   }
                 }}
