@@ -244,9 +244,9 @@ export function pointToSV(
 /**
  * Calculate gradient coordinates that align with the triangle's geometry
  *
- * The gradients should follow the triangle edges:
- * - Hue-to-white gradient: From hue vertex (top) to the black-white edge (bottom)
- * - Black overlay gradient: From hue vertex (top) to the black-white edge (bottom)
+ * The gradients should follow the triangle edges to create proper 3-point interpolation:
+ * - Hue-to-white gradient: From hue-black edge to the white vertex (saturation control)
+ * - Black overlay gradient: From hue-white edge to the black vertex (value/brightness control)
  *
  * @param vertices - The triangle vertices
  * @returns Gradient start and end points for both gradients
@@ -255,20 +255,28 @@ export function calculateGradientCoordinates(vertices: TriangleVertices): {
   hueToWhite: { start: Point; end: Point };
   blackOverlay: { start: Point; end: Point };
 } {
-  // Both gradients go from the hue vertex (top) to the midpoint of the black-white edge (bottom)
-  const bottomMidpoint: Point = {
-    x: (vertices.white.x + vertices.black.x) / 2,
-    y: (vertices.white.y + vertices.black.y) / 2
+  // Hue-to-white gradient: From the midpoint of hue-black edge to the white vertex
+  // This creates the saturation gradient (left edge = hue, right corner = white)
+  const hueBlackMidpoint: Point = {
+    x: (vertices.hue.x + vertices.black.x) / 2,
+    y: (vertices.hue.y + vertices.black.y) / 2
+  };
+
+  // Black overlay gradient: From the midpoint of hue-white edge to the black vertex
+  // This creates the value gradient (top edge = bright, bottom corner = black)
+  const hueWhiteMidpoint: Point = {
+    x: (vertices.hue.x + vertices.white.x) / 2,
+    y: (vertices.hue.y + vertices.white.y) / 2
   };
 
   return {
     hueToWhite: {
-      start: vertices.hue,
-      end: bottomMidpoint
+      start: hueBlackMidpoint,
+      end: vertices.white
     },
     blackOverlay: {
-      start: vertices.hue,
-      end: bottomMidpoint
+      start: hueWhiteMidpoint,
+      end: vertices.black
     }
   };
 }
