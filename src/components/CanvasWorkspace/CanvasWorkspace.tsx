@@ -1,13 +1,14 @@
 import React from 'react';
 import { Stage, Layer as KonvaLayer, Line, Circle } from 'react-konva';
 import type { Project } from '@/types/project';
-import type { Stroke, Layer } from '@/types/canvas';
+import type { Stroke, Layer, ShapeType } from '@/types/canvas';
 import { saveCanvas, loadCanvas } from '@/services/canvasService';
 import { generateClientId } from '@/lib/utils';
 import LayerPanel from '@/components/LayerPanel/LayerPanel';
 import ToolSelectionPanel from '@/components/ToolSelectionPanel/ToolSelectionPanel';
 import PenToolConfig from '@/components/PenToolConfig/PenToolConfig';
 import EraserToolConfig from '@/components/EraserToolConfig/EraserToolConfig';
+import ShapeToolConfig from '@/components/ShapeToolConfig/ShapeToolConfig';
 import './CanvasWorkspace.css';
 
 type CanvasWorkspaceProps = {
@@ -21,7 +22,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const canvasHeight = canvasConfig?.height || 1000;
   const canvasBackgroundColor = canvasConfig?.backgroundColor || '#ffffff';
 
-  const [tool, setTool] = React.useState<'pen' | 'eraser'>('pen');
+  const [tool, setTool] = React.useState<'pen' | 'eraser' | 'shape'>('pen');
   const [layers, setLayers] = React.useState<Layer[]>([]);
   const [activeLayerId, setActiveLayerId] = React.useState<string>('');
   const [brushSize, setBrushSize] = React.useState(5);
@@ -29,6 +30,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [lastSaved, setLastSaved] = React.useState<Date | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+
+  // Shape tool state
+  const [selectedShape, setSelectedShape] = React.useState<ShapeType>('rectangle');
+  const [fillEnabled, setFillEnabled] = React.useState(false);
+  const [fillColor, setFillColor] = React.useState('#ffffff');
 
   // Zoom & Pan state
   const [scale, setScale] = React.useState(1);
@@ -126,6 +132,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           points: [transformedPos.x, transformedPos.y],
           color: brushColor,
           strokeWidth: brushSize,
+          // Shape-specific properties
+          ...(tool === 'shape' && {
+            shapeType: selectedShape,
+            fillColor: fillEnabled ? fillColor : undefined,
+          }),
         };
 
         setLayers(prev => prev.map(layer =>
@@ -167,10 +178,22 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           const updatedStrokes = [...layer.strokes];
           const lastIndex = updatedStrokes.length - 1;
           if (lastIndex >= 0) {
-            updatedStrokes[lastIndex] = {
-              ...updatedStrokes[lastIndex],
-              points: [...updatedStrokes[lastIndex].points, transformedPoint.x, transformedPoint.y]
-            };
+            const currentStroke = updatedStrokes[lastIndex];
+            // For shapes, only keep start and end points
+            if (currentStroke.tool === 'shape') {
+              const startX = currentStroke.points[0];
+              const startY = currentStroke.points[1];
+              updatedStrokes[lastIndex] = {
+                ...currentStroke,
+                points: [startX, startY, transformedPoint.x, transformedPoint.y]
+              };
+            } else {
+              // For pen/eraser, keep adding points
+              updatedStrokes[lastIndex] = {
+                ...currentStroke,
+                points: [...currentStroke.points, transformedPoint.x, transformedPoint.y]
+              };
+            }
           }
           return { ...layer, strokes: updatedStrokes };
         }));
@@ -303,6 +326,88 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     };
   }, []);
 
+  // Helper component to render shapes
+  const renderShape = (stroke: Stroke) => {
+    if (stroke.tool !== 'shape' || !stroke.shapeType || stroke.points.length < 4) {
+      return null;
+    }
+
+    const [x1, y1, x2, y2] = stroke.points;
+    const minX = Math.min(x1, x2);
+    const minY = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
+
+    const commonProps = {
+      key: stroke.clientId,
+      stroke: stroke.color,
+      strokeWidth: stroke.strokeWidth,
+      fill: stroke.fillColor || 'transparent',
+      listening: false,
+      perfectDrawEnabled: false,
+      shadowForStrokeEnabled: false,
+    };
+
+    switch (stroke.shapeType) {
+      case 'line':
+        return (
+          <Line
+            {...commonProps}
+            points={[x1, y1, x2, y2]}
+            lineCap="round"
+          />
+        );
+
+      case 'rectangle':
+        return (
+          <Line
+            {...commonProps}
+            points={[minX, minY, minX + width, minY, minX + width, minY + height, minX, minY + height]}
+            closed
+          />
+        );
+
+      case 'ellipse':
+        return (
+          <Line
+            {...commonProps}
+            points={generateEllipsePoints(minX + width / 2, minY + height / 2, width / 2, height / 2)}
+            closed
+            tension={0}
+          />
+        );
+
+      case 'triangle':
+        // Equilateral triangle pointing up
+        const centerX = minX + width / 2;
+        const topY = minY;
+        const bottomY = minY + height;
+        return (
+          <Line
+            {...commonProps}
+            points={[centerX, topY, minX + width, bottomY, minX, bottomY]}
+            closed
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Generate ellipse points using parametric equation
+  const generateEllipsePoints = (cx: number, cy: number, rx: number, ry: number): number[] => {
+    const points: number[] = [];
+    const steps = 64; // Number of points to approximate the ellipse
+    for (let i = 0; i <= steps; i++) {
+      const angle = (i / steps) * 2 * Math.PI;
+      const x = cx + rx * Math.cos(angle);
+      const y = cy + ry * Math.sin(angle);
+      points.push(x, y);
+    }
+    return points;
+  };
+
   return (
     <div className="canvas-workspace">
       {/* Tool Selection Panel */}
@@ -316,8 +421,21 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           onBrushSizeChange={setBrushSize}
           onBrushColorChange={setBrushColor}
         />
-      ) : (
+      ) : tool === 'eraser' ? (
         <EraserToolConfig brushSize={brushSize} onBrushSizeChange={setBrushSize} />
+      ) : (
+        <ShapeToolConfig
+          brushSize={brushSize}
+          brushColor={brushColor}
+          selectedShape={selectedShape}
+          fillEnabled={fillEnabled}
+          fillColor={fillColor}
+          onBrushSizeChange={setBrushSize}
+          onBrushColorChange={setBrushColor}
+          onShapeChange={setSelectedShape}
+          onFillEnabledChange={setFillEnabled}
+          onFillColorChange={setFillColor}
+        />
       )}
 
       {/* Center Canvas Area */}
@@ -362,39 +480,76 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                 ref={layer.id === activeLayerId ? layerRef : undefined}
                 listening={false}
               >
-                {layer.strokes.map((stroke) => (
-                  <Line
-                    key={stroke.clientId}
-                    points={stroke.points}
-                    stroke={stroke.color}
-                    strokeWidth={stroke.strokeWidth}
-                    tension={0.5}
-                    lineCap="round"
-                    lineJoin="round"
-                    globalCompositeOperation={
-                      stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
-                    }
-                    perfectDrawEnabled={false}
-                    shadowForStrokeEnabled={false}
-                    hitStrokeWidth={0}
-                    listening={false}
-                  />
-                ))}
+                {layer.strokes.map((stroke) => {
+                  // Render shapes differently from pen/eraser strokes
+                  if (stroke.tool === 'shape') {
+                    return renderShape(stroke);
+                  }
+
+                  // Render pen/eraser strokes as lines
+                  return (
+                    <Line
+                      key={stroke.clientId}
+                      points={stroke.points}
+                      stroke={stroke.color}
+                      strokeWidth={stroke.strokeWidth}
+                      tension={0.5}
+                      lineCap="round"
+                      lineJoin="round"
+                      globalCompositeOperation={
+                        stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
+                      }
+                      perfectDrawEnabled={false}
+                      shadowForStrokeEnabled={false}
+                      hitStrokeWidth={0}
+                      listening={false}
+                    />
+                  );
+                })}
               </KonvaLayer>
             ))}
 
           {/* Cursor Overlay - Brush Preview Circle */}
           {showCursor && cursorPos && !isPanning.current && (
             <KonvaLayer listening={false}>
-              <Circle
-                x={(cursorPos.x - position.x) / scale}
-                y={(cursorPos.y - position.y) / scale}
-                radius={brushSize / 2}
-                stroke={tool === 'eraser' ? '#ffffff' : brushColor}
-                strokeWidth={1 / scale}
-                opacity={0.5}
-                dash={[4 / scale, 4 / scale]}
-              />
+              {tool === 'shape' ? (
+                // Crosshair cursor for shape tool
+                <>
+                  <Line
+                    points={[
+                      (cursorPos.x - position.x) / scale - 10 / scale,
+                      (cursorPos.y - position.y) / scale,
+                      (cursorPos.x - position.x) / scale + 10 / scale,
+                      (cursorPos.y - position.y) / scale,
+                    ]}
+                    stroke={brushColor}
+                    strokeWidth={1 / scale}
+                    opacity={0.7}
+                  />
+                  <Line
+                    points={[
+                      (cursorPos.x - position.x) / scale,
+                      (cursorPos.y - position.y) / scale - 10 / scale,
+                      (cursorPos.x - position.x) / scale,
+                      (cursorPos.y - position.y) / scale + 10 / scale,
+                    ]}
+                    stroke={brushColor}
+                    strokeWidth={1 / scale}
+                    opacity={0.7}
+                  />
+                </>
+              ) : (
+                // Circle cursor for pen/eraser tool
+                <Circle
+                  x={(cursorPos.x - position.x) / scale}
+                  y={(cursorPos.y - position.y) / scale}
+                  radius={brushSize / 2}
+                  stroke={tool === 'eraser' ? '#ffffff' : brushColor}
+                  strokeWidth={1 / scale}
+                  opacity={0.5}
+                  dash={[4 / scale, 4 / scale]}
+                />
+              )}
             </KonvaLayer>
           )}
         </Stage>

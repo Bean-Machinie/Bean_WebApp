@@ -1,0 +1,345 @@
+.shape-tool-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 12px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  height: 100vh;
+  width: 220px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.shape-tool-config__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shape-tool-config__section-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.shape-tool-config__divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+/* Shape Grid */
+.shape-tool-config__shape-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.shape-tool-config__shape-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text);
+}
+
+.shape-tool-config__shape-button:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.shape-tool-config__shape-button--active {
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  border-color: var(--primary-strong);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 30%, transparent);
+  color: var(--bg);
+}
+
+.shape-tool-config__shape-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Tool Properties */
+.shape-tool-config__property {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shape-tool-config__property-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 4px;
+}
+
+.shape-tool-config__property-value {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.shape-tool-config__checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.shape-tool-config__slider-container {
+  position: relative;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.shape-tool-config__slider {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.shape-tool-config__slider-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-hover));
+  border-radius: 3px;
+  transition: width 0.1s ease;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 40%, transparent);
+  pointer-events: none;
+}
+
+.shape-tool-config__slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--text) 20%, transparent);
+  position: relative;
+  z-index: 3;
+}
+
+.shape-tool-config__slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  cursor: pointer;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+/* Color Type Toggle */
+.shape-tool-config__color-type-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.shape-tool-config__color-type-button {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.shape-tool-config__color-type-button:hover {
+  border-color: var(--primary);
+}
+
+.shape-tool-config__color-type-button--active {
+  background: var(--primary);
+  border-color: var(--primary-strong);
+  color: var(--bg);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+/* Color Wheel */
+.shape-tool-config__color-wheel-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 6px 6px;
+  background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.shape-tool-config__wheel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
+  filter: drop-shadow(0 12px 20px color-mix(in srgb, var(--primary) 12%, transparent));
+  touch-action: none;
+}
+
+.shape-tool-config__wheel-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    #f00,
+    #ff0,
+    #0f0,
+    #0ff,
+    #00f,
+    #f0f,
+    #f00
+  );
+  mask: radial-gradient(circle, transparent calc(50% - var(--wheel-thickness)), black calc(50% - var(--wheel-thickness)));
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - var(--wheel-thickness)), black calc(50% - var(--wheel-thickness)));
+  filter: saturate(1.05);
+}
+
+.shape-tool-config__wheel-ring {
+  position: absolute;
+  inset: calc(var(--wheel-thickness) - 3px);
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--bg) 90%, transparent) 0%, transparent 60%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 80%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--bg) 60%, transparent);
+  pointer-events: none;
+}
+
+.shape-tool-config__wheel-hole {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--bg-secondary) 90%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.shape-tool-config__hue-thumb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 6px 12px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transform-origin: center;
+  z-index: 20;
+}
+
+.shape-tool-config__color-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.shape-tool-config__color-preview {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--text) 14%, transparent);
+  transition: transform 0.2s ease;
+}
+
+.shape-tool-config__color-preview:hover {
+  transform: scale(1.03);
+}
+
+.shape-tool-config__color-input-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shape-tool-config__swatch-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.shape-tool-config__color-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
+  font-family: 'Monaco', 'Courier New', monospace;
+  transition: all 0.2s ease;
+}
+
+.shape-tool-config__color-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Scrollbar Styling */
+.shape-tool-config::-webkit-scrollbar {
+  width: 6px;
+}
+
+.shape-tool-config::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.shape-tool-config::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.shape-tool-config::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}

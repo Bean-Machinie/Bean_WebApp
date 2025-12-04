@@ -1,12 +1,18 @@
 // Canvas stroke types - simplified for JSON document storage
 
+export type ShapeType = 'line' | 'polyline' | 'rectangle' | 'ellipse' | 'triangle';
+
 export type Stroke = {
   clientId: string;       // Temporary ID for React keys
-  tool: 'pen' | 'eraser'; // Tool type
+  tool: 'pen' | 'eraser' | 'shape'; // Tool type
   points: number[];       // [x1, y1, x2, y2, ...] in canvas coordinates
-  color: string;          // Hex color
+  color: string;          // Hex color (stroke color for shapes, fill for pen)
   strokeWidth: number;    // Brush size
   saveState?: 'saved';    // Optional - only set after load from DB
+  // Shape-specific properties
+  shapeType?: ShapeType;  // Type of shape (only for tool: 'shape')
+  fillColor?: string;     // Fill color for shapes
+  closed?: boolean;       // Whether shape is closed (for polyline)
 };
 
 // Layer type for multi-layer canvas system
