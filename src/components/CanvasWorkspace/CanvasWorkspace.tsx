@@ -340,11 +340,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           y={position.y}
           style={{ cursor: 'none' }}
         >
-          <KonvaLayer
-            ref={layerRef}
-            listening={false}
-          >
-            {/* Canvas Background Rectangle */}
+          {/* Background Layer */}
+          <KonvaLayer listening={false}>
             <Line
               points={[0, 0, canvasWidth, 0, canvasWidth, canvasHeight, 0, canvasHeight]}
               closed
@@ -353,34 +350,38 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               strokeWidth={0}
               listening={false}
             />
-
-            {/* Render layers in order (lowest order first, so higher order appears on top) */}
-            {layers
-              .filter(layer => layer.visible)
-              .sort((a, b) => a.order - b.order)
-              .map(layer => (
-                <React.Fragment key={layer.id}>
-                  {layer.strokes.map((stroke) => (
-                    <Line
-                      key={stroke.clientId}
-                      points={stroke.points}
-                      stroke={stroke.color}
-                      strokeWidth={stroke.strokeWidth}
-                      tension={0.5}
-                      lineCap="round"
-                      lineJoin="round"
-                      globalCompositeOperation={
-                        stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
-                      }
-                      perfectDrawEnabled={false}
-                      shadowForStrokeEnabled={false}
-                      hitStrokeWidth={0}
-                      listening={false}
-                    />
-                  ))}
-                </React.Fragment>
-              ))}
           </KonvaLayer>
+
+          {/* Render each canvas layer as a separate Konva layer for proper eraser isolation */}
+          {layers
+            .filter(layer => layer.visible)
+            .sort((a, b) => a.order - b.order)
+            .map(layer => (
+              <KonvaLayer
+                key={layer.id}
+                ref={layer.id === activeLayerId ? layerRef : undefined}
+                listening={false}
+              >
+                {layer.strokes.map((stroke) => (
+                  <Line
+                    key={stroke.clientId}
+                    points={stroke.points}
+                    stroke={stroke.color}
+                    strokeWidth={stroke.strokeWidth}
+                    tension={0.5}
+                    lineCap="round"
+                    lineJoin="round"
+                    globalCompositeOperation={
+                      stroke.tool === 'eraser' ? 'destination-out' : 'source-over'
+                    }
+                    perfectDrawEnabled={false}
+                    shadowForStrokeEnabled={false}
+                    hitStrokeWidth={0}
+                    listening={false}
+                  />
+                ))}
+              </KonvaLayer>
+            ))}
 
           {/* Cursor Overlay - Brush Preview Circle */}
           {showCursor && cursorPos && !isPanning.current && (
