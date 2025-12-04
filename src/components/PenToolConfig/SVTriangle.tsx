@@ -4,6 +4,8 @@ import {
   pointToSV,
   svToPoint,
   calculateGradientCoordinates,
+  pointToBarycentric,
+  isInsideTriangle,
   type Point
 } from './svTriangleUtils';
 import './SVTriangle.css';
@@ -116,6 +118,23 @@ export function SVTriangle({
    * Start pointer tracking
    */
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (!triangleRef.current) return;
+
+    // Check if click is actually inside the triangle
+    const rect = triangleRef.current.getBoundingClientRect();
+    const point: Point = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+
+    const bary = pointToBarycentric(point, vertices);
+    const isInside = isInsideTriangle(bary);
+
+    // Only handle the event if click is inside the triangle
+    if (!isInside) {
+      return; // Let the event bubble up to the wheel handler
+    }
+
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
