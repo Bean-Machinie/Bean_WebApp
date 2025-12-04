@@ -240,3 +240,35 @@ export function pointToSV(
   const clampedBary = clampToTriangle(bary);
   return barycentricToSV(clampedBary);
 }
+
+/**
+ * Calculate gradient coordinates that align with the triangle's geometry
+ *
+ * The gradients should follow the triangle edges:
+ * - Hue-to-white gradient: From hue vertex (top) to the black-white edge (bottom)
+ * - Black overlay gradient: From hue vertex (top) to the black-white edge (bottom)
+ *
+ * @param vertices - The triangle vertices
+ * @returns Gradient start and end points for both gradients
+ */
+export function calculateGradientCoordinates(vertices: TriangleVertices): {
+  hueToWhite: { start: Point; end: Point };
+  blackOverlay: { start: Point; end: Point };
+} {
+  // Both gradients go from the hue vertex (top) to the midpoint of the black-white edge (bottom)
+  const bottomMidpoint: Point = {
+    x: (vertices.white.x + vertices.black.x) / 2,
+    y: (vertices.white.y + vertices.black.y) / 2
+  };
+
+  return {
+    hueToWhite: {
+      start: vertices.hue,
+      end: bottomMidpoint
+    },
+    blackOverlay: {
+      start: vertices.hue,
+      end: bottomMidpoint
+    }
+  };
+}

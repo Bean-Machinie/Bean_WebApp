@@ -1,10 +1,10 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   calculateTriangleVertices,
   pointToSV,
   svToPoint,
-  type Point,
-  type TriangleVertices
+  calculateGradientCoordinates,
+  type Point
 } from './svTriangleUtils';
 import './SVTriangle.css';
 
@@ -27,7 +27,7 @@ export interface SVTriangleProps {
  * SVTriangle - Saturation/Value picker in the form of a rotating triangle
  *
  * The triangle represents the S/V plane for a given hue:
- * - Top vertex: Pure hue (100% saturation, 50% value)
+ * - Top vertex: Pure hue (100% saturation, 100% value)
  * - Bottom-right: White (0% saturation, 100% value)
  * - Bottom-left: Black (0% saturation, 0% value)
  *
@@ -47,6 +47,9 @@ export function SVTriangle({
   // Calculate the center and vertices of the triangle
   const center = size / 2;
   const vertices = calculateTriangleVertices(center, center, radius, hue);
+
+  // Calculate gradient coordinates that align with the triangle's geometry
+  const gradientCoords = calculateGradientCoordinates(vertices);
 
   // Calculate the thumb position based on current S/V
   const thumbPosition = svToPoint(saturation, value, vertices);
@@ -113,12 +116,27 @@ export function SVTriangle({
         style={{ cursor: isDragging ? 'grabbing' : 'crosshair' }}
       >
         <defs>
-          {/* Gradient from hue (top) to white (bottom-right) to black (bottom-left) */}
-          <linearGradient id={`sv-gradient-h-${hue}`} x1="0%" y1="0%" x2="100%" y2="0%">
+          {/* Gradient from hue (top) to white (bottom), aligned with triangle geometry */}
+          <linearGradient
+            id="sv-gradient-hue"
+            x1={gradientCoords.hueToWhite.start.x}
+            y1={gradientCoords.hueToWhite.start.y}
+            x2={gradientCoords.hueToWhite.end.x}
+            y2={gradientCoords.hueToWhite.end.y}
+            gradientUnits="userSpaceOnUse"
+          >
             <stop offset="0%" stopColor={hueColor} />
             <stop offset="100%" stopColor="white" />
           </linearGradient>
-          <linearGradient id="sv-gradient-black" x1="0%" y1="0%" x2="0%" y2="100%">
+          {/* Black gradient from top to bottom, aligned with triangle geometry */}
+          <linearGradient
+            id="sv-gradient-black"
+            x1={gradientCoords.blackOverlay.start.x}
+            y1={gradientCoords.blackOverlay.start.y}
+            x2={gradientCoords.blackOverlay.end.x}
+            y2={gradientCoords.blackOverlay.end.y}
+            gradientUnits="userSpaceOnUse"
+          >
             <stop offset="0%" stopColor="transparent" />
             <stop offset="100%" stopColor="black" />
           </linearGradient>
@@ -127,7 +145,7 @@ export function SVTriangle({
         {/* Triangle with hue-to-white gradient */}
         <polygon
           points={`${vertices.hue.x},${vertices.hue.y} ${vertices.white.x},${vertices.white.y} ${vertices.black.x},${vertices.black.y}`}
-          fill={`url(#sv-gradient-h-${hue})`}
+          fill="url(#sv-gradient-hue)"
           className="sv-triangle__base"
         />
 
