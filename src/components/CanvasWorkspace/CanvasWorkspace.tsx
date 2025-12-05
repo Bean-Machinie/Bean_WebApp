@@ -36,6 +36,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [fillEnabled, setFillEnabled] = React.useState(false);
   const [fillColor, setFillColor] = React.useState('#ffffff');
 
+  // History for undo/redo
+  const [history, setHistory] = React.useState<Layer[][]>([]);
+  const [historyIndex, setHistoryIndex] = React.useState(-1);
+  const isApplyingHistory = React.useRef(false);
+
   // Zoom & Pan state
   const [scale, setScale] = React.useState(1);
   // Calculate initial position to center the canvas in the viewport
@@ -69,6 +74,45 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     transform.invert();
     return transform.point(pointerPos);
   };
+
+  // Push current state to history (for undo/redo)
+  const pushToHistory = React.useCallback((newLayers: Layer[]) => {
+    if (isApplyingHistory.current) return;
+
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(JSON.parse(JSON.stringify(newLayers)));
+      if (newHistory.length > 30) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryIndex(prev => prev + 1 >= 30 ? 29 : prev + 1);
+  }, [historyIndex]);
+
+  // Undo function
+  const undo = React.useCallback(() => {
+    if (historyIndex > 0) {
+      isApplyingHistory.current = true;
+      const previousState = history[historyIndex - 1];
+      setLayers(JSON.parse(JSON.stringify(previousState)));
+      setHistoryIndex(prev => prev - 1);
+      setTimeout(() => {
+        isApplyingHistory.current = false;
+      }, 0);
+    }
+  }, [history, historyIndex]);
+
+  // Redo function
+  const redo = React.useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isApplyingHistory.current = true;
+      const nextState = history[historyIndex + 1];
+      setLayers(JSON.parse(JSON.stringify(nextState)));
+      setHistoryIndex(prev => prev + 1);
+      setTimeout(() => {
+        isApplyingHistory.current = false;
+      }, 0);
+    }
+  }, [history, historyIndex]);
 
   // Handle mouse wheel zoom
   const handleWheel = (e: any) => {
@@ -203,6 +247,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
+    // If we were drawing, record the state in history
+    if (isDrawing.current && activeLayerId) {
+      pushToHistory(layers);
+    }
+
     // Reset drawing state
     isDrawing.current = false;
     isPanning.current = false;
@@ -238,6 +287,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       setLayers(loadedLayers);
       setActiveLayerId(loadedActiveLayerId);
       setLastSaved(new Date());
+
+      // Initialize history with the loaded state
+      setHistory([JSON.parse(JSON.stringify(loadedLayers))]);
+      setHistoryIndex(0);
     };
 
     loadProjectCanvas();
@@ -255,6 +308,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       };
       setLayers([defaultLayer]);
       setActiveLayerId(defaultLayer.id);
+
+      // Initialize history with the default layer
+      setHistory([[JSON.parse(JSON.stringify(defaultLayer))]]);
+      setHistoryIndex(0);
     }
   }, [layers.length, lastSaved]);
 
@@ -295,9 +352,23 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   }, []);
 
-  // Keyboard support for spacebar panning
+  // Keyboard support for spacebar panning and undo/redo
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Undo: Ctrl+Z (or Cmd+Z on Mac)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // Redo: Ctrl+Y or Ctrl+Shift+Z (or Cmd+Y / Cmd+Shift+Z on Mac)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       if (e.code === 'Space' && !isSpacePressed.current) {
         e.preventDefault();
         isSpacePressed.current = true;
@@ -324,7 +395,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, []);
+  }, [undo, redo]);
 
   // Helper component to render shapes
   const renderShape = (stroke: Stroke) => {
