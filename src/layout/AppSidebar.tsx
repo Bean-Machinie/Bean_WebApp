@@ -25,6 +25,7 @@ function AppSidebar({
   });
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
   const { profile, avatarUrl, isLoading } = useProfile();
@@ -36,7 +37,26 @@ function AppSidebar({
   // Close profile menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedInsideTrigger = profileMenuRef.current?.contains(target);
+      const clickedInsideDropdown = profileDropdownRef.current?.contains(target);
+
+      // Debug: check parent hierarchy
+      const targetElement = target as HTMLElement;
+      console.log('Click outside check:', {
+        clickedInsideTrigger,
+        clickedInsideDropdown,
+        target,
+        targetTagName: targetElement.tagName,
+        targetParent: targetElement.parentElement,
+        targetParentParent: targetElement.parentElement?.parentElement,
+        dropdownRef: profileDropdownRef.current,
+        manualCheck: profileDropdownRef.current && targetElement && profileDropdownRef.current.contains(targetElement),
+      });
+
+      // Only close if click is outside both trigger and dropdown
+      if (!clickedInsideTrigger && !clickedInsideDropdown) {
+        console.log('Closing profile menu');
         setProfileMenuOpen(false);
       }
     };
@@ -64,18 +84,25 @@ function AppSidebar({
       .join('');
   }, [profile?.displayName, profile?.emailFallback, user?.email]);
 
-  const handleProfileMenuItemClick = (itemId: string) => {
+  const handleProfileMenuItemClick = (itemId: string, event?: React.MouseEvent) => {
+    console.log('Profile menu item clicked:', itemId, event);
+    event?.stopPropagation();
+    event?.preventDefault();
     const destinations: Record<string, string> = {
       profile: '/settings/profile',
       themes: '/settings/appearance',
       settings: '/settings',
     };
 
+    console.log('Navigating to:', destinations[itemId] ?? '/settings');
     navigate(destinations[itemId] ?? '/settings');
     setProfileMenuOpen(false);
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (event?: React.MouseEvent) => {
+    console.log('Logout clicked:', event);
+    event?.stopPropagation();
+    event?.preventDefault();
     setProfileMenuOpen(false);
     await signOut();
     navigate('/login');
@@ -206,6 +233,11 @@ function AppSidebar({
           {/* Profile Dropdown Menu */}
           {profileMenuOpen && (
             <div
+              ref={profileDropdownRef}
+              onMouseDown={(e) => {
+                console.log('Dropdown mousedown - stopping propagation');
+                e.stopPropagation();
+              }}
               className="fixed bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-md shadow-lg overflow-hidden"
               style={{
                 bottom: '72px',
@@ -217,7 +249,7 @@ function AppSidebar({
               {profileMenuItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => handleProfileMenuItemClick(item.id)}
+                  onClick={(e) => handleProfileMenuItemClick(item.id, e)}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
                 >
                   <span className="h-5 w-5 flex-shrink-0">{item.icon}</span>
@@ -226,7 +258,7 @@ function AppSidebar({
               ))}
               <div className="border-t border-neutral-200 dark:border-neutral-700" />
               <button
-                onClick={handleLogout}
+                onClick={(e) => handleLogout(e)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
               >
                 {logoutIcon}
