@@ -639,7 +639,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             <button
               onClick={() => {
                 setScale(1);
-                const viewportWidth = window.innerWidth - 480;
+                const viewportWidth = window.innerWidth - 520; // 200px toolbar + 320px sidebar
                 const viewportHeight = window.innerHeight;
                 const centerX = (viewportWidth - canvasWidth) / 2;
                 const centerY = (viewportHeight - canvasHeight) / 2;

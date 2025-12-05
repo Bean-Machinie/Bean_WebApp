@@ -10,7 +10,9 @@
       "Bash(tree:*)",
       "Bash(cat:*)",
       "Bash(git log:*)",
-      "Bash(timeout 5 bash:*)"
+      "Bash(timeout 5 bash:*)",
+      "Bash(dir:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

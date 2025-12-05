@@ -35,6 +35,113 @@ type SortableLayerItemProps = {
   onDelete: () => void;
 };
 
+// Simple thumbnail renderer for layer preview
+function LayerThumbnail({ layer }: { layer: Layer }) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, 40, 40);
+
+    if (layer.strokes.length === 0) {
+      // Empty layer - show subtle background
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, 40, 40);
+      return;
+    }
+
+    // Calculate bounding box of all strokes
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    layer.strokes.forEach(stroke => {
+      for (let i = 0; i < stroke.points.length; i += 2) {
+        minX = Math.min(minX, stroke.points[i]);
+        maxX = Math.max(maxX, stroke.points[i]);
+        minY = Math.min(minY, stroke.points[i + 1]);
+        maxY = Math.max(maxY, stroke.points[i + 1]);
+      }
+    });
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const scale = Math.min(36 / width, 36 / height, 1); // Fit with 2px padding
+
+    // Center the preview
+    const offsetX = (40 - width * scale) / 2 - minX * scale;
+    const offsetY = (40 - height * scale) / 2 - minY * scale;
+
+    // Draw strokes
+    layer.strokes.forEach(stroke => {
+      if (stroke.tool === 'eraser') return; // Skip eraser strokes in preview
+
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
+
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = stroke.strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (stroke.tool === 'shape' && stroke.shapeType) {
+        // Draw shapes
+        ctx.beginPath();
+
+        if (stroke.shapeType === 'rectangle' && stroke.points.length >= 4) {
+          const [x1, y1, x2, y2] = stroke.points;
+          ctx.rect(x1, y1, x2 - x1, y2 - y1);
+        } else if (stroke.shapeType === 'ellipse' && stroke.points.length >= 4) {
+          const [x1, y1, x2, y2] = stroke.points;
+          const cx = (x1 + x2) / 2;
+          const cy = (y1 + y2) / 2;
+          const rx = Math.abs(x2 - x1) / 2;
+          const ry = Math.abs(y2 - y1) / 2;
+          ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+        } else if (stroke.points.length >= 2) {
+          // Polyline, line, triangle
+          ctx.moveTo(stroke.points[0], stroke.points[1]);
+          for (let i = 2; i < stroke.points.length; i += 2) {
+            ctx.lineTo(stroke.points[i], stroke.points[i + 1]);
+          }
+          if (stroke.closed || stroke.shapeType === 'triangle') {
+            ctx.closePath();
+          }
+        }
+
+        if (stroke.fillColor) {
+          ctx.fillStyle = stroke.fillColor;
+          ctx.fill();
+        }
+        ctx.stroke();
+      } else if (stroke.points.length >= 4) {
+        // Draw pen strokes
+        ctx.beginPath();
+        ctx.moveTo(stroke.points[0], stroke.points[1]);
+        for (let i = 2; i < stroke.points.length; i += 2) {
+          ctx.lineTo(stroke.points[i], stroke.points[i + 1]);
+        }
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  }, [layer.strokes]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={40}
+      height={40}
+      className="layer-item__thumbnail"
+    />
+  );
+}
+
 function SortableLayerItem({
   layer,
   isActive,
@@ -59,7 +166,7 @@ function SortableLayerItem({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
   };
 
   const handleRenameSubmit = () => {
@@ -80,76 +187,83 @@ function SortableLayerItem({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!isBackground && layer.strokes.length === 0) {
+      // Simple delete for empty layers
+      onDelete();
+    } else if (!isBackground) {
+      // Confirm delete for layers with content
+      if (
+        window.confirm(
+          `Delete "${layer.name}"? This will remove ${layer.strokes.length} strokes.`
+        )
+      ) {
+        onDelete();
+      }
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`layer-item ${isActive ? 'layer-item--active' : ''} ${isBackground ? 'layer-item--background' : ''}`}
+      className={`layer-item ${isActive ? 'layer-item--active' : ''} ${isBackground ? 'layer-item--background' : ''} ${isDragging ? 'layer-item--dragging' : ''}`}
       onClick={onSelect}
+      onContextMenu={handleContextMenu}
+      {...(isBackground ? {} : { ...attributes, ...listeners })}
     >
-      {!isBackground && (
-        <div className="layer-item__drag-handle" {...attributes} {...listeners}>
-          ⋮⋮
-        </div>
-      )}
-
-      <button
-        className="layer-item__visibility"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleVisibility();
-        }}
-        title={layer.visible ? 'Hide layer' : 'Show layer'}
-      >
-        {layer.visible ? '👁' : '👁‍🗨'}
-      </button>
-
-      {isRenaming && !isBackground ? (
-        <input
-          className="layer-item__name-input"
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          onBlur={handleRenameSubmit}
-          onKeyDown={handleKeyDown}
-          onClick={(e) => e.stopPropagation()}
-          autoFocus
-        />
-      ) : (
-        <div
-          className="layer-item__name"
-          onDoubleClick={(e) => {
-            if (!isBackground) {
-              e.stopPropagation();
-              setIsRenaming(true);
-            }
-          }}
-          style={isBackground ? { cursor: 'default' } : undefined}
-        >
-          {layer.name}
-        </div>
-      )}
-
-      <span className="layer-item__count">{layer.strokes.length}</span>
-
-      {!isBackground && (
+      {/* Eye Toggle */}
+      <div className="layer-item__section layer-item__section--visibility">
         <button
-          className="layer-item__delete"
+          className="layer-item__visibility"
           onClick={(e) => {
             e.stopPropagation();
-            if (
-              layer.strokes.length === 0 ||
-              window.confirm(
-                `Delete "${layer.name}"? This will remove ${layer.strokes.length} strokes.`
-              )
-            ) {
-              onDelete();
-            }
+            onToggleVisibility();
           }}
-          title="Delete layer"
+          title={layer.visible ? 'Hide layer' : 'Show layer'}
         >
-          🗑
+          {layer.visible && <span className="layer-item__eye-icon">👁</span>}
         </button>
-      )}
+      </div>
+
+      <div className="layer-item__divider" />
+
+      {/* Thumbnail */}
+      <div className="layer-item__section layer-item__section--thumbnail">
+        <LayerThumbnail layer={layer} />
+      </div>
+
+      <div className="layer-item__divider" />
+
+      {/* Layer Name */}
+      <div className="layer-item__section layer-item__section--name">
+        {isRenaming && !isBackground ? (
+          <input
+            className="layer-item__name-input"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleRenameSubmit}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+          />
+        ) : (
+          <div
+            className="layer-item__name"
+            onDoubleClick={(e) => {
+              if (!isBackground) {
+                e.stopPropagation();
+                setIsRenaming(true);
+              }
+            }}
+            style={isBackground ? { cursor: 'default' } : undefined}
+          >
+            {layer.name}
+          </div>
+        )}
+        <span className="layer-item__count">{layer.strokes.length}</span>
+      </div>
     </div>
   );
 }
@@ -270,12 +384,6 @@ export default function LayerPanel({
           </div>
         </SortableContext>
       </DndContext>
-
-      <div className="layer-panel__help">
-        <p>• Click to select layer</p>
-        <p>• Double-click name to rename</p>
-        <p>• Drag to reorder</p>
-      </div>
     </div>
   );
 }
