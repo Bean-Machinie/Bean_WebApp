@@ -63,6 +63,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const stageRef = React.useRef<any>(null);
   const layerRef = React.useRef<any>(null);
   const isSpacePressed = React.useRef(false);
+  const gridRef = React.useRef<HTMLDivElement>(null);
 
   // Transform pointer position from screen to canvas coordinates
   const getTransformedPointerPosition = (stage: any) => {
@@ -352,6 +353,32 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   }, []);
 
+  // Update infinite grid background based on zoom and pan
+  React.useEffect(() => {
+    if (!gridRef.current) return;
+
+    // Base grid size (spacing between lines at 100% zoom)
+    const baseGridSize = 50;
+
+    // Calculate grid size based on current scale
+    // At higher zoom levels, we increase grid spacing to maintain visual density
+    let gridSize = baseGridSize * scale;
+
+    // Adaptive grid: switch to larger grid when zoomed out for better visibility
+    if (scale < 0.5) {
+      gridSize = baseGridSize * scale * 2;
+    }
+
+    // Calculate background position to keep grid aligned when panning
+    // The modulo operation ensures the grid pattern repeats infinitely
+    const offsetX = position.x % gridSize;
+    const offsetY = position.y % gridSize;
+
+    // Apply the grid background with calculated size and position
+    gridRef.current.style.backgroundSize = `${gridSize}px ${gridSize}px`;
+    gridRef.current.style.backgroundPosition = `${offsetX}px ${offsetY}px`;
+  }, [scale, position]);
+
   // Keyboard support for spacebar panning and undo/redo
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -515,6 +542,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        {/* Infinite Grid Background */}
+        <div ref={gridRef} className="canvas-workspace__grid-background" />
+
         <Stage
           ref={stageRef}
           width={window.innerWidth - 480}
@@ -527,7 +557,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           scaleY={scale}
           x={position.x}
           y={position.y}
-          style={{ cursor: 'none' }}
+          style={{ cursor: 'none', position: 'relative', zIndex: 1 }}
         >
           {/* Background Layer */}
           <KonvaLayer listening={false}>
