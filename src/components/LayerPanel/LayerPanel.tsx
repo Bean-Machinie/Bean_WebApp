@@ -15,8 +15,11 @@ import {
 } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
+import { ContextMenu } from '@base-ui-components/react/context-menu';
+import { Copy, Trash2, Edit3, Layers } from 'lucide-react';
 import type { Layer } from '@/types/canvas';
 import './LayerPanel.css';
+import './LayerContextMenu.css';
 
 type LayerPanelProps = {
   layers: Layer[];
@@ -33,6 +36,9 @@ type SortableLayerItemProps = {
   onToggleVisibility: () => void;
   onRename: (newName: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
+  onMerge: () => void;
+  canMerge: boolean;
 };
 
 // Simple thumbnail renderer for layer preview
@@ -150,6 +156,9 @@ function SortableLayerItem({
   onToggleVisibility,
   onRename,
   onDelete,
+  onDuplicate,
+  onMerge,
+  canMerge,
 }: SortableLayerItemProps) {
   const {
     attributes,
@@ -187,84 +196,119 @@ function SortableLayerItem({
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!isBackground && layer.strokes.length === 0) {
-      // Simple delete for empty layers
-      onDelete();
-    } else if (!isBackground) {
-      // Confirm delete for layers with content
-      if (
-        window.confirm(
-          `Delete "${layer.name}"? This will remove ${layer.strokes.length} strokes.`
-        )
-      ) {
-        onDelete();
-      }
-    }
-  };
-
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`layer-item ${isActive ? 'layer-item--active' : ''} ${isBackground ? 'layer-item--background' : ''} ${isDragging ? 'layer-item--dragging' : ''}`}
-      onClick={onSelect}
-      onContextMenu={handleContextMenu}
-      {...(isBackground ? {} : { ...attributes, ...listeners })}
-    >
-      {/* Eye Toggle */}
-      <div className="layer-item__section layer-item__section--visibility">
-        <button
-          className="layer-item__visibility"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleVisibility();
-          }}
-          title={layer.visible ? 'Hide layer' : 'Show layer'}
+    <ContextMenu.Root>
+      <ContextMenu.Trigger className="layer-context-menu__trigger">
+        <div
+          ref={setNodeRef}
+          style={style}
+          className={`layer-item ${isActive ? 'layer-item--active' : ''} ${isBackground ? 'layer-item--background' : ''} ${isDragging ? 'layer-item--dragging' : ''}`}
+          onClick={onSelect}
+          {...(isBackground ? {} : { ...attributes, ...listeners })}
         >
-          {layer.visible && <span className="layer-item__eye-icon">👁</span>}
-        </button>
-      </div>
-
-      <div className="layer-item__divider" />
-
-      {/* Thumbnail */}
-      <div className="layer-item__section layer-item__section--thumbnail">
-        <LayerThumbnail layer={layer} />
-      </div>
-
-      <div className="layer-item__divider" />
-
-      {/* Layer Name */}
-      <div className="layer-item__section layer-item__section--name">
-        {isRenaming && !isBackground ? (
-          <input
-            className="layer-item__name-input"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={handleRenameSubmit}
-            onKeyDown={handleKeyDown}
-            onClick={(e) => e.stopPropagation()}
-            autoFocus
-          />
-        ) : (
-          <div
-            className="layer-item__name"
-            onDoubleClick={(e) => {
-              if (!isBackground) {
+          {/* Eye Toggle */}
+          <div className="layer-item__section layer-item__section--visibility">
+            <button
+              className="layer-item__visibility"
+              onClick={(e) => {
                 e.stopPropagation();
-                setIsRenaming(true);
-              }
-            }}
-            style={isBackground ? { cursor: 'default' } : undefined}
-          >
-            {layer.name}
+                onToggleVisibility();
+              }}
+              title={layer.visible ? 'Hide layer' : 'Show layer'}
+            >
+              {layer.visible && <span className="layer-item__eye-icon">👁</span>}
+            </button>
           </div>
-        )}
-        <span className="layer-item__count">{layer.strokes.length}</span>
-      </div>
-    </div>
+
+          <div className="layer-item__divider" />
+
+          {/* Thumbnail */}
+          <div className="layer-item__section layer-item__section--thumbnail">
+            <LayerThumbnail layer={layer} />
+          </div>
+
+          <div className="layer-item__divider" />
+
+          {/* Layer Name */}
+          <div className="layer-item__section layer-item__section--name">
+            {isRenaming && !isBackground ? (
+              <input
+                className="layer-item__name-input"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleRenameSubmit}
+                onKeyDown={handleKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+              />
+            ) : (
+              <div
+                className="layer-item__name"
+                onDoubleClick={(e) => {
+                  if (!isBackground) {
+                    e.stopPropagation();
+                    setIsRenaming(true);
+                  }
+                }}
+                style={isBackground ? { cursor: 'default' } : undefined}
+              >
+                {layer.name}
+              </div>
+            )}
+            <span className="layer-item__count">{layer.strokes.length}</span>
+          </div>
+        </div>
+      </ContextMenu.Trigger>
+
+      <ContextMenu.Portal>
+        <ContextMenu.Positioner className="layer-context-menu__positioner">
+          <ContextMenu.Popup className="layer-context-menu__popup">
+            {/* Duplicate Layer */}
+            <ContextMenu.Item
+              className="layer-context-menu__item"
+              onClick={onDuplicate}
+            >
+              <Copy className="layer-context-menu__item-icon" size={16} />
+              Duplicate Layer
+            </ContextMenu.Item>
+
+            {/* Rename Layer */}
+            {!isBackground && (
+              <ContextMenu.Item
+                className="layer-context-menu__item"
+                onClick={() => setIsRenaming(true)}
+              >
+                <Edit3 className="layer-context-menu__item-icon" size={16} />
+                Rename Layer
+              </ContextMenu.Item>
+            )}
+
+            {/* Merge Selected Layers */}
+            <ContextMenu.Item
+              className="layer-context-menu__item"
+              onClick={onMerge}
+              disabled={!canMerge}
+            >
+              <Layers className="layer-context-menu__item-icon" size={16} />
+              Merge Selected Layers
+            </ContextMenu.Item>
+
+            <ContextMenu.Separator className="layer-context-menu__separator" />
+
+            {/* Delete Layer */}
+            {!isBackground && (
+              <ContextMenu.Item
+                className="layer-context-menu__item layer-context-menu__item--danger"
+                onClick={onDelete}
+              >
+                <Trash2 className="layer-context-menu__item-icon" size={16} />
+                Delete Layer
+              </ContextMenu.Item>
+            )}
+          </ContextMenu.Popup>
+        </ContextMenu.Positioner>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }
 
@@ -343,6 +387,18 @@ export default function LayerPanel({
       return;
     }
 
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return;
+
+    // Confirm if layer has content
+    if (layer.strokes.length > 0) {
+      if (!window.confirm(
+        `Delete "${layer.name}"? This will remove ${layer.strokes.length} strokes.`
+      )) {
+        return;
+      }
+    }
+
     const remainingLayers = layers.filter((l) => l.id !== layerId);
     onLayersChange(remainingLayers);
 
@@ -350,6 +406,36 @@ export default function LayerPanel({
     if (layerId === activeLayerId && remainingLayers.length > 0) {
       onActiveLayerChange(remainingLayers[0].id);
     }
+  };
+
+  const handleDuplicate = (layerId: string) => {
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return;
+
+    const maxOrder = Math.max(...layers.map((l) => l.order), -1);
+
+    // Create a deep copy of strokes
+    const duplicatedStrokes = layer.strokes.map(stroke => ({
+      ...stroke,
+      clientId: crypto.randomUUID(), // New client ID for each stroke
+    }));
+
+    const duplicatedLayer: Layer = {
+      id: crypto.randomUUID(),
+      name: `${layer.name} Copy`,
+      visible: layer.visible,
+      order: maxOrder + 1,
+      strokes: duplicatedStrokes,
+    };
+
+    onLayersChange([...layers, duplicatedLayer]);
+    onActiveLayerChange(duplicatedLayer.id);
+  };
+
+  const handleMerge = (layerId: string) => {
+    // For now, merge is disabled (canMerge is always false)
+    // This would require multi-selection implementation
+    alert('Multi-layer selection and merging will be available in a future update.');
   };
 
   return (
@@ -379,6 +465,9 @@ export default function LayerPanel({
                 onToggleVisibility={() => handleToggleVisibility(layer.id)}
                 onRename={(newName) => handleRename(layer.id, newName)}
                 onDelete={() => handleDelete(layer.id)}
+                onDuplicate={() => handleDuplicate(layer.id)}
+                onMerge={() => handleMerge(layer.id)}
+                canMerge={false} // TODO: Implement multi-selection
               />
             ))}
           </div>
