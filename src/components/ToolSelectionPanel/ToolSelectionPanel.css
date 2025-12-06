@@ -1,73 +1,65 @@
+/* Tool Panel Container */
 .tool-selection-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 8px;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
+  gap: 6px;
+  padding: 8px 6px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   height: 100vh;
   width: 60px;
   box-sizing: border-box;
 }
 
+/* TOOL BUTTON – now behaves like layer rows */
 .tool-selection-panel__button {
   width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
+
+  background: var(--card-muted);
+  border-top: 1px solid var(--sidebar-border);
+  border-bottom: 1px solid var(--sidebar-border);
+
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: var(--text);
-  padding: 0;
+  transition: all 0.2s ease;
+  border-radius: 4px;
   position: relative;
-  overflow: hidden;
 }
 
-.tool-selection-panel__button::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent, color-mix(in srgb, var(--primary) 10%, transparent));
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
+/* Hover = same feel as layer item hover */
 .tool-selection-panel__button:hover {
-  border-color: var(--primary);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent);
+  background: var(--sidebar-hover);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.tool-selection-panel__button:hover::before {
-  opacity: 1;
-}
-
+/* Active state now identical to layer-item--active */
 .tool-selection-panel__button--active {
-  background: var(--primary);
-  border-color: var(--primary-strong);
-  color: var(--bg);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary) 30%, transparent);
+  background: var(--sidebar-hover);
+  box-shadow: inset 0 0 0 1px var(--primary);
+  border-top-color: var(--primary-strong);
+  border-bottom-color: var(--primary-strong);
 }
 
-.tool-selection-panel__button--active::before {
-  display: none;
+/* Active hover remains subtle – same as layers */
+.tool-selection-panel__button--active:hover {
+  background: var(--sidebar-hover);
 }
 
+/* Button press feedback (not drag) */
+.tool-selection-panel__button:active {
+  transform: scale(0.97);
+}
+
+/* Icon behavior in tool buttons */
 .tool-selection-panel__button svg {
-  position: relative;
-  z-index: 1;
-  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--text) 10%, transparent));
+  width: 20px;
+  height: 20px;
+  color: var(--sidebar-text);
 }
 
 .tool-selection-panel__button--active svg {
-  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--bg) 20%, transparent));
-}
-
-.tool-selection-panel__button:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--sidebar-text);
 }

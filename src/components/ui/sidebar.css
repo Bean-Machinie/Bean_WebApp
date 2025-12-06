@@ -1,0 +1,59 @@
+/* Sidebar Theme-Aware Styles */
+
+.sidebar-container {
+  background: var(--sidebar-bg);
+}
+
+.sidebar-text {
+  color: var(--sidebar-text);
+}
+
+.sidebar-icon {
+  color: var(--sidebar-text);
+}
+
+.sidebar-border-right {
+  border-right: 1px solid var(--sidebar-border);
+}
+
+.sidebar-border-left {
+  border-left: 1px solid var(--sidebar-border);
+}
+
+.sidebar-border {
+  border: 1px solid var(--sidebar-border);
+}
+
+.sidebar-hover:hover {
+  background: var(--sidebar-hover);
+}
+
+.sidebar-active {
+  background: var(--sidebar-active-bg);
+}
+
+.sidebar-button {
+  background: var(--card-muted);
+  border: 1px solid var(--sidebar-border);
+  color: var(--sidebar-text);
+}
+
+.sidebar-button:hover {
+  background: var(--sidebar-hover);
+  border-color: var(--border-strong);
+}
+
+.sidebar-dropdown {
+  background: var(--popover-bg);
+  border: 1px solid var(--popover-border);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
+              0 4px 6px -4px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-dropdown-item:hover {
+  background: var(--sidebar-hover);
+}
+
+.sidebar-separator {
+  border-top: 1px solid var(--popover-separator);
+}
