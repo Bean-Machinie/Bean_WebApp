@@ -41,38 +41,9 @@ type SortableLayerItemProps = {
   canMerge: boolean;
 };
 
-// Simple static thumbnail - performance optimized
-function LayerThumbnail({ layer }: { layer: Layer }) {
-  // Get dominant color from first non-eraser stroke for visual indicator
-  const getDominantColor = () => {
-    const firstStroke = layer.strokes.find(s => s.tool !== 'eraser');
-    return firstStroke?.color || '#333333';
-  };
-
-  const strokeCount = layer.strokes.length;
-  const isEmpty = strokeCount === 0;
-  const dominantColor = getDominantColor();
-
-  return (
-    <div
-      className="layer-item__thumbnail"
-      style={{
-        background: isEmpty
-          ? 'var(--bg-tertiary)'
-          : `linear-gradient(135deg, ${dominantColor}33 0%, var(--bg-tertiary) 100%)`
-      }}
-    >
-      {/* Show stroke count indicator */}
-      {!isEmpty && (
-        <div className="layer-item__thumbnail-indicator">
-          <div
-            className="layer-item__thumbnail-dot"
-            style={{ background: dominantColor }}
-          />
-        </div>
-      )}
-    </div>
-  );
+// Static thumbnail placeholder - no canvas preview for performance
+function LayerThumbnail() {
+  return <div className="layer-item__thumbnail" />;
 }
 
 function SortableLayerItem({
@@ -151,7 +122,7 @@ function SortableLayerItem({
 
           {/* Thumbnail */}
           <div className="layer-item__section layer-item__section--thumbnail">
-            <LayerThumbnail layer={layer} />
+            <LayerThumbnail />
           </div>
 
           <div className="layer-item__divider" />

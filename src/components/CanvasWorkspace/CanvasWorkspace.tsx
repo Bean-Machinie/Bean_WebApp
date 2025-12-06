@@ -52,8 +52,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const initialY = (viewportHeight - canvasHeight) / 2;
   const [position, setPosition] = React.useState({ x: initialX, y: initialY });
 
-  // Cursor overlay state
-  const [cursorPos, setCursorPos] = React.useState<{ x: number; y: number } | null>(null);
+  // Cursor overlay - use ref instead of state for performance
+  const cursorRef = React.useRef<HTMLDivElement>(null);
   const [showCursor, setShowCursor] = React.useState(true);
 
   // Interaction refs
@@ -185,7 +185,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       isPanning.current = false;
       isDrawing.current = true;
       const transformedPos = getTransformedPointerPosition(stage);
-      if (transformedPos && activeLayerId) {
+      if (transformedPos && activeLayerId && previewLineRef.current) {
         // Create stroke in ref (no state update = fast!)
         currentStrokeRef.current = {
           clientId: generateClientId(),
@@ -199,33 +199,44 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             fillColor: fillEnabled ? fillColor : undefined,
           }),
         };
+
+        // Initialize preview line immediately
+        previewLineRef.current.points([transformedPos.x, transformedPos.y]);
+        previewLineRef.current.stroke(brushColor);
+        previewLineRef.current.strokeWidth(brushSize);
+        previewLineRef.current.globalCompositeOperation(
+          tool === 'eraser' ? 'destination-out' : 'source-over'
+        );
+        previewLineRef.current.getLayer().batchDraw();
       }
     }
   };
 
-  // Handle mouse move - draw or pan
+  // Handle mouse move - draw or pan (ZERO state updates for max performance!)
   const handleMouseMove = (e: any) => {
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
+    if (!pointer) return;
 
-    // Update cursor position for HTML overlay using cached rects
-    if (pointer && cachedRectsRef.current?.container && cachedRectsRef.current?.stage) {
+    // Update cursor position directly via DOM (no re-render!)
+    if (cursorRef.current && cachedRectsRef.current?.container && cachedRectsRef.current?.stage) {
       const { container, stage: stageRect } = cachedRectsRef.current;
-      setCursorPos({
-        x: pointer.x + (stageRect.left - container.left),
-        y: pointer.y + (stageRect.top - container.top)
-      });
+      const x = pointer.x + (stageRect.left - container.left);
+      const y = pointer.y + (stageRect.top - container.top);
+      cursorRef.current.style.transform = `translate(${x}px, ${y}px)`;
     }
 
-    if (isPanning.current && lastPanPoint.current && pointer) {
-      // Pan the canvas - calculate delta
+    if (isPanning.current && lastPanPoint.current) {
+      // Pan via direct Stage manipulation (no re-render!)
       const deltaX = pointer.x - lastPanPoint.current.x;
       const deltaY = pointer.y - lastPanPoint.current.y;
 
-      setPosition((prevPosition) => ({
-        x: prevPosition.x + deltaX,
-        y: prevPosition.y + deltaY,
-      }));
+      const newX = stage.x() + deltaX;
+      const newY = stage.y() + deltaY;
+      stage.x(newX);
+      stage.y(newY);
+      stage.batchDraw();
+
       lastPanPoint.current = pointer;
     } else if (isDrawing.current && currentStrokeRef.current) {
       // Continue drawing - update ref and preview line directly (no state update!)
@@ -267,8 +278,17 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         return newLayers;
       });
 
-      // Clear current stroke ref
+      // Clear current stroke ref and preview line
       currentStrokeRef.current = null;
+      if (previewLineRef.current) {
+        previewLineRef.current.points([]);
+        previewLineRef.current.getLayer().batchDraw();
+      }
+    }
+
+    // If we were panning, sync position state with Stage
+    if (isPanning.current && stageRef.current) {
+      setPosition({ x: stageRef.current.x(), y: stageRef.current.y() });
     }
 
     // Reset drawing state
@@ -294,7 +314,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   const handleMouseLeave = () => {
     setShowCursor(false);
-    setCursorPos(null);
   };
 
   // Load canvas when project opens
@@ -634,40 +653,33 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               </KonvaLayer>
             ))}
 
-          {/* Preview Layer - shows current stroke while drawing (fast updates!) */}
+          {/* Preview Layer - always rendered for instant drawing feedback */}
           <KonvaLayer listening={false}>
-            {currentStrokeRef.current && (
-              currentStrokeRef.current.tool === 'shape' ? (
-                renderShape(currentStrokeRef.current)
-              ) : (
-                <Line
-                  ref={previewLineRef}
-                  points={currentStrokeRef.current.points}
-                  stroke={currentStrokeRef.current.color}
-                  strokeWidth={currentStrokeRef.current.strokeWidth}
-                  tension={0.5}
-                  lineCap="round"
-                  lineJoin="round"
-                  globalCompositeOperation={
-                    currentStrokeRef.current.tool === 'eraser' ? 'destination-out' : 'source-over'
-                  }
-                  perfectDrawEnabled={false}
-                  shadowForStrokeEnabled={false}
-                  listening={false}
-                />
-              )
-            )}
+            <Line
+              ref={previewLineRef}
+              points={[]}
+              stroke="#000000"
+              strokeWidth={5}
+              tension={0.5}
+              lineCap="round"
+              lineJoin="round"
+              globalCompositeOperation="source-over"
+              perfectDrawEnabled={false}
+              shadowForStrokeEnabled={false}
+              listening={false}
+            />
           </KonvaLayer>
 
         </Stage>
 
         {/* HTML Cursor Overlay with CSS blend mode for auto-contrast */}
-        {showCursor && cursorPos && !isPanning.current && (
+        {showCursor && !isPanning.current && (
           <div
+            ref={cursorRef}
             style={{
               position: 'absolute',
-              left: cursorPos.x,
-              top: cursorPos.y,
+              left: 0,
+              top: 0,
               pointerEvents: 'none',
               mixBlendMode: 'difference',
               zIndex: 999,
