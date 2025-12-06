@@ -19,9 +19,9 @@ function applyTheme(theme: ThemeId) {
 }
 
 function getStoredThemePreference(): ThemeId {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'ink-wash';
   const stored = window.localStorage.getItem('theme-preference') as ThemeId | null;
-  return stored ?? 'system';
+  return stored ?? 'ink-wash';
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -56,7 +56,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       if (!active) return;
 
-      const preference = (data?.theme_preference as ThemeId | null) ?? 'system';
+      const preference = (data?.theme_preference as ThemeId | null) ?? 'ink-wash';
       setTheme(preference);
       applyTheme(preference);
       window.localStorage.setItem('theme-preference', preference);

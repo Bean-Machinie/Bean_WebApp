@@ -171,14 +171,14 @@
 /* Divider */
 .canvas-workspace__divider {
   height: 1px;
-  background: #3a3a3a;
+  background: var(--primary); 
   margin: 0.25rem 0;
 }
 
 /* Help Text */
 .canvas-workspace__help-text {
   font-size: 0.75rem;
-  color: #666666;
+  color: var(--text-contrast);
   line-height: 1.6;
   margin-top: 0.5rem;
 }
@@ -201,9 +201,9 @@
 
 /* Right Sidebar */
 .canvas-workspace__sidebar {
-  width: 320px;
-  background: #2a2a2a;
-  border-left: 1px solid #3a3a3a;
+  width: 300px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -219,7 +219,7 @@
 .canvas-workspace__sidebar-title {
   font-size: 1rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--text-contrast);
   margin: 0;
 }
 
@@ -232,7 +232,7 @@
 
 .canvas-workspace__info {
   font-size: 0.75rem;
-  color: #aaaaaa;
+  color: var(--text-contrast);
   line-height: 1.6;
 }
 
@@ -242,7 +242,7 @@
 
 .canvas-workspace__sidebar-placeholder {
   font-size: 0.75rem;
-  color: #666666;
+  color: var(--text-contrast);
   line-height: 1.5;
   margin-top: 1rem;
 }

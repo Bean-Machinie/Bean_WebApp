@@ -165,15 +165,34 @@
   line-height: 1;
 }
 
-/* Thumbnail */
+/* Thumbnail - Static, Performance Optimized */
 .layer-item__thumbnail {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 40px;
   height: 40px;
   border: 1px solid var(--border);
   border-radius: 3px;
   background: var(--bg-tertiary);
-  image-rendering: crisp-edges;
+  position: relative;
+  overflow: hidden;
+}
+
+.layer-item__thumbnail-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.layer-item__thumbnail-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--sidebar-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 /* Layer Name */
