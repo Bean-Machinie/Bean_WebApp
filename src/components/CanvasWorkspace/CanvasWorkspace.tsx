@@ -64,6 +64,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const layerRef = React.useRef<any>(null);
   const isSpacePressed = React.useRef(false);
   const gridRef = React.useRef<HTMLDivElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Transform pointer position from screen to canvas coordinates
   const getTransformedPointerPosition = (stage: any) => {
@@ -198,9 +199,14 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
 
-    // Update cursor position for overlay
-    if (pointer) {
-      setCursorPos(pointer);
+    // Update cursor position for HTML overlay (relative to container)
+    if (pointer && containerRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const stageRect = stage.container().getBoundingClientRect();
+      setCursorPos({
+        x: pointer.x + (stageRect.left - containerRect.left),
+        y: pointer.y + (stageRect.top - containerRect.top)
+      });
     }
 
     if (isPanning.current && lastPanPoint.current && pointer) {
@@ -538,6 +544,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
       {/* Center Canvas Area */}
       <div
+        ref={containerRef}
         className="canvas-workspace__canvas-container"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -610,50 +617,46 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
               </KonvaLayer>
             ))}
 
-          {/* Cursor Overlay - Brush Preview Circle */}
-          {showCursor && cursorPos && !isPanning.current && (
-            <KonvaLayer listening={false}>
-              {tool === 'shape' ? (
-                // Crosshair cursor for shape tool
-                <>
-                  <Line
-                    points={[
-                      (cursorPos.x - position.x) / scale - 10 / scale,
-                      (cursorPos.y - position.y) / scale,
-                      (cursorPos.x - position.x) / scale + 10 / scale,
-                      (cursorPos.y - position.y) / scale,
-                    ]}
-                    stroke={brushColor}
-                    strokeWidth={1 / scale}
-                    opacity={0.7}
-                  />
-                  <Line
-                    points={[
-                      (cursorPos.x - position.x) / scale,
-                      (cursorPos.y - position.y) / scale - 10 / scale,
-                      (cursorPos.x - position.x) / scale,
-                      (cursorPos.y - position.y) / scale + 10 / scale,
-                    ]}
-                    stroke={brushColor}
-                    strokeWidth={1 / scale}
-                    opacity={0.7}
-                  />
-                </>
-              ) : (
-                // Circle cursor for pen/eraser tool
-                <Circle
-                  x={(cursorPos.x - position.x) / scale}
-                  y={(cursorPos.y - position.y) / scale}
-                  radius={brushSize / 2}
-                  stroke={tool === 'eraser' ? '#ffffff' : brushColor}
-                  strokeWidth={1 / scale}
-                  opacity={0.5}
-                  dash={[4 / scale, 4 / scale]}
-                />
-              )}
-            </KonvaLayer>
-          )}
         </Stage>
+
+        {/* HTML Cursor Overlay with CSS blend mode for auto-contrast */}
+        {showCursor && cursorPos && !isPanning.current && (
+          <div
+            style={{
+              position: 'absolute',
+              left: cursorPos.x,
+              top: cursorPos.y,
+              pointerEvents: 'none',
+              mixBlendMode: 'difference',
+              zIndex: 999,
+            }}
+          >
+            {tool === 'shape' ? (
+              // Crosshair cursor for shape tool
+              <svg width="20" height="20" style={{ transform: 'translate(-10px, -10px)' }}>
+                <line x1="0" y1="10" x2="20" y2="10" stroke="#ffffff" strokeWidth="2" />
+                <line x1="10" y1="0" x2="10" y2="20" stroke="#ffffff" strokeWidth="2" />
+              </svg>
+            ) : (
+              // Circle cursor for pen/eraser tool
+              <svg
+                width={brushSize + 4}
+                height={brushSize + 4}
+                style={{ transform: `translate(${-(brushSize + 4) / 2}px, ${-(brushSize + 4) / 2}px)` }}
+              >
+                <circle
+                  cx={(brushSize + 4) / 2}
+                  cy={(brushSize + 4) / 2}
+                  r={brushSize / 2}
+                  fill="none"
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                  strokeDasharray="4 4"
+                />
+              </svg>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right Sidebar */}
