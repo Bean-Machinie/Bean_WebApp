@@ -66,6 +66,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const gridRef = React.useRef<HTMLDivElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
+  // Performance optimization refs
+  const currentStrokeRef = React.useRef<Stroke | null>(null);
+  const previewLineRef = React.useRef<any>(null);
+  const cachedRectsRef = React.useRef<{ container?: DOMRect; stage?: DOMRect } | null>(null);
+
   // Transform pointer position from screen to canvas coordinates
   const getTransformedPointerPosition = (stage: any) => {
     const pointerPos = stage.getPointerPosition();
@@ -76,6 +81,16 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     transform.invert();
     return transform.point(pointerPos);
   };
+
+  // Cache bounding rects for cursor positioning (performance optimization)
+  const updateCachedRects = React.useCallback(() => {
+    if (containerRef.current && stageRef.current) {
+      cachedRectsRef.current = {
+        container: containerRef.current.getBoundingClientRect(),
+        stage: stageRef.current.container().getBoundingClientRect()
+      };
+    }
+  }, []);
 
   // Push current state to history (for undo/redo)
   const pushToHistory = React.useCallback((newLayers: Layer[]) => {
@@ -171,8 +186,8 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       isDrawing.current = true;
       const transformedPos = getTransformedPointerPosition(stage);
       if (transformedPos && activeLayerId) {
-        // Add new stroke to the active layer
-        const newStroke: Stroke = {
+        // Create stroke in ref (no state update = fast!)
+        currentStrokeRef.current = {
           clientId: generateClientId(),
           tool,
           points: [transformedPos.x, transformedPos.y],
@@ -184,12 +199,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
             fillColor: fillEnabled ? fillColor : undefined,
           }),
         };
-
-        setLayers(prev => prev.map(layer =>
-          layer.id === activeLayerId
-            ? { ...layer, strokes: [...layer.strokes, newStroke] }
-            : layer
-        ));
       }
     }
   };
@@ -199,13 +208,12 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
 
-    // Update cursor position for HTML overlay (relative to container)
-    if (pointer && containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const stageRect = stage.container().getBoundingClientRect();
+    // Update cursor position for HTML overlay using cached rects
+    if (pointer && cachedRectsRef.current?.container && cachedRectsRef.current?.stage) {
+      const { container, stage: stageRect } = cachedRectsRef.current;
       setCursorPos({
-        x: pointer.x + (stageRect.left - containerRect.left),
-        y: pointer.y + (stageRect.top - containerRect.top)
+        x: pointer.x + (stageRect.left - container.left),
+        y: pointer.y + (stageRect.top - container.top)
       });
     }
 
@@ -219,44 +227,48 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         y: prevPosition.y + deltaY,
       }));
       lastPanPoint.current = pointer;
-    } else if (isDrawing.current && activeLayerId) {
-      // Continue drawing - immutable update to active layer's last stroke
+    } else if (isDrawing.current && currentStrokeRef.current) {
+      // Continue drawing - update ref and preview line directly (no state update!)
       const transformedPoint = getTransformedPointerPosition(stage);
-      if (transformedPoint) {
-        setLayers(prev => prev.map(layer => {
-          if (layer.id !== activeLayerId) return layer;
+      if (transformedPoint && previewLineRef.current) {
+        const stroke = currentStrokeRef.current;
 
-          const updatedStrokes = [...layer.strokes];
-          const lastIndex = updatedStrokes.length - 1;
-          if (lastIndex >= 0) {
-            const currentStroke = updatedStrokes[lastIndex];
-            // For shapes, only keep start and end points
-            if (currentStroke.tool === 'shape') {
-              const startX = currentStroke.points[0];
-              const startY = currentStroke.points[1];
-              updatedStrokes[lastIndex] = {
-                ...currentStroke,
-                points: [startX, startY, transformedPoint.x, transformedPoint.y]
-              };
-            } else {
-              // For pen/eraser, keep adding points
-              updatedStrokes[lastIndex] = {
-                ...currentStroke,
-                points: [...currentStroke.points, transformedPoint.x, transformedPoint.y]
-              };
-            }
-          }
-          return { ...layer, strokes: updatedStrokes };
-        }));
+        // For shapes, only keep start and end points
+        if (stroke.tool === 'shape') {
+          const startX = stroke.points[0];
+          const startY = stroke.points[1];
+          stroke.points = [startX, startY, transformedPoint.x, transformedPoint.y];
+        } else {
+          // For pen/eraser, keep adding points
+          stroke.points.push(transformedPoint.x, transformedPoint.y);
+        }
+
+        // Update preview line directly (fast!)
+        previewLineRef.current.points(stroke.points);
+        previewLineRef.current.getLayer().batchDraw();
       }
     }
   };
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
-    // If we were drawing, record the state in history
-    if (isDrawing.current && activeLayerId) {
-      pushToHistory(layers);
+    // If we were drawing, commit stroke from ref to state (only 1 state update per stroke!)
+    if (isDrawing.current && currentStrokeRef.current && activeLayerId) {
+      const completedStroke = currentStrokeRef.current;
+
+      setLayers(prev => {
+        const newLayers = prev.map(layer =>
+          layer.id === activeLayerId
+            ? { ...layer, strokes: [...layer.strokes, completedStroke] }
+            : layer
+        );
+        // Push to history with new layers
+        pushToHistory(newLayers);
+        return newLayers;
+      });
+
+      // Clear current stroke ref
+      currentStrokeRef.current = null;
     }
 
     // Reset drawing state
@@ -384,6 +396,11 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     gridRef.current.style.backgroundSize = `${gridSize}px ${gridSize}px`;
     gridRef.current.style.backgroundPosition = `${offsetX}px ${offsetY}px`;
   }, [scale, position]);
+
+  // Update cached rects when component mounts or scale/position changes
+  React.useEffect(() => {
+    updateCachedRects();
+  }, [scale, position, updateCachedRects]);
 
   // Keyboard support for spacebar panning and undo/redo
   React.useEffect(() => {
@@ -616,6 +633,31 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                 })}
               </KonvaLayer>
             ))}
+
+          {/* Preview Layer - shows current stroke while drawing (fast updates!) */}
+          <KonvaLayer listening={false}>
+            {currentStrokeRef.current && (
+              currentStrokeRef.current.tool === 'shape' ? (
+                renderShape(currentStrokeRef.current)
+              ) : (
+                <Line
+                  ref={previewLineRef}
+                  points={currentStrokeRef.current.points}
+                  stroke={currentStrokeRef.current.color}
+                  strokeWidth={currentStrokeRef.current.strokeWidth}
+                  tension={0.5}
+                  lineCap="round"
+                  lineJoin="round"
+                  globalCompositeOperation={
+                    currentStrokeRef.current.tool === 'eraser' ? 'destination-out' : 'source-over'
+                  }
+                  perfectDrawEnabled={false}
+                  shadowForStrokeEnabled={false}
+                  listening={false}
+                />
+              )
+            )}
+          </KonvaLayer>
 
         </Stage>
 
