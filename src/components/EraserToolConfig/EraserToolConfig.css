@@ -1,10 +1,14 @@
+/* ============================
+   Eraser Tool Panel (Updated Style)
+   ============================ */
+
 .eraser-tool-config {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 16px 12px;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   height: 100vh;
   width: 220px;
   box-sizing: border-box;
@@ -12,6 +16,7 @@
   overflow-x: hidden;
 }
 
+/* Section */
 .eraser-tool-config__section {
   display: flex;
   flex-direction: column;
@@ -21,20 +26,20 @@
 .eraser-tool-config__section-title {
   margin: 0;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  padding: 0 4px;
+  letter-spacing: 0.5px;
+  color: var(--sidebar-text);
+  padding: 2px 4px;
 }
 
 .eraser-tool-config__divider {
   height: 1px;
-  background: var(--border);
-  margin: 16px 0;
+  background: var(--sidebar-border);
+  margin: 14px 0;
 }
 
-/* Tool Properties */
+/* Property Container */
 .eraser-tool-config__property {
   display: flex;
   flex-direction: column;
@@ -45,21 +50,22 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 0.80rem;
+  font-weight: 500;
+  color: var(--sidebar-text);
   padding: 0 4px;
 }
 
 .eraser-tool-config__property-value {
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
+/* Slider */
 .eraser-tool-config__slider-container {
   position: relative;
   height: 6px;
@@ -72,7 +78,6 @@
   position: absolute;
   width: 100%;
   height: 100%;
-  margin: 0;
   opacity: 0;
   cursor: pointer;
   z-index: 2;
@@ -80,78 +85,50 @@
 
 .eraser-tool-config__slider-fill {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   height: 100%;
-  background: linear-gradient(90deg, var(--danger), color-mix(in srgb, var(--danger) 80%, var(--text)));
-  border-radius: 3px;
-  transition: width 0.1s ease;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 40%, transparent);
+  background: var(--danger);
+  transition: width 0.12s ease;
   pointer-events: none;
 }
 
-.eraser-tool-config__slider::-webkit-slider-thumb {
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2px solid var(--danger);
-  cursor: pointer;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--text) 20%, transparent);
-  position: relative;
-  z-index: 3;
-}
-
+/* Thumb */
+.eraser-tool-config__slider::-webkit-slider-thumb,
 .eraser-tool-config__slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  appearance: none;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--bg);
+  background: var(--sidebar-bg);
   border: 2px solid var(--danger);
   cursor: pointer;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--text) 20%, transparent);
 }
 
-/* Info Section */
+/* Info Box */
 .eraser-tool-config__info {
   display: flex;
-  align-items: flex-start;
   gap: 10px;
-  padding: 12px;
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
-  border-radius: 10px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
+  border-radius: 6px;
 }
 
 .eraser-tool-config__info-icon {
   color: var(--danger);
-  flex-shrink: 0;
-  margin-top: 2px;
 }
 
 .eraser-tool-config__info-text {
-  margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.8rem;
   line-height: 1.4;
-  color: var(--text);
-  font-weight: 500;
+  color: var(--sidebar-text);
 }
 
-/* Scrollbar Styling */
-.eraser-tool-config::-webkit-scrollbar {
-  width: 6px;
-}
-
-.eraser-tool-config::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-
+/* Scrollbar */
+.eraser-tool-config::-webkit-scrollbar { width: 6px; }
+.eraser-tool-config::-webkit-scrollbar-track { background: var(--sidebar-bg); }
 .eraser-tool-config::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 4px;
 }
-
-.eraser-tool-config::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
-}
+.eraser-tool-config::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }

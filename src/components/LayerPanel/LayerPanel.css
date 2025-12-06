@@ -26,26 +26,28 @@
   letter-spacing: 0.5px;
 }
 
+/* Add New Layer – now matches Reset View button styling */
 .layer-panel__new-button {
-  padding: 0.4rem 0.75rem;
-  background: var(--primary);
-  color: var(--text-contrast);
-  border: none;
-  border-radius: 3px;
+  padding: 0.5rem;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 4px;
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s, transform 0.2s;
 }
 
 .layer-panel__new-button:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
+  background: var(--sidebar-hover);
 }
 
 .layer-panel__new-button:active {
-  transform: translateY(0);
+  background: var(--bg-tertiary);
+  transform: scale(0.97);
 }
+
 
 /* Layer List - NO HORIZONTAL PADDING */
 .layer-panel__list {
