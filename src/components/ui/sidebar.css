@@ -35,7 +35,7 @@
 .sidebar-button {
   background: var(--card-muted);
   border: 1px solid var(--sidebar-border);
-  color: var(--danger-border);
+  color: var(--sidebar-text);
 }
 
 .sidebar-button:hover {
