@@ -1,0 +1,13 @@
+<svg id="svg2" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" height="1024pt" width="1024pt" version="1.1" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" viewBox="0 0 1024 1024">
+<defs id="defs13370">
+<filter id="filter24184" style="color-interpolation-filters:sRGB">
+<feColorMatrix id="feColorMatrix24186" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1000 -500 "/>
+</filter>
+</defs>
+<g id="g17500" filter="url(#filter24184)">
+<path id="path4" fill="#6e6973" d="m0 0h19.11c-5.73 0.23-16.12 8.81-19.11 1.93v-1.93z"/>
+<path id="path6" fill="#625f62" d="m19.11 0h5.49c1.45 0.45 2.89 0.91 4.33 1.36 5.82 1.33 13.89 4.98 17.98-1.36h21.77l0.23 0.86c-6.09 2.12-12.72-0.84-18.96 0.64-5.45 4.31-12.8 4.68-19.41 3.63-3.29-4.49-16.8-0.68-22.97-0.95-5.86 0.3-0.5 10.87-7.57 9.05v-11.3c2.99 6.88 13.38-1.7 19.11-1.93z"/>
+<path id="path8" fill="#818081" d="m24.6 0h15.03c-3.57 0.41-7.12 1-10.7 1.36-1.44-0.45-2.88-0.91-4.33-1.36z"/>
+<path id="path10" fill="#696869" d="m39.63 0h7.28c-4.09 6.34-12.16 2.69-17.98 1.36 3.58-0.36 7.13-0.95 10.7-1.36z"/>
+</g>
+</svg>

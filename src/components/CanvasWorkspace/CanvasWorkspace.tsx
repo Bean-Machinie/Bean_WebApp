@@ -851,24 +851,24 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
           >
             {tool === 'shape' ? (
               // Crosshair cursor for shape tool
-              <svg width="20" height="20" style={{ transform: 'translate(-10px, -10px)' }}>
-                <line x1="0" y1="10" x2="20" y2="10" stroke="#ffffff" strokeWidth="2" />
-                <line x1="10" y1="0" x2="10" y2="20" stroke="#ffffff" strokeWidth="2" />
+              <svg width={20 * scale} height={20 * scale} style={{ transform: `translate(${-(10 * scale)}px, ${-(10 * scale)}px)` }}>
+                <line x1="0" y1={10 * scale} x2={20 * scale} y2={10 * scale} stroke="#ffffff" strokeWidth={Math.max(1.5, 2 * scale)} />
+                <line x1={10 * scale} y1="0" x2={10 * scale} y2={20 * scale} stroke="#ffffff" strokeWidth={Math.max(1.5, 2 * scale)} />
               </svg>
             ) : (
               // Circle cursor for pen/eraser tool
               <svg
-                width={brushSize + 4}
-                height={brushSize + 4}
-                style={{ transform: `translate(${-(brushSize + 4) / 2}px, ${-(brushSize + 4) / 2}px)` }}
+                width={(brushSize + 4) * scale}
+                height={(brushSize + 4) * scale}
+                style={{ transform: `translate(${-(brushSize + 4) * scale / 2}px, ${-(brushSize + 4) * scale / 2}px)` }}
               >
                 <circle
-                  cx={(brushSize + 4) / 2}
-                  cy={(brushSize + 4) / 2}
-                  r={brushSize / 2}
+                  cx={(brushSize + 4) * scale / 2}
+                  cy={(brushSize + 4) * scale / 2}
+                  r={(brushSize * scale) / 2}
                   fill="none"
                   stroke="#ffffff"
-                  strokeWidth="2"
+                  strokeWidth={Math.max(1.5, 2 * scale)}
                   strokeDasharray="4 4"
                 />
               </svg>

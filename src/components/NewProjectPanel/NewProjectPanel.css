@@ -256,11 +256,11 @@
 .new-project-form__unit {
   position: absolute;
   right: 14px;
-  color: var(--sidebar-text);
+  color: var(--text-strong);
   font-size: 0.9rem;
   font-weight: 600;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 1;
 }
 
 /* Color Picker - Slick Circle Design */

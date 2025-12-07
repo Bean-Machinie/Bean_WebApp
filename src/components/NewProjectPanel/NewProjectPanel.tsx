@@ -139,6 +139,11 @@ function NewProjectPanel({
       await createInitialCanvas(createdProject.id);
     }
 
+    // For battle-maps projects, create the initial battle map
+    if (selectedProjectTypeId === 'battle-maps') {
+      await createInitialBattleMap(createdProject.id);
+    }
+
     onProjectCreated?.(createdProject);
     setIsSubmitting(false);
     onClose();
@@ -180,6 +185,22 @@ function NewProjectPanel({
       });
     } catch (error) {
       console.error('Failed to create initial canvas:', error);
+    }
+  };
+
+  const createInitialBattleMap = async (projectId: string) => {
+    if (!user) return;
+
+    try {
+      await supabase.from('battle_maps').insert({
+        project_id: projectId,
+        width: 30,
+        height: 30,
+        tile_size: 48,
+        grid_type: 'square',
+      });
+    } catch (error) {
+      console.error('Failed to create initial battle map:', error);
     }
   };
 

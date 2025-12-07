@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types/project';
 import CanvasWorkspace from '../../components/CanvasWorkspace/CanvasWorkspace';
+import BattleMapWorkspace from '../BattleMapWorkspace';
 
 function WorkspacePage() {
   const { projectId, projectType } = useParams();
@@ -42,10 +43,14 @@ function WorkspacePage() {
 
   const projectTypeValue = project?.project_type ?? projectType;
   const isCanvasProject = projectTypeValue === 'canvas';
-
+  const isBattleMapProject = projectTypeValue === 'battle-maps';
 
   if (isCanvasProject && project) {
     return <CanvasWorkspace project={project} />;
+  }
+
+  if (isBattleMapProject) {
+    return <BattleMapWorkspace />;
   }
 
   return (
