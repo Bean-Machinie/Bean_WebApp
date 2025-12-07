@@ -1,7 +1,7 @@
 import React from 'react';
-import { Stage, Layer as KonvaLayer, Line, Circle } from 'react-konva';
+import { Stage, Layer as KonvaLayer, Line, Transformer, Rect, Ellipse } from 'react-konva';
 import type { Project } from '@/types/project';
-import type { Stroke, Layer, ShapeType } from '@/types/canvas';
+import type { Stroke, Layer, ShapeType, EditableShape } from '@/types/canvas';
 import { saveCanvas, loadCanvas } from '@/services/canvasService';
 import { generateClientId } from '@/lib/utils';
 import LayerPanel from '@/components/LayerPanel/LayerPanel';
@@ -9,6 +9,7 @@ import ToolSelectionPanel from '@/components/ToolSelectionPanel/ToolSelectionPan
 import PenToolConfig from '@/components/PenToolConfig/PenToolConfig';
 import EraserToolConfig from '@/components/EraserToolConfig/EraserToolConfig';
 import ShapeToolConfig from '@/components/ShapeToolConfig/ShapeToolConfig';
+import { EditableShapeComponent } from './EditableShape';
 import './CanvasWorkspace.css';
 
 type CanvasWorkspaceProps = {
@@ -35,6 +36,10 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [selectedShape, setSelectedShape] = React.useState<ShapeType>('rectangle');
   const [fillEnabled, setFillEnabled] = React.useState(false);
   const [fillColor, setFillColor] = React.useState('#ffffff');
+
+  // Shape selection and editing
+  const [selectedShapeId, setSelectedShapeId] = React.useState<string | null>(null);
+  const transformerRef = React.useRef<any>(null);
 
   // History for undo/redo
   const [history, setHistory] = React.useState<Layer[][]>([]);
@@ -71,6 +76,9 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const previewLineRef = React.useRef<any>(null);
   const cachedRectsRef = React.useRef<{ container?: DOMRect; stage?: DOMRect } | null>(null);
 
+  // Modifier keys for shape creation and selection
+  const modifierKeysRef = React.useRef({ shift: false, alt: false, ctrl: false });
+
   // Transform pointer position from screen to canvas coordinates
   const getTransformedPointerPosition = (stage: any) => {
     const pointerPos = stage.getPointerPosition();
@@ -80,6 +88,117 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const transform = stage.getAbsoluteTransform().copy();
     transform.invert();
     return transform.point(pointerPos);
+  };
+
+  // Convert EditableShape to permanent Stroke (bake shape)
+  const bakeShapeToStroke = (shape: EditableShape): Stroke => {
+    const { x, y, width, height, rotation, scaleX, scaleY, shapeType, strokeColor, strokeWidth, fillColor, fillEnabled } = shape;
+
+    // Calculate actual dimensions with scale
+    const actualWidth = width * scaleX;
+    const actualHeight = height * scaleY;
+
+    let points: number[] = [];
+
+    // Generate points based on shape type
+    if (shapeType === 'rectangle') {
+      // Rectangle: 4 corners + back to start for closed shape
+      const corners = [
+        [x, y],
+        [x + actualWidth, y],
+        [x + actualWidth, y + actualHeight],
+        [x, y + actualHeight],
+        [x, y] // Close the shape
+      ];
+
+      // Apply rotation if needed
+      if (rotation !== 0) {
+        const centerX = x + actualWidth / 2;
+        const centerY = y + actualHeight / 2;
+        const rad = (rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        points = corners.flatMap(([px, py]) => {
+          const dx = px - centerX;
+          const dy = py - centerY;
+          return [
+            centerX + dx * cos - dy * sin,
+            centerY + dx * sin + dy * cos
+          ];
+        });
+      } else {
+        points = corners.flat();
+      }
+    } else if (shapeType === 'ellipse') {
+      // Ellipse: approximate with 36 points (10 degree increments)
+      const centerX = x + actualWidth / 2;
+      const centerY = y + actualHeight / 2;
+      const radiusX = actualWidth / 2;
+      const radiusY = actualHeight / 2;
+      const numPoints = 36;
+
+      const ellipsePoints: number[][] = [];
+      for (let i = 0; i <= numPoints; i++) {
+        const angle = (i / numPoints) * 2 * Math.PI;
+        let px = centerX + radiusX * Math.cos(angle);
+        let py = centerY + radiusY * Math.sin(angle);
+
+        // Apply rotation if needed
+        if (rotation !== 0) {
+          const rad = (rotation * Math.PI) / 180;
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          const dx = px - centerX;
+          const dy = py - centerY;
+          px = centerX + dx * cos - dy * sin;
+          py = centerY + dx * sin + dy * cos;
+        }
+
+        ellipsePoints.push([px, py]);
+      }
+      points = ellipsePoints.flat();
+    } else if (shapeType === 'triangle') {
+      // Triangle: 3 corners + back to start
+      const corners = [
+        [x + actualWidth / 2, y],           // Top
+        [x + actualWidth, y + actualHeight], // Bottom right
+        [x, y + actualHeight],               // Bottom left
+        [x + actualWidth / 2, y]             // Close
+      ];
+
+      // Apply rotation if needed
+      if (rotation !== 0) {
+        const centerX = x + actualWidth / 2;
+        const centerY = y + actualHeight / 2;
+        const rad = (rotation * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        points = corners.flatMap(([px, py]) => {
+          const dx = px - centerX;
+          const dy = py - centerY;
+          return [
+            centerX + dx * cos - dy * sin,
+            centerY + dx * sin + dy * cos
+          ];
+        });
+      } else {
+        points = corners.flat();
+      }
+    }
+
+    return {
+      clientId: generateClientId(),
+      tool: 'shape',
+      points,
+      color: strokeColor,
+      strokeWidth,
+      shapeType,
+      fillColor: fillEnabled ? fillColor : undefined,
+      closed: true,
+      saveState: 'saved'
+    };
   };
 
   // Cache bounding rects for cursor positioning (performance optimization)
@@ -131,6 +250,32 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   }, [history, historyIndex]);
 
+  // Shape management handlers
+  const handleShapeChange = React.useCallback((shapeId: string, attrs: Partial<import('@/types/canvas').EditableShape>) => {
+    setLayers(prev => {
+      const newLayers = prev.map(layer => ({
+        ...layer,
+        shapes: layer.shapes?.map(shape =>
+          shape.id === shapeId ? { ...shape, ...attrs } : shape
+        ) || []
+      }));
+      pushToHistory(newLayers);
+      return newLayers;
+    });
+  }, [pushToHistory]);
+
+  const handleDeleteShape = React.useCallback((shapeId: string) => {
+    setLayers(prev => {
+      const newLayers = prev.map(layer => ({
+        ...layer,
+        shapes: layer.shapes?.filter(s => s.id !== shapeId) || []
+      }));
+      pushToHistory(newLayers);
+      return newLayers;
+    });
+    setSelectedShapeId(null);
+  }, [pushToHistory]);
+
   // Handle mouse wheel zoom
   const handleWheel = (e: any) => {
     e.evt.preventDefault();
@@ -181,6 +326,41 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       setShowCursor(false);
       stage.container().style.cursor = 'grabbing';
     } else if (e.evt.button === 0) {
+      // Check if clicked on shape or transformer
+      const clickedOnShape = e.target !== stage && e.target.attrs?.id;
+      const clickedOnTransformer = e.target.getClassName() === 'Transformer' ||
+                                   e.target.parent?.getClassName() === 'Transformer';
+
+      // If clicked on transformer or selected shape, let Konva handle it (don't draw)
+      if (clickedOnTransformer || (selectedShapeId && clickedOnShape && e.target.attrs?.id === selectedShapeId)) {
+        return; // Don't start drawing when manipulating shapes
+      }
+
+      // Click outside selected shape: BAKE it to permanent stroke and deselect
+      if (selectedShapeId) {
+        setLayers(prev => {
+          const newLayers = prev.map(layer => {
+            // Find and bake the selected shape
+            const shapeToBake = layer.shapes?.find(s => s.id === selectedShapeId);
+            if (!shapeToBake) return layer;
+
+            // Convert shape to stroke
+            const bakedStroke = bakeShapeToStroke(shapeToBake);
+
+            // Remove from shapes, add to strokes
+            return {
+              ...layer,
+              shapes: layer.shapes?.filter(s => s.id !== selectedShapeId) || [],
+              strokes: [...layer.strokes, bakedStroke]
+            };
+          });
+          pushToHistory(newLayers);
+          return newLayers;
+        });
+        setSelectedShapeId(null);
+        return; // Don't start drawing on the same click that bakes the shape
+      }
+
       // Only draw on left click (button 0) when NOT panning
       isPanning.current = false;
       isDrawing.current = true;
@@ -244,18 +424,103 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       if (transformedPoint && previewLineRef.current) {
         const stroke = currentStrokeRef.current;
 
-        // For shapes, only keep start and end points
+        // For shapes, only keep start and end points with modifier key logic
         if (stroke.tool === 'shape') {
           const startX = stroke.points[0];
           const startY = stroke.points[1];
-          stroke.points = [startX, startY, transformedPoint.x, transformedPoint.y];
+          let endX = transformedPoint.x;
+          let endY = transformedPoint.y;
+
+          // Calculate dimensions
+          let width = endX - startX;
+          let height = endY - startY;
+
+          // Shift: Constrain to square/circle
+          if (modifierKeysRef.current.shift) {
+            const size = Math.max(Math.abs(width), Math.abs(height));
+            width = width < 0 ? -size : size;
+            height = height < 0 ? -size : size;
+            endX = startX + width;
+            endY = startY + height;
+          }
+
+          // Alt: Draw from center
+          if (modifierKeysRef.current.alt) {
+            const centerX = startX;
+            const centerY = startY;
+            endX = centerX + width;
+            endY = centerY + height;
+            const newStartX = centerX - width;
+            const newStartY = centerY - height;
+            stroke.points = [newStartX, newStartY, endX, endY];
+          } else {
+            stroke.points = [startX, startY, endX, endY];
+          }
         } else {
           // For pen/eraser, keep adding points
           stroke.points.push(transformedPoint.x, transformedPoint.y);
+
+          // ERASER: Check if touching any shapes and delete them
+          if (stroke.tool === 'eraser') {
+            const eraserRadius = brushSize / 2;
+            setLayers(prev => prev.map(layer => {
+              if (layer.id !== activeLayerId) return layer;
+
+              // Filter out shapes that are touched by eraser
+              const shapesToKeep = (layer.shapes || []).filter(shape => {
+                // Calculate shape bounds considering scale
+                const shapeLeft = shape.x;
+                const shapeTop = shape.y;
+                const shapeRight = shape.x + (shape.width * shape.scaleX);
+                const shapeBottom = shape.y + (shape.height * shape.scaleY);
+
+                // Check if eraser point is within shape bounds (simple AABB collision)
+                const isTouching = transformedPoint.x + eraserRadius > shapeLeft &&
+                                   transformedPoint.x - eraserRadius < shapeRight &&
+                                   transformedPoint.y + eraserRadius > shapeTop &&
+                                   transformedPoint.y - eraserRadius < shapeBottom;
+
+                return !isTouching; // Keep shape if NOT touching
+              });
+
+              return { ...layer, shapes: shapesToKeep };
+            }));
+          }
         }
 
-        // Update preview line directly (fast!)
-        previewLineRef.current.points(stroke.points);
+        // Update preview shape based on shape type (fast!)
+        const [x1, y1, x2, y2] = stroke.points;
+        const minX = Math.min(x1, x2);
+        const minY = Math.min(y1, y2);
+        const absWidth = Math.abs(x2 - x1);
+        const absHeight = Math.abs(y2 - y1);
+
+        if (stroke.shapeType === 'rectangle') {
+          // Update rectangle preview
+          previewLineRef.current.x(minX);
+          previewLineRef.current.y(minY);
+          previewLineRef.current.width(absWidth);
+          previewLineRef.current.height(absHeight);
+        } else if (stroke.shapeType === 'ellipse') {
+          // Update ellipse preview
+          const centerX = minX + absWidth / 2;
+          const centerY = minY + absHeight / 2;
+          previewLineRef.current.x(centerX);
+          previewLineRef.current.y(centerY);
+          previewLineRef.current.radiusX(absWidth / 2);
+          previewLineRef.current.radiusY(absHeight / 2);
+        } else if (stroke.shapeType === 'triangle') {
+          // Update triangle preview with three points
+          const points = [
+            minX + absWidth / 2, minY,           // Top
+            minX + absWidth, minY + absHeight,   // Bottom right
+            minX, minY + absHeight,              // Bottom left
+          ];
+          previewLineRef.current.points(points);
+        } else {
+          // Line or other: use points directly
+          previewLineRef.current.points(stroke.points);
+        }
         previewLineRef.current.getLayer().batchDraw();
       }
     }
@@ -263,20 +528,66 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
-    // If we were drawing, commit stroke from ref to state (only 1 state update per stroke!)
+    // If we were drawing, commit stroke or shape from ref to state (only 1 state update per stroke!)
     if (isDrawing.current && currentStrokeRef.current && activeLayerId) {
       const completedStroke = currentStrokeRef.current;
+      let newShapeId: string | null = null;
 
       setLayers(prev => {
-        const newLayers = prev.map(layer =>
-          layer.id === activeLayerId
-            ? { ...layer, strokes: [...layer.strokes, completedStroke] }
-            : layer
-        );
+        const newLayers = prev.map(layer => {
+          if (layer.id !== activeLayerId) return layer;
+
+          // For shape tool, create EditableShape instead of stroke
+          if (completedStroke.tool === 'shape' && completedStroke.shapeType &&
+              completedStroke.shapeType !== 'line' && completedStroke.shapeType !== 'polyline') {
+            const [x1, y1, x2, y2] = completedStroke.points;
+            const x = Math.min(x1, x2);
+            const y = Math.min(y1, y2);
+            const width = Math.abs(x2 - x1);
+            const height = Math.abs(y2 - y1);
+
+            // Only create shape if it has meaningful size
+            if (width > 2 && height > 2) {
+              const shapeId = generateClientId();
+              newShapeId = shapeId; // Capture ID for auto-selection
+
+              const newShape: EditableShape = {
+                id: shapeId,
+                shapeType: completedStroke.shapeType as 'rectangle' | 'ellipse' | 'triangle',
+                x,
+                y,
+                width,
+                height,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                strokeColor: completedStroke.color,
+                strokeWidth: completedStroke.strokeWidth,
+                fillColor: completedStroke.fillColor,
+                fillEnabled: !!completedStroke.fillColor,
+              };
+
+              return {
+                ...layer,
+                shapes: [...(layer.shapes || []), newShape]
+              };
+            }
+            return layer;
+          }
+
+          // For other tools (pen, eraser, line), add as stroke
+          return { ...layer, strokes: [...layer.strokes, completedStroke] };
+        });
+
         // Push to history with new layers
         pushToHistory(newLayers);
         return newLayers;
       });
+
+      // Auto-select the newly created shape
+      if (newShapeId) {
+        setSelectedShapeId(newShapeId);
+      }
 
       // Clear current stroke ref and preview line
       currentStrokeRef.current = null;
@@ -421,7 +732,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     updateCachedRects();
   }, [scale, position, updateCachedRects]);
 
-  // Keyboard support for spacebar panning and undo/redo
+  // Keyboard support for spacebar panning, undo/redo, and modifier keys
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Undo: Ctrl+Z (or Cmd+Z on Mac)
@@ -438,6 +749,31 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         return;
       }
 
+      // Delete selected shape
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
+        e.preventDefault();
+        handleDeleteShape(selectedShapeId);
+        return;
+      }
+
+      // Deselect with Escape
+      if (e.key === 'Escape' && selectedShapeId) {
+        e.preventDefault();
+        setSelectedShapeId(null);
+        return;
+      }
+
+      // Track modifier keys for shape creation and selection
+      if (e.key === 'Shift') {
+        modifierKeysRef.current.shift = true;
+      }
+      if (e.key === 'Alt') {
+        modifierKeysRef.current.alt = true;
+      }
+      if (e.key === 'Control' || e.key === 'Meta') {
+        modifierKeysRef.current.ctrl = true;
+      }
+
       if (e.code === 'Space' && !isSpacePressed.current) {
         e.preventDefault();
         isSpacePressed.current = true;
@@ -448,6 +784,17 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Release modifier keys
+      if (e.key === 'Shift') {
+        modifierKeysRef.current.shift = false;
+      }
+      if (e.key === 'Alt') {
+        modifierKeysRef.current.alt = false;
+      }
+      if (e.key === 'Control' || e.key === 'Meta') {
+        modifierKeysRef.current.ctrl = false;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         isSpacePressed.current = false;
@@ -464,7 +811,46 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [undo, redo]);
+  }, [undo, redo, selectedShapeId]);
+
+  // Attach Transformer to selected shape
+  React.useEffect(() => {
+    if (selectedShapeId && transformerRef.current && stageRef.current) {
+      const selectedNode = stageRef.current.findOne(`#${selectedShapeId}`);
+      if (selectedNode) {
+        transformerRef.current.nodes([selectedNode]);
+        transformerRef.current.getLayer().batchDraw();
+
+        // Customize rotation handle cursor
+        const transformer = transformerRef.current;
+        const rotater = transformer.findOne('.rotater');
+
+        if (rotater) {
+          const stage = stageRef.current;
+
+          // Hand cursor on hover
+          rotater.on('mouseenter', () => {
+            stage.container().style.cursor = 'grab';
+          });
+
+          rotater.on('mouseleave', () => {
+            stage.container().style.cursor = 'none';
+          });
+
+          // Grabbing cursor when dragging
+          rotater.on('mousedown', () => {
+            stage.container().style.cursor = 'grabbing';
+          });
+
+          rotater.on('mouseup', () => {
+            stage.container().style.cursor = 'grab';
+          });
+        }
+      }
+    } else if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+    }
+  }, [selectedShapeId]);
 
   // Helper component to render shapes
   const renderShape = (stroke: Stroke) => {
@@ -650,24 +1036,128 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                     />
                   );
                 })}
+
+                {/* Preview line on active layer for proper eraser visual feedback */}
+                {layer.id === activeLayerId && (tool === 'pen' || tool === 'eraser' || (tool === 'shape' && selectedShape === 'line')) && (
+                  <Line
+                    ref={previewLineRef}
+                    points={[]}
+                    stroke={brushColor}
+                    strokeWidth={brushSize}
+                    tension={0.5}
+                    lineCap="round"
+                    lineJoin="round"
+                    globalCompositeOperation={tool === 'eraser' ? 'destination-out' : 'source-over'}
+                    perfectDrawEnabled={false}
+                    shadowForStrokeEnabled={false}
+                    listening={false}
+                  />
+                )}
               </KonvaLayer>
             ))}
 
-          {/* Preview Layer - always rendered for instant drawing feedback */}
+          {/* Editable Shapes Layer - NEW: Native Konva shapes with selection/transform */}
+          <KonvaLayer name="shapesLayer" listening={true}>
+            {layers
+              .filter(layer => layer.visible)
+              .sort((a, b) => a.order - b.order)
+              .map(layer =>
+                layer.shapes?.map(shape => (
+                  <EditableShapeComponent
+                    key={shape.id}
+                    shape={shape}
+                    isSelected={shape.id === selectedShapeId}
+                    onSelect={() => setSelectedShapeId(shape.id)}
+                    onChange={(attrs) => handleShapeChange(shape.id, attrs)}
+                  />
+                ))
+              )}
+
+            {/* Transformer for selected shape */}
+            {selectedShapeId && (
+              <Transformer
+                ref={transformerRef}
+                rotateEnabled={true}
+                enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+                boundBoxFunc={(oldBox, newBox) => {
+                  // Minimum size constraint
+                  if (newBox.width < 5 || newBox.height < 5) {
+                    return oldBox;
+                  }
+
+                  // Shift key: constrain aspect ratio (proportional scaling)
+                  if (modifierKeysRef.current.shift) {
+                    const aspectRatio = oldBox.width / oldBox.height;
+
+                    // Determine which dimension changed more
+                    const widthChange = Math.abs(newBox.width - oldBox.width);
+                    const heightChange = Math.abs(newBox.height - oldBox.height);
+
+                    if (widthChange > heightChange) {
+                      // Width changed more, adjust height to maintain ratio
+                      newBox.height = newBox.width / aspectRatio;
+                    } else {
+                      // Height changed more, adjust width to maintain ratio
+                      newBox.width = newBox.height * aspectRatio;
+                    }
+                  }
+
+                  return newBox;
+                }}
+              />
+            )}
+          </KonvaLayer>
+
+          {/* Preview Layer - for shape previews only (pen/eraser preview is on active layer) */}
           <KonvaLayer listening={false}>
-            <Line
-              ref={previewLineRef}
-              points={[]}
-              stroke="#000000"
-              strokeWidth={5}
-              tension={0.5}
-              lineCap="round"
-              lineJoin="round"
-              globalCompositeOperation="source-over"
-              perfectDrawEnabled={false}
-              shadowForStrokeEnabled={false}
-              listening={false}
-            />
+            {/* Rectangle preview */}
+            {tool === 'shape' && selectedShape === 'rectangle' && (
+              <Rect
+                ref={previewLineRef}
+                x={0}
+                y={0}
+                width={0}
+                height={0}
+                stroke={brushColor}
+                strokeWidth={brushSize}
+                fill={fillEnabled ? fillColor : undefined}
+                perfectDrawEnabled={false}
+                shadowForStrokeEnabled={false}
+                listening={false}
+              />
+            )}
+
+            {/* Ellipse preview */}
+            {tool === 'shape' && selectedShape === 'ellipse' && (
+              <Ellipse
+                ref={previewLineRef}
+                x={0}
+                y={0}
+                radiusX={0}
+                radiusY={0}
+                stroke={brushColor}
+                strokeWidth={brushSize}
+                fill={fillEnabled ? fillColor : undefined}
+                perfectDrawEnabled={false}
+                shadowForStrokeEnabled={false}
+                listening={false}
+              />
+            )}
+
+            {/* Triangle preview */}
+            {tool === 'shape' && selectedShape === 'triangle' && (
+              <Line
+                ref={previewLineRef}
+                points={[]}
+                stroke={brushColor}
+                strokeWidth={brushSize}
+                fill={fillEnabled ? fillColor : undefined}
+                closed
+                perfectDrawEnabled={false}
+                shadowForStrokeEnabled={false}
+                listening={false}
+              />
+            )}
           </KonvaLayer>
 
         </Stage>

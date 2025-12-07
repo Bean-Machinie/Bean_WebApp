@@ -51,9 +51,42 @@ declare module 'react-konva' {
     [key: string]: any;
   }
 
+  export interface RectProps {
+    x?: number;
+    y?: number;
+    width: number;
+    height: number;
+    stroke?: string;
+    strokeWidth?: number;
+    fill?: string;
+    [key: string]: any;
+  }
+
+  export interface EllipseProps {
+    x?: number;
+    y?: number;
+    radiusX: number;
+    radiusY: number;
+    stroke?: string;
+    strokeWidth?: number;
+    fill?: string;
+    [key: string]: any;
+  }
+
+  export interface TransformerProps {
+    ref?: any;
+    rotateEnabled?: boolean;
+    enabledAnchors?: string[];
+    boundBoxFunc?: (oldBox: any, newBox: any) => any;
+    [key: string]: any;
+  }
+
   export class Stage extends Component<StageProps> {}
   export class Layer extends Component<LayerProps> {}
   export class Line extends Component<LineProps> {}
   export class Text extends Component<TextProps> {}
   export class Circle extends Component<CircleProps> {}
+  export class Rect extends Component<RectProps> {}
+  export class Ellipse extends Component<EllipseProps> {}
+  export class Transformer extends Component<TransformerProps> {}
 }

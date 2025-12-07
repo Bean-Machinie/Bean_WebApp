@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import type { Layer, CanvasData, CanvasDataV1, CanvasDataV2 } from '../types/canvas';
+import type { Layer, CanvasData, CanvasDataV1, CanvasDataV2, CanvasDataV3 } from '../types/canvas';
 import { generateClientId } from '../lib/utils';
 
 /**
@@ -8,6 +8,7 @@ import { generateClientId } from '../lib/utils';
  * Follows Konva best practices
  *
  * Version 2 adds multi-layer support with automatic migration from V1
+ * Version 3 adds editable shapes support with automatic migration from V2
  */
 
 /**
@@ -37,9 +38,23 @@ function migrateV1toV2(oldData: CanvasDataV1): CanvasDataV2 {
 }
 
 /**
+ * Migrate V2 (layer-based) to V3 (with editable shapes)
+ */
+function migrateV2toV3(oldData: CanvasDataV2): CanvasDataV3 {
+  return {
+    layers: oldData.layers.map(layer => ({
+      ...layer,
+      shapes: [], // Add empty shapes array to existing layers
+    })),
+    activeLayerId: oldData.activeLayerId,
+    version: 3 as const,
+  };
+}
+
+/**
  * Save entire canvas state to database
  * Single write operation - much faster than per-stroke saves
- * Now supports multi-layer V2 format
+ * Now supports multi-layer V3 format with editable shapes
  */
 export async function saveCanvas(
   projectId: string,
@@ -53,8 +68,8 @@ export async function saveCanvas(
       throw new Error('User not authenticated');
     }
 
-    // Store as V2 format with layers
-    const canvasData: CanvasDataV2 = {
+    // Store as V3 format with layers and shapes
+    const canvasData: CanvasDataV3 = {
       layers: layers.map(layer => ({
         id: layer.id,
         name: layer.name,
@@ -66,10 +81,14 @@ export async function saveCanvas(
           points: stroke.points,
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
+          ...(stroke.shapeType && { shapeType: stroke.shapeType }),
+          ...(stroke.fillColor && { fillColor: stroke.fillColor }),
+          ...(stroke.closed !== undefined && { closed: stroke.closed }),
         })),
+        shapes: layer.shapes || [], // Include shapes array (empty if none)
       })),
       activeLayerId,
-      version: 2 as const,
+      version: 3 as const,
     };
 
     // Upsert - insert or update existing canvas
@@ -97,7 +116,7 @@ export async function saveCanvas(
 /**
  * Load canvas state from database
  * Single read operation - much faster than per-stroke loads
- * Automatically migrates V1 → V2 if needed
+ * Automatically migrates V1 → V2 → V3 if needed
  */
 export async function loadCanvas(projectId: string): Promise<{
   layers: Layer[];
@@ -123,18 +142,23 @@ export async function loadCanvas(projectId: string): Promise<{
     const rawData = data.canvas_data as CanvasData;
 
     // Check version and migrate if needed
-    let canvasData: CanvasDataV2;
+    let canvasData: CanvasDataV3;
 
-    if ('version' in rawData && rawData.version === 2) {
-      // Already V2 format
+    if ('version' in rawData && rawData.version === 3) {
+      // Already V3 format
       canvasData = rawData;
+    } else if ('version' in rawData && rawData.version === 2) {
+      // V2 format - migrate to V3
+      console.log('Migrating canvas from V2 to V3 format');
+      canvasData = migrateV2toV3(rawData);
     } else {
-      // V1 format or no version - migrate
-      console.log('Migrating canvas from V1 to V2 format');
-      canvasData = migrateV1toV2(rawData as CanvasDataV1);
+      // V1 format or no version - migrate V1 → V2 → V3
+      console.log('Migrating canvas from V1 to V3 format');
+      const v2Data = migrateV1toV2(rawData as CanvasDataV1);
+      canvasData = migrateV2toV3(v2Data);
     }
 
-    // Convert to Layer[] with full Stroke objects
+    // Convert to Layer[] with full Stroke and Shape objects
     const layers: Layer[] = canvasData.layers.map(layer => ({
       id: layer.id,
       name: layer.name,
@@ -147,7 +171,11 @@ export async function loadCanvas(projectId: string): Promise<{
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         saveState: 'saved' as const,
+        ...(stroke.shapeType && { shapeType: stroke.shapeType }),
+        ...(stroke.fillColor && { fillColor: stroke.fillColor }),
+        ...(stroke.closed !== undefined && { closed: stroke.closed }),
       })),
+      shapes: layer.shapes || [], // Include shapes array
     }));
 
     return {

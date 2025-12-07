@@ -15,13 +15,38 @@ export type Stroke = {
   closed?: boolean;       // Whether shape is closed (for polyline)
 };
 
+// Editable shape type - native Konva shapes with geometric properties
+export type EditableShape = {
+  id: string;              // UUID for selection
+  shapeType: 'rectangle' | 'ellipse' | 'triangle'; // Exclude 'line' and 'polyline'
+  x: number;               // Position
+  y: number;
+  width: number;           // Dimensions
+  height: number;
+  rotation: number;        // Transform state
+  scaleX: number;
+  scaleY: number;
+  strokeColor: string;     // Stroke properties
+  strokeWidth: number;
+  fillColor?: string;      // Fill properties
+  fillEnabled: boolean;
+};
+
 // Layer type for multi-layer canvas system
 export type Layer = {
   id: string;             // UUID
   name: string;           // "Layer 1", "Background", etc.
   visible: boolean;       // Eye icon toggle
   order: number;          // Stacking order (higher = on top)
-  strokes: Stroke[];      // Strokes belonging to this layer
+  strokes: Stroke[];      // Strokes belonging to this layer (immutable)
+  shapes?: EditableShape[]; // NEW: Editable shapes (V3+, optional for backward compatibility)
+};
+
+// Version 3: Multi-layer canvas with editable shapes
+export type CanvasDataV3 = {
+  layers: Layer[];        // Layers now include shapes array
+  activeLayerId: string;
+  version: 3;
 };
 
 // Version 2: Multi-layer canvas data
@@ -43,4 +68,4 @@ export type CanvasDataV1 = {
 };
 
 // Union type for backwards compatibility
-export type CanvasData = CanvasDataV1 | CanvasDataV2;
+export type CanvasData = CanvasDataV1 | CanvasDataV2 | CanvasDataV3;
