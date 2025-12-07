@@ -155,7 +155,7 @@ function AppSidebar({
             {/* Collapse/Expand Button */}
             <button
               onClick={() => setOpen(!open)}
-              className="w-[40px] h-[40px] flex items-center justify-center sidebar-button rounded-xl sidebar-hover"
+              className="w-[40px] h-[40px] flex items-center justify-center sidebar-button rounded-md sidebar-hover"
               aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
               title={open ? 'Collapse sidebar' : 'Expand sidebar'}
             >

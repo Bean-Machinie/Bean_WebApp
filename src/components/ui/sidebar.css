@@ -24,6 +24,11 @@
   border: 1px solid var(--sidebar-border);
 }
 
+.sidebar-container a,
+.sidebar-container a:hover {
+  text-decoration: none;
+}
+
 .sidebar-hover:hover {
   background: var(--sidebar-hover);
 }
