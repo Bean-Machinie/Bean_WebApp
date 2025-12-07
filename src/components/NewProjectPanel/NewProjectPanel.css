@@ -63,7 +63,7 @@
 }
 
 .new-project-panel__selection-title {
-  margin: 8px 0 6px;
+  margin: 0 0 12px 0;
   font-size: 1.4rem;
   color: var(--sidebar-text);
 }
@@ -115,7 +115,8 @@
   padding: 12px 14px;
   font-size: 1rem;
   font-family: inherit;
-  color: var(--text);
+  font-weight: 500;
+  color: var(--text-strong);
   background: var(--bg);
   border: 2px solid var(--sidebar-border);
   border-radius: 4px;
@@ -137,8 +138,9 @@
 }
 
 .new-project-form__input::placeholder {
-  color: var(--sidebar-text);
-  opacity: 0.5;
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-weight: 400;
 }
 
 .new-project-form__actions {
@@ -220,7 +222,7 @@
 .new-project-canvas-column {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
   height: 100%;
 }
 
@@ -322,7 +324,7 @@
 
 /* Canvas Preview */
 .new-project-canvas-preview__label {
-  margin: 8px 0 6px;
+  margin: 0 0 12px 0;
   font-size: 1.4rem;
   font-weight: 600;
   color: var(--sidebar-text);
