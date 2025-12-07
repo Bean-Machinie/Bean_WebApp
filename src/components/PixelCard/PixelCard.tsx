@@ -146,11 +146,18 @@ const VARIANTS = {
     speed: 80,
     colors: '#fecdd3,#fda4af,#e11d48',
     noFocus: true
+  },
+  gold: {
+    activeColor: '#fef3c7',
+    gap: 5,
+    speed: 30,
+    colors: '#fef3c7,#fbbf24,#d97706',
+    noFocus: false
   }
 };
 
 interface PixelCardProps {
-  variant?: 'default' | 'blue' | 'yellow' | 'pink';
+  variant?: 'default' | 'blue' | 'yellow' | 'pink' | 'gold';
   gap?: number;
   speed?: number;
   colors?: string;

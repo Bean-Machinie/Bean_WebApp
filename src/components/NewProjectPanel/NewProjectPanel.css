@@ -11,7 +11,8 @@
 .new-project-panel {
   width: min(1120px, 96vw);
   max-width: 1120px;
-  min-height: 540px;
+  height: 680px;
+  max-height: 85vh;
   background: var(--sidebar-bg);
   border: 1px solid var(--sidebar-border);
   border-radius: 20px;
@@ -37,8 +38,13 @@
   background: var(--sidebar-bg);
 }
 
+.new-project-panel__header {
+  padding: 0 14px;
+}
+
 .new-project-panel__header h2 {
   margin: 6px 0 4px;
+  color: var(--sidebar-text);
 }
 
 .new-project-panel__subtitle {
@@ -64,9 +70,9 @@
 
 .new-project-form {
   flex: 1;
-  background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
+  background: var(--card-muted);
   border: 1px solid var(--sidebar-border);
-  border-radius: 14px;
+  border-radius: 4px;
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -82,14 +88,14 @@
 .new-project-form__label {
   font-weight: 600;
   color: var(--sidebar-text);
-  font-size: 0.9rem;
+  font-size: .95rem;
 }
 
 .new-project-form__optional {
   font-weight: 400;
   color: var(--sidebar-text);
-  opacity: 0.7;
-  font-size: 0.85rem;
+  opacity: 1;
+  font-size: 0.95rem;
 }
 
 .new-project-form__section {
@@ -109,10 +115,10 @@
   padding: 12px 14px;
   font-size: 1rem;
   font-family: inherit;
-  color: var(--sidebar-text);
+  color: var(--text);
   background: var(--bg);
   border: 2px solid var(--sidebar-border);
-  border-radius: 10px;
+  border-radius: 4px;
   outline: none;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-text) 5%, transparent);
@@ -144,46 +150,46 @@
 
 /* Enhanced button styles for New Project panel */
 .new-project-form__actions .button {
-  padding: 12px 20px;
-  font-size: 1rem;
-  font-weight: 700;
-  border-radius: 10px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
+  transition: background 0.2s, transform 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  background: var(--card-muted);
+  border: 2px solid var(--sidebar-hover);
+  color: var(--sidebar-text);
+  position: relative;
+}
+
+.new-project-form__actions .button:hover:not(:disabled) {
+  background: var(--sidebar-hover);
+}
+
+.new-project-form__actions .button:active:not(:disabled) {
+  background: var(--bg-tertiary);
+  transform: scale(0.97);
 }
 
 .new-project-form__actions .button--ghost {
-  background: transparent;
-  border-color: var(--border-strong);
-  color: var(--text);
-}
-
-.new-project-form__actions .button--ghost:hover:not(:disabled) {
-  background: var(--bg-secondary);
-  border-color: var(--text-muted);
-  transform: translateY(-1px);
+  opacity: 0.7;
 }
 
 .new-project-form__actions .button--primary {
-  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-  border-color: var(--primary);
-  color: var(--bg);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 30%, transparent);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
 }
 
 .new-project-form__actions .button--primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--primary) 40%, transparent);
-  background: linear-gradient(135deg, var(--primary-hover), var(--primary));
+  background: var(--sidebar-hover);
 }
 
 .new-project-form__actions .button--primary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 25%, transparent);
+  background: var(--bg-tertiary);
+  transform: scale(0.97);
 }
 
 .new-project-form__actions .button:disabled {
@@ -208,16 +214,25 @@
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   flex: 1;
+  align-items: start;
+}
+
+.new-project-canvas-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
 }
 
 .new-project-canvas-form {
-  background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
+  background: var(--card-muted);
   border: 1px solid var(--sidebar-border);
-  border-radius: 14px;
+  border-radius: 4px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
 }
 
 .new-project-canvas-divider {
@@ -306,20 +321,11 @@
 }
 
 /* Canvas Preview */
-.new-project-canvas-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .new-project-canvas-preview__label {
-  margin: 0;
-  font-size: 0.85rem;
+  margin: 8px 0 6px;
+  font-size: 1.4rem;
   font-weight: 600;
   color: var(--sidebar-text);
-  opacity: 0.7;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .new-project-canvas-preview__container {
@@ -327,9 +333,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: color-mix(in srgb, var(--bg-secondary) 75%, transparent);
+  background: var(--card-muted);
   border: 1px solid var(--sidebar-border);
-  border-radius: 14px;
+  border-radius: 4px;
   padding: 20px;
   align-items: center;
   justify-content: center;
@@ -340,25 +346,26 @@
 .new-project-canvas-preview__card {
   position: relative;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 1px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .new-project-canvas-preview__card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-0px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .new-project-canvas-preview__inner {
   position: absolute;
-  inset: 8px;
-  border-radius: 12px;
+  inset: 20px;
+  border-radius: 6px;
   pointer-events: none;
+  z-index: 10;
 }
 
 .new-project-canvas-preview__dimensions {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   color: var(--sidebar-text);
   opacity: 0.7;
   font-weight: 500;
