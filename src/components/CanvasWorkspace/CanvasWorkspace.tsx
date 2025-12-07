@@ -1,7 +1,7 @@
 import React from 'react';
-import { Stage, Layer as KonvaLayer, Line, Transformer, Rect, Ellipse } from 'react-konva';
+import { Stage, Layer as KonvaLayer, Line, Rect, Ellipse } from 'react-konva';
 import type { Project } from '@/types/project';
-import type { Stroke, Layer, ShapeType, EditableShape } from '@/types/canvas';
+import type { Stroke, Layer, ShapeType } from '@/types/canvas';
 import { saveCanvas, loadCanvas } from '@/services/canvasService';
 import { generateClientId } from '@/lib/utils';
 import LayerPanel from '@/components/LayerPanel/LayerPanel';
@@ -9,7 +9,6 @@ import ToolSelectionPanel from '@/components/ToolSelectionPanel/ToolSelectionPan
 import PenToolConfig from '@/components/PenToolConfig/PenToolConfig';
 import EraserToolConfig from '@/components/EraserToolConfig/EraserToolConfig';
 import ShapeToolConfig from '@/components/ShapeToolConfig/ShapeToolConfig';
-import { EditableShapeComponent } from './EditableShape';
 import './CanvasWorkspace.css';
 
 type CanvasWorkspaceProps = {
@@ -36,10 +35,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
   const [selectedShape, setSelectedShape] = React.useState<ShapeType>('rectangle');
   const [fillEnabled, setFillEnabled] = React.useState(false);
   const [fillColor, setFillColor] = React.useState('#ffffff');
-
-  // Shape selection and editing
-  const [selectedShapeId, setSelectedShapeId] = React.useState<string | null>(null);
-  const transformerRef = React.useRef<any>(null);
 
   // History for undo/redo
   const [history, setHistory] = React.useState<Layer[][]>([]);
@@ -88,117 +83,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     const transform = stage.getAbsoluteTransform().copy();
     transform.invert();
     return transform.point(pointerPos);
-  };
-
-  // Convert EditableShape to permanent Stroke (bake shape)
-  const bakeShapeToStroke = (shape: EditableShape): Stroke => {
-    const { x, y, width, height, rotation, scaleX, scaleY, shapeType, strokeColor, strokeWidth, fillColor, fillEnabled } = shape;
-
-    // Calculate actual dimensions with scale
-    const actualWidth = width * scaleX;
-    const actualHeight = height * scaleY;
-
-    let points: number[] = [];
-
-    // Generate points based on shape type
-    if (shapeType === 'rectangle') {
-      // Rectangle: 4 corners + back to start for closed shape
-      const corners = [
-        [x, y],
-        [x + actualWidth, y],
-        [x + actualWidth, y + actualHeight],
-        [x, y + actualHeight],
-        [x, y] // Close the shape
-      ];
-
-      // Apply rotation if needed
-      if (rotation !== 0) {
-        const centerX = x + actualWidth / 2;
-        const centerY = y + actualHeight / 2;
-        const rad = (rotation * Math.PI) / 180;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-
-        points = corners.flatMap(([px, py]) => {
-          const dx = px - centerX;
-          const dy = py - centerY;
-          return [
-            centerX + dx * cos - dy * sin,
-            centerY + dx * sin + dy * cos
-          ];
-        });
-      } else {
-        points = corners.flat();
-      }
-    } else if (shapeType === 'ellipse') {
-      // Ellipse: approximate with 36 points (10 degree increments)
-      const centerX = x + actualWidth / 2;
-      const centerY = y + actualHeight / 2;
-      const radiusX = actualWidth / 2;
-      const radiusY = actualHeight / 2;
-      const numPoints = 36;
-
-      const ellipsePoints: number[][] = [];
-      for (let i = 0; i <= numPoints; i++) {
-        const angle = (i / numPoints) * 2 * Math.PI;
-        let px = centerX + radiusX * Math.cos(angle);
-        let py = centerY + radiusY * Math.sin(angle);
-
-        // Apply rotation if needed
-        if (rotation !== 0) {
-          const rad = (rotation * Math.PI) / 180;
-          const cos = Math.cos(rad);
-          const sin = Math.sin(rad);
-          const dx = px - centerX;
-          const dy = py - centerY;
-          px = centerX + dx * cos - dy * sin;
-          py = centerY + dx * sin + dy * cos;
-        }
-
-        ellipsePoints.push([px, py]);
-      }
-      points = ellipsePoints.flat();
-    } else if (shapeType === 'triangle') {
-      // Triangle: 3 corners + back to start
-      const corners = [
-        [x + actualWidth / 2, y],           // Top
-        [x + actualWidth, y + actualHeight], // Bottom right
-        [x, y + actualHeight],               // Bottom left
-        [x + actualWidth / 2, y]             // Close
-      ];
-
-      // Apply rotation if needed
-      if (rotation !== 0) {
-        const centerX = x + actualWidth / 2;
-        const centerY = y + actualHeight / 2;
-        const rad = (rotation * Math.PI) / 180;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-
-        points = corners.flatMap(([px, py]) => {
-          const dx = px - centerX;
-          const dy = py - centerY;
-          return [
-            centerX + dx * cos - dy * sin,
-            centerY + dx * sin + dy * cos
-          ];
-        });
-      } else {
-        points = corners.flat();
-      }
-    }
-
-    return {
-      clientId: generateClientId(),
-      tool: 'shape',
-      points,
-      color: strokeColor,
-      strokeWidth,
-      shapeType,
-      fillColor: fillEnabled ? fillColor : undefined,
-      closed: true,
-      saveState: 'saved'
-    };
   };
 
   // Cache bounding rects for cursor positioning (performance optimization)
@@ -250,32 +134,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
     }
   }, [history, historyIndex]);
 
-  // Shape management handlers
-  const handleShapeChange = React.useCallback((shapeId: string, attrs: Partial<import('@/types/canvas').EditableShape>) => {
-    setLayers(prev => {
-      const newLayers = prev.map(layer => ({
-        ...layer,
-        shapes: layer.shapes?.map(shape =>
-          shape.id === shapeId ? { ...shape, ...attrs } : shape
-        ) || []
-      }));
-      pushToHistory(newLayers);
-      return newLayers;
-    });
-  }, [pushToHistory]);
-
-  const handleDeleteShape = React.useCallback((shapeId: string) => {
-    setLayers(prev => {
-      const newLayers = prev.map(layer => ({
-        ...layer,
-        shapes: layer.shapes?.filter(s => s.id !== shapeId) || []
-      }));
-      pushToHistory(newLayers);
-      return newLayers;
-    });
-    setSelectedShapeId(null);
-  }, [pushToHistory]);
-
   // Handle mouse wheel zoom
   const handleWheel = (e: any) => {
     e.evt.preventDefault();
@@ -326,41 +184,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       setShowCursor(false);
       stage.container().style.cursor = 'grabbing';
     } else if (e.evt.button === 0) {
-      // Check if clicked on shape or transformer
-      const clickedOnShape = e.target !== stage && e.target.attrs?.id;
-      const clickedOnTransformer = e.target.getClassName() === 'Transformer' ||
-                                   e.target.parent?.getClassName() === 'Transformer';
-
-      // If clicked on transformer or selected shape, let Konva handle it (don't draw)
-      if (clickedOnTransformer || (selectedShapeId && clickedOnShape && e.target.attrs?.id === selectedShapeId)) {
-        return; // Don't start drawing when manipulating shapes
-      }
-
-      // Click outside selected shape: BAKE it to permanent stroke and deselect
-      if (selectedShapeId) {
-        setLayers(prev => {
-          const newLayers = prev.map(layer => {
-            // Find and bake the selected shape
-            const shapeToBake = layer.shapes?.find(s => s.id === selectedShapeId);
-            if (!shapeToBake) return layer;
-
-            // Convert shape to stroke
-            const bakedStroke = bakeShapeToStroke(shapeToBake);
-
-            // Remove from shapes, add to strokes
-            return {
-              ...layer,
-              shapes: layer.shapes?.filter(s => s.id !== selectedShapeId) || [],
-              strokes: [...layer.strokes, bakedStroke]
-            };
-          });
-          pushToHistory(newLayers);
-          return newLayers;
-        });
-        setSelectedShapeId(null);
-        return; // Don't start drawing on the same click that bakes the shape
-      }
-
       // Only draw on left click (button 0) when NOT panning
       isPanning.current = false;
       isDrawing.current = true;
@@ -528,54 +351,15 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
 
   // Handle mouse up - stop drawing or panning
   const handleMouseUp = () => {
-    // If we were drawing, commit stroke or shape from ref to state (only 1 state update per stroke!)
+    // If we were drawing, commit stroke from ref to state (only 1 state update per stroke!)
     if (isDrawing.current && currentStrokeRef.current && activeLayerId) {
       const completedStroke = currentStrokeRef.current;
-      let newShapeId: string | null = null;
 
       setLayers(prev => {
         const newLayers = prev.map(layer => {
           if (layer.id !== activeLayerId) return layer;
 
-          // For shape tool, create EditableShape instead of stroke
-          if (completedStroke.tool === 'shape' && completedStroke.shapeType &&
-              completedStroke.shapeType !== 'line' && completedStroke.shapeType !== 'polyline') {
-            const [x1, y1, x2, y2] = completedStroke.points;
-            const x = Math.min(x1, x2);
-            const y = Math.min(y1, y2);
-            const width = Math.abs(x2 - x1);
-            const height = Math.abs(y2 - y1);
-
-            // Only create shape if it has meaningful size
-            if (width > 2 && height > 2) {
-              const shapeId = generateClientId();
-              newShapeId = shapeId; // Capture ID for auto-selection
-
-              const newShape: EditableShape = {
-                id: shapeId,
-                shapeType: completedStroke.shapeType as 'rectangle' | 'ellipse' | 'triangle',
-                x,
-                y,
-                width,
-                height,
-                rotation: 0,
-                scaleX: 1,
-                scaleY: 1,
-                strokeColor: completedStroke.color,
-                strokeWidth: completedStroke.strokeWidth,
-                fillColor: completedStroke.fillColor,
-                fillEnabled: !!completedStroke.fillColor,
-              };
-
-              return {
-                ...layer,
-                shapes: [...(layer.shapes || []), newShape]
-              };
-            }
-            return layer;
-          }
-
-          // For other tools (pen, eraser, line), add as stroke
+          // Add stroke to layer (shape tool does nothing - no shapes created)
           return { ...layer, strokes: [...layer.strokes, completedStroke] };
         });
 
@@ -583,11 +367,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         pushToHistory(newLayers);
         return newLayers;
       });
-
-      // Auto-select the newly created shape
-      if (newShapeId) {
-        setSelectedShapeId(newShapeId);
-      }
 
       // Clear current stroke ref and preview line
       currentStrokeRef.current = null;
@@ -749,21 +528,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
         return;
       }
 
-      // Delete selected shape
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
-        e.preventDefault();
-        handleDeleteShape(selectedShapeId);
-        return;
-      }
-
-      // Deselect with Escape
-      if (e.key === 'Escape' && selectedShapeId) {
-        e.preventDefault();
-        setSelectedShapeId(null);
-        return;
-      }
-
-      // Track modifier keys for shape creation and selection
+      // Track modifier keys for shape creation
       if (e.key === 'Shift') {
         modifierKeysRef.current.shift = true;
       }
@@ -811,46 +576,7 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [undo, redo, selectedShapeId]);
-
-  // Attach Transformer to selected shape
-  React.useEffect(() => {
-    if (selectedShapeId && transformerRef.current && stageRef.current) {
-      const selectedNode = stageRef.current.findOne(`#${selectedShapeId}`);
-      if (selectedNode) {
-        transformerRef.current.nodes([selectedNode]);
-        transformerRef.current.getLayer().batchDraw();
-
-        // Customize rotation handle cursor
-        const transformer = transformerRef.current;
-        const rotater = transformer.findOne('.rotater');
-
-        if (rotater) {
-          const stage = stageRef.current;
-
-          // Hand cursor on hover
-          rotater.on('mouseenter', () => {
-            stage.container().style.cursor = 'grab';
-          });
-
-          rotater.on('mouseleave', () => {
-            stage.container().style.cursor = 'none';
-          });
-
-          // Grabbing cursor when dragging
-          rotater.on('mousedown', () => {
-            stage.container().style.cursor = 'grabbing';
-          });
-
-          rotater.on('mouseup', () => {
-            stage.container().style.cursor = 'grab';
-          });
-        }
-      }
-    } else if (transformerRef.current) {
-      transformerRef.current.nodes([]);
-    }
-  }, [selectedShapeId]);
+  }, [undo, redo]);
 
   // Helper component to render shapes
   const renderShape = (stroke: Stroke) => {
@@ -1055,58 +781,6 @@ function CanvasWorkspace({ project }: CanvasWorkspaceProps) {
                 )}
               </KonvaLayer>
             ))}
-
-          {/* Editable Shapes Layer - NEW: Native Konva shapes with selection/transform */}
-          <KonvaLayer name="shapesLayer" listening={true}>
-            {layers
-              .filter(layer => layer.visible)
-              .sort((a, b) => a.order - b.order)
-              .map(layer =>
-                layer.shapes?.map(shape => (
-                  <EditableShapeComponent
-                    key={shape.id}
-                    shape={shape}
-                    isSelected={shape.id === selectedShapeId}
-                    onSelect={() => setSelectedShapeId(shape.id)}
-                    onChange={(attrs) => handleShapeChange(shape.id, attrs)}
-                  />
-                ))
-              )}
-
-            {/* Transformer for selected shape */}
-            {selectedShapeId && (
-              <Transformer
-                ref={transformerRef}
-                rotateEnabled={true}
-                enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-                boundBoxFunc={(oldBox, newBox) => {
-                  // Minimum size constraint
-                  if (newBox.width < 5 || newBox.height < 5) {
-                    return oldBox;
-                  }
-
-                  // Shift key: constrain aspect ratio (proportional scaling)
-                  if (modifierKeysRef.current.shift) {
-                    const aspectRatio = oldBox.width / oldBox.height;
-
-                    // Determine which dimension changed more
-                    const widthChange = Math.abs(newBox.width - oldBox.width);
-                    const heightChange = Math.abs(newBox.height - oldBox.height);
-
-                    if (widthChange > heightChange) {
-                      // Width changed more, adjust height to maintain ratio
-                      newBox.height = newBox.width / aspectRatio;
-                    } else {
-                      // Height changed more, adjust width to maintain ratio
-                      newBox.width = newBox.height * aspectRatio;
-                    }
-                  }
-
-                  return newBox;
-                }}
-              />
-            )}
-          </KonvaLayer>
 
           {/* Preview Layer - for shape previews only (pen/eraser preview is on active layer) */}
           <KonvaLayer listening={false}>
