@@ -50,18 +50,20 @@
   border-radius:6px;
   cursor:pointer;
   transition:.2s;
+  color:var(--sidebar-text);
 }
 
 .shape-tool-config__shape-button:hover {
   background:var(--sidebar-hover);
   box-shadow:inset 0 0 0 1px var(--border);
+  color:var(--sidebar-text);
 }
 
 .shape-tool-config__shape-button--active {
   background:var(--sidebar-hover);
   border-color:var(--primary);
   box-shadow:inset 0 0 0 1px var(--primary);
-  color:var(--primary);
+  color:var(--sidebar-text);
 }
 
 .shape-tool-config__shape-label {
