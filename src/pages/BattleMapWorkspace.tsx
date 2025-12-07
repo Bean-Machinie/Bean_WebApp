@@ -17,7 +17,7 @@ function BattleMapWorkspace() {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
 
-  const { battleMap, placedTiles, isLoading, error, addPlacedTile, removePlacedTile } =
+  const { battleMap, placedTiles, isLoading, error, addPlacedTile, removePlacedTile, movePlacedTile } =
     useBattleMap(projectId || '');
   const { tiles, isLoading: isLoadingTiles, refreshTiles } = useTiles();
 
@@ -61,15 +61,21 @@ function BattleMapWorkspace() {
 
     if (!over) return;
 
+    const cellData = over.data.current as { x: number; y: number } | undefined;
+    if (!cellData) return;
+
+    // If we're dragging an already placed tile, move it
+    const placedTileId = active.data.current?.placedTileId as string | undefined;
+    if (placedTileId) {
+      movePlacedTile(placedTileId, cellData.x, cellData.y);
+      return;
+    }
+
     // Extract tile data from the dragged item
     const tileData = active.data.current?.tile as Tile | undefined;
     if (!tileData) return;
 
-    // Extract cell coordinates from the drop target
-    const cellData = over.data.current as { x: number; y: number } | undefined;
-    if (!cellData) return;
-
-    // Add the tile to the grid
+    // Add a new tile from the sidebar
     addPlacedTile(tileData.id, cellData.x, cellData.y);
   };
 

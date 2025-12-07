@@ -109,6 +109,27 @@ export function useBattleMap(projectId: string) {
     setPlacedTiles((prev) => prev.filter((t) => t.id !== placedTileId));
   };
 
+  const movePlacedTile = async (placedTileId: string, newX: number, newY: number) => {
+    const { data, error } = await supabase
+      .from('battle_map_tiles')
+      .update({ x: newX, y: newY })
+      .eq('id', placedTileId)
+      .select(`
+        *,
+        tile:tiles(*)
+      `)
+      .single();
+
+    if (error) {
+      console.error('Failed to move tile:', error);
+      return;
+    }
+
+    setPlacedTiles((prev) =>
+      prev.map((t) => (t.id === placedTileId ? (data as PlacedTile) : t))
+    );
+  };
+
   return {
     battleMap,
     placedTiles,
@@ -116,5 +137,6 @@ export function useBattleMap(projectId: string) {
     error,
     addPlacedTile,
     removePlacedTile,
+    movePlacedTile,
   };
 }

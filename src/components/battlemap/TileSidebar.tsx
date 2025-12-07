@@ -13,9 +13,15 @@ type TileSidebarProps = {
 
 type DraggableTileProps = {
   tile: Tile;
+  fallbackImage?: string;
 };
 
-function DraggableTile({ tile }: DraggableTileProps) {
+function DraggableTile({ tile, fallbackImage }: DraggableTileProps) {
+  const resolvedSrc =
+    (fallbackImage && tile.name && fallbackImage) ||
+    tile.image_url ||
+    fallbackImage;
+
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `tile-${tile.id}`,
     data: { tile },
@@ -39,10 +45,15 @@ function DraggableTile({ tile }: DraggableTileProps) {
       title={tile.name}
     >
       <img
-        src={tile.image_url}
+        src={resolvedSrc}
         alt={tile.name}
         className="tile-sidebar__image"
         draggable={false}
+        onError={(e) => {
+          if (fallbackImage && e.currentTarget.src !== fallbackImage) {
+            e.currentTarget.src = fallbackImage;
+          }
+        }}
       />
       <span className="tile-sidebar__name">{tile.name}</span>
     </div>
@@ -52,6 +63,11 @@ function DraggableTile({ tile }: DraggableTileProps) {
 export default function TileSidebar({ tiles, isLoading, onTileAdded }: TileSidebarProps) {
   const { user } = useAuth();
   const [isAddingTiles, setIsAddingTiles] = useState(false);
+  const allowedTileNames = new Set(['Stone Floor', 'Grass Tile']);
+  const defaultTileImages: Record<string, string> = {
+    'Stone Floor': '/tiles/stone-floor.svg',
+    'Grass Tile': '/tiles/grass-tile.svg',
+  };
 
   const handleAddDefaultTiles = async () => {
     if (!user) return;
@@ -60,10 +76,7 @@ export default function TileSidebar({ tiles, isLoading, onTileAdded }: TileSideb
 
     const defaultTiles = [
       { name: 'Stone Floor', image_url: '/tiles/stone-floor.svg', type: 'custom' },
-      { name: 'Grass Tile', image_url: 'https://via.placeholder.com/50/228B22/FFFFFF?text=Grass', type: 'custom' },
-      { name: 'Water Tile', image_url: 'https://via.placeholder.com/50/4169E1/FFFFFF?text=Water', type: 'custom' },
-      { name: 'Wood Floor', image_url: 'https://via.placeholder.com/50/8B4513/FFFFFF?text=Wood', type: 'custom' },
-      { name: 'Lava Tile', image_url: 'https://via.placeholder.com/50/FF4500/FFFFFF?text=Lava', type: 'custom' },
+      { name: 'Grass Tile', image_url: '/tiles/grass-tile.svg', type: 'custom' },
     ];
 
     try {
@@ -131,7 +144,15 @@ export default function TileSidebar({ tiles, isLoading, onTileAdded }: TileSideb
             </p>
           </div>
         ) : (
-          tiles.map((tile) => <DraggableTile key={tile.id} tile={tile} />)
+          tiles
+            .filter((tile) => allowedTileNames.has(tile.name))
+            .map((tile) => (
+              <DraggableTile
+                key={tile.id}
+                tile={tile}
+                fallbackImage={defaultTileImages[tile.name]}
+              />
+            ))
         )}
       </div>
     </div>
