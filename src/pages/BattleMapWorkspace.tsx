@@ -137,13 +137,14 @@ function BattleMapWorkspace() {
   const syncGridGuides = useCallback(() => {
     if (!gridStackRef.current || !gridRef.current) return;
 
-    const cellWidth = gridStackRef.current.cellWidth();
+    const cellWidth = gridStackRef.current.cellWidth() || cellSizeRef.current;
 
     if (cellWidth && cellWidth > 0) {
       gridStackRef.current.cellHeight(cellWidth, false);
 
       gridRef.current.style.setProperty('--grid-cell-width', `${cellWidth}px`);
       gridRef.current.style.setProperty('--grid-cell-height', `${cellWidth}px`);
+      gridRef.current.style.backgroundPosition = '0 0, 0 0';
     }
   }, []);
 
@@ -593,10 +594,14 @@ function BattleMapWorkspace() {
         applyConfigToGrid(nextConfig);
       }
 
+      requestAnimationFrame(() => {
+        syncGridGuides();
+      });
+
       queueSave(nextConfig);
       log('Grid expanded', { direction, columns: nextColumns, rows: nextRows });
     },
-    [applyConfigToGrid, initGridStack, log, queueSave],
+    [applyConfigToGrid, initGridStack, log, queueSave, syncGridGuides],
   );
 
   if (isLoading) {
