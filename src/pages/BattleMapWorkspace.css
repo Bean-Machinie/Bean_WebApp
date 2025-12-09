@@ -14,7 +14,8 @@
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .battlemap-workspace__sidebar-header {
@@ -36,15 +37,102 @@
   letter-spacing: -0.01em;
 }
 
+/* Sidebar Controls */
+.battlemap-workspace__controls {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.battlemap-workspace__control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.battlemap-workspace__control-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sidebar-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.battlemap-workspace__control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.battlemap-workspace__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.battlemap-workspace__slider {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background 0.2s ease;
+}
+
+.battlemap-workspace__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--primary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.12s ease;
+}
+
+.battlemap-workspace__slider::-webkit-slider-thumb:hover {
+  background: var(--primary-hover);
+  transform: scale(1.1);
+}
+
+.battlemap-workspace__slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--primary);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.12s ease;
+}
+
+.battlemap-workspace__slider::-moz-range-thumb:hover {
+  background: var(--primary-hover);
+  transform: scale(1.1);
+}
+
+.battlemap-workspace__add-widget-btn {
+  width: 100%;
+}
+
 /* Main Workspace Area */
 .battlemap-workspace__main {
   flex: 1;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: auto;
   background: var(--bg-secondary);
   position: relative;
+  padding: 2rem;
+}
+
+.battlemap-workspace__grid {
+  width: 100%;
+  min-height: 100%;
 }
 
 .battlemap-workspace__content {
@@ -73,4 +161,96 @@
 
 .battlemap-workspace__error-button {
   margin-top: 1rem;
+}
+
+/* ========================================
+   GridStack Theme Customization
+   ======================================== */
+
+/* Override GridStack default styles with theme variables */
+.battlemap-workspace .grid-stack-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: box-shadow 0.2s ease, transform 0.12s ease;
+}
+
+.battlemap-workspace .grid-stack-item:hover {
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.battlemap-workspace .grid-stack-item.ui-draggable-dragging,
+.battlemap-workspace .grid-stack-item.ui-resizable-resizing {
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--text) 15%, transparent);
+  transform: scale(1.02);
+  z-index: 100;
+}
+
+.battlemap-workspace .grid-stack-item-content {
+  background: var(--card);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  overflow: hidden;
+  inset: 0;
+}
+
+/* GridStack resize handles */
+.battlemap-workspace .ui-resizable-handle {
+  background: var(--primary);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.battlemap-workspace .grid-stack-item:hover .ui-resizable-handle {
+  opacity: 0.6;
+}
+
+.battlemap-workspace .ui-resizable-handle:hover {
+  opacity: 1 !important;
+}
+
+.battlemap-workspace .ui-resizable-se,
+.battlemap-workspace .ui-resizable-sw,
+.battlemap-workspace .ui-resizable-ne,
+.battlemap-workspace .ui-resizable-nw {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.battlemap-workspace .ui-resizable-e,
+.battlemap-workspace .ui-resizable-w {
+  width: 6px;
+}
+
+.battlemap-workspace .ui-resizable-n,
+.battlemap-workspace .ui-resizable-s {
+  height: 6px;
+}
+
+/* GridStack placeholder (drop preview) */
+.battlemap-workspace .grid-stack-placeholder > .placeholder-content {
+  background: var(--primary);
+  opacity: 0.2;
+  border: 2px dashed var(--primary);
+  border-radius: 10px;
+}
+
+/* Custom widget content styling */
+.battlemap-widget-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  text-align: center;
+  user-select: none;
 }

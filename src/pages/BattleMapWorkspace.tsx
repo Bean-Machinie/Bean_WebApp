@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import type { Project } from '../types/project';
+import { GridStack } from 'gridstack';
+import 'gridstack/dist/gridstack.min.css';
 import './BattleMapWorkspace.css';
 
 function BattleMapWorkspace() {
@@ -11,6 +13,13 @@ function BattleMapWorkspace() {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
+
+  // GridStack state
+  const gridRef = useRef<HTMLDivElement>(null);
+  const gridStackRef = useRef<GridStack | null>(null);
+  const [gridColumns, setGridColumns] = useState(12);
+  const [cellHeight, setCellHeight] = useState(50);
+  const [widgetCounter, setWidgetCounter] = useState(1);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -38,6 +47,58 @@ function BattleMapWorkspace() {
 
     loadProject();
   }, [projectId, user]);
+
+  // Initialize GridStack
+  useEffect(() => {
+    if (!gridRef.current || !project) return;
+
+    gridStackRef.current = GridStack.init(
+      {
+        column: gridColumns,
+        cellHeight: cellHeight,
+        margin: 8,
+        animate: true,
+        float: true,
+        resizable: {
+          handles: 'e,se,s,sw,w',
+        },
+      },
+      gridRef.current
+    );
+
+    return () => {
+      if (gridStackRef.current) {
+        gridStackRef.current.destroy(false);
+      }
+    };
+  }, [project, gridColumns, cellHeight]);
+
+  const handleAddWidget = () => {
+    if (!gridStackRef.current) return;
+
+    const widget = {
+      w: 2,
+      h: 2,
+      content: `<div class="battlemap-widget-content">Widget ${widgetCounter}</div>`,
+    };
+
+    gridStackRef.current.addWidget(widget);
+    setWidgetCounter(widgetCounter + 1);
+  };
+
+  const handleGridColumnsChange = (newColumns: number) => {
+    setGridColumns(newColumns);
+    if (gridStackRef.current) {
+      gridStackRef.current.column(newColumns);
+    }
+  };
+
+  const handleCellHeightChange = (newHeight: number) => {
+    setCellHeight(newHeight);
+    if (gridStackRef.current) {
+      gridStackRef.current.cellHeight(newHeight);
+    }
+  };
 
   if (isLoadingProject) {
     return (
@@ -74,12 +135,58 @@ function BattleMapWorkspace() {
           </button>
           <h2 className="battlemap-workspace__project-name">{project.name}</h2>
         </div>
+
+        {/* Grid Configuration */}
+        <div className="battlemap-workspace__controls">
+          <div className="battlemap-workspace__control-section">
+            <h3 className="battlemap-workspace__control-title">Grid Settings</h3>
+
+            <div className="battlemap-workspace__control-group">
+              <label className="battlemap-workspace__label">
+                Grid Columns: {gridColumns}
+              </label>
+              <input
+                type="range"
+                className="battlemap-workspace__slider"
+                min="1"
+                max="24"
+                value={gridColumns}
+                onChange={(e) => handleGridColumnsChange(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="battlemap-workspace__control-group">
+              <label className="battlemap-workspace__label">
+                Cell Height: {cellHeight}px
+              </label>
+              <input
+                type="range"
+                className="battlemap-workspace__slider"
+                min="20"
+                max="200"
+                value={cellHeight}
+                onChange={(e) => handleCellHeightChange(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          {/* Widget Controls */}
+          <div className="battlemap-workspace__control-section">
+            <h3 className="battlemap-workspace__control-title">Widgets</h3>
+            <button
+              className="button button--primary battlemap-workspace__add-widget-btn"
+              onClick={handleAddWidget}
+            >
+              Add Widget
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Main Workspace Area */}
       <div className="battlemap-workspace__main">
-        <div className="battlemap-workspace__content">
-          {/* Battle map content will go here */}
+        <div ref={gridRef} className="grid-stack battlemap-workspace__grid">
+          {/* GridStack items will be added here dynamically */}
         </div>
       </div>
     </div>
