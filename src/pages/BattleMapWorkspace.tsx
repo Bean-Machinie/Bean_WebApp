@@ -451,13 +451,18 @@ function BattleMapWorkspace() {
   );
 
   const handleWheelZoom = useCallback(
-    (event: ReactWheelEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      const direction = event.deltaY > 0 ? -0.1 : 0.1;
+    (event: WheelEvent | ReactWheelEvent<HTMLDivElement>) => {
+      if ('cancelable' in event && event.cancelable) {
+        event.preventDefault();
+      }
+      const deltaY = 'deltaY' in event ? event.deltaY : 0;
+      const clientX = 'clientX' in event ? event.clientX : undefined;
+      const clientY = 'clientY' in event ? event.clientY : undefined;
+      const direction = deltaY > 0 ? -0.1 : 0.1;
       const proposedScale = clampZoom(scaleRef.current + direction);
       if (proposedScale === scaleRef.current) return;
 
-      applyZoom(proposedScale, event.clientX, event.clientY);
+      applyZoom(proposedScale, clientX, clientY);
     },
     [applyZoom, clampZoom],
   );
