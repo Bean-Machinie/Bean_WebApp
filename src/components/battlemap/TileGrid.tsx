@@ -3,8 +3,17 @@ import type { BattleMap, PlacedTile } from '../../types/battlemap';
 import './battlemap.css';
 
 const fallbackTileImages: Record<string, string> = {
-  'Stone Floor': '/tiles/stone-floor.svg',
-  'Grass Tile': '/tiles/grass-tile.svg',
+  'stone floor': '/tiles/stone-floor.svg',
+  'grass tile': '/tiles/grass-tile.svg',
+};
+
+const getFallback = (name?: string) => {
+  if (!name) return undefined;
+  const key = name.trim().toLowerCase();
+  if (fallbackTileImages[key]) return fallbackTileImages[key];
+  if (key.includes('stone')) return fallbackTileImages['stone floor'];
+  if (key.includes('grass')) return fallbackTileImages['grass tile'];
+  return undefined;
 };
 
 type TileGridProps = {
@@ -90,8 +99,9 @@ function DraggablePlacedTile({
     >
       <img
         src={
-          fallbackTileImages[placedTile.tile?.name ?? ''] ||
-          placedTile.tile?.image_url ||
+          getFallback(placedTile.tile?.name) ??
+          placedTile.tile?.image_url ??
+          getFallback(placedTile.tile?.name) ??
           ''
         }
         alt={placedTile.tile?.name ?? 'Tile'}

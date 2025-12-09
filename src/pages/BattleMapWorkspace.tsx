@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import type { Project } from '../types/project';
-import type { Tile } from '../types/battlemap';
-import { useBattleMap } from '../hooks/useBattleMap';
-import { useTiles } from '../hooks/useTiles';
-import TileGrid from '../components/battlemap/TileGrid';
-import TileSidebar from '../components/battlemap/TileSidebar';
 
 function BattleMapWorkspace() {
   const { projectId } = useParams();
@@ -16,18 +10,6 @@ function BattleMapWorkspace() {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
-
-  const { battleMap, placedTiles, isLoading, error, addPlacedTile, removePlacedTile, movePlacedTile } =
-    useBattleMap(projectId || '');
-  const { tiles, isLoading: isLoadingTiles, refreshTiles } = useTiles();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
 
   useEffect(() => {
     const loadProject = async () => {
@@ -56,30 +38,7 @@ function BattleMapWorkspace() {
     loadProject();
   }, [projectId, user]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (!over) return;
-
-    const cellData = over.data.current as { x: number; y: number } | undefined;
-    if (!cellData) return;
-
-    // If we're dragging an already placed tile, move it
-    const placedTileId = active.data.current?.placedTileId as string | undefined;
-    if (placedTileId) {
-      movePlacedTile(placedTileId, cellData.x, cellData.y);
-      return;
-    }
-
-    // Extract tile data from the dragged item
-    const tileData = active.data.current?.tile as Tile | undefined;
-    if (!tileData) return;
-
-    // Add a new tile from the sidebar
-    addPlacedTile(tileData.id, cellData.x, cellData.y);
-  };
-
-  if (isLoadingProject || isLoading) {
+  if (isLoadingProject) {
     return (
       <div style={{ padding: '2rem' }}>
         <p className="muted">Loading battle map...</p>
@@ -87,19 +46,7 @@ function BattleMapWorkspace() {
     );
   }
 
-  if (error) {
-    return (
-      <div style={{ padding: '2rem' }}>
-        <p className="strong">Error loading battle map</p>
-        <p className="muted">{error}</p>
-        <button className="button button--ghost" onClick={() => navigate('/app')}>
-          Back to Projects
-        </button>
-      </div>
-    );
-  }
-
-  if (!battleMap) {
+  if (!project) {
     return (
       <div style={{ padding: '2rem' }}>
         <p className="muted">Battle map not found.</p>
@@ -111,57 +58,47 @@ function BattleMapWorkspace() {
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <div
+      style={{
+        display: 'flex',
+        height: '100vh',
+        overflow: 'hidden',
+        backgroundColor: '#0a0a0a',
+      }}
+    >
+      {/* Sidebar */}
       <div
         style={{
+          width: '300px',
+          borderRight: '1px solid rgba(255, 255, 255, 0.1)',
           display: 'flex',
-          height: '100vh',
+          flexDirection: 'column',
           overflow: 'hidden',
-          backgroundColor: '#0a0a0a',
         }}
       >
-        {/* Sidebar */}
-        <div
-          style={{
-            width: '300px',
-            borderRight: '1px solid rgba(255, 255, 255, 0.1)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ padding: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <button
-              className="button button--ghost"
-              onClick={() => navigate('/app')}
-              style={{ marginBottom: '0.5rem', width: '100%' }}
-            >
-              Back to Projects
-            </button>
-            <h2 style={{ margin: '0.5rem 0' }}>{project?.name}</h2>
-            <p className="muted" style={{ fontSize: '0.875rem' }}>
-              {battleMap.width} × {battleMap.height} grid
-            </p>
-          </div>
-          <TileSidebar tiles={tiles} isLoading={isLoadingTiles} onTileAdded={refreshTiles} />
-        </div>
-
-        {/* Main Grid Area */}
-        <div
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '1rem',
-          }}
-        >
-          <TileGrid
-            battleMap={battleMap}
-            placedTiles={placedTiles}
-            onRemoveTile={removePlacedTile}
-          />
+        <div style={{ padding: '1rem' }}>
+          <button
+            className="button button--ghost"
+            onClick={() => navigate('/app')}
+            style={{ marginBottom: '0.5rem', width: '100%' }}
+          >
+            Back to Projects
+          </button>
+          <h2 style={{ margin: '0.5rem 0' }}>{project?.name}</h2>
         </div>
       </div>
-    </DndContext>
+
+      {/* Main Area */}
+      <div
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '1rem',
+        }}
+      >
+        {/* Content will go here */}
+      </div>
+    </div>
   );
 }
 

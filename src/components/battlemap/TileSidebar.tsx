@@ -17,10 +17,7 @@ type DraggableTileProps = {
 };
 
 function DraggableTile({ tile, fallbackImage }: DraggableTileProps) {
-  const resolvedSrc =
-    (fallbackImage && tile.name && fallbackImage) ||
-    tile.image_url ||
-    fallbackImage;
+  const resolvedSrc = fallbackImage ?? tile.image_url ?? fallbackImage;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `tile-${tile.id}`,
@@ -65,8 +62,16 @@ export default function TileSidebar({ tiles, isLoading, onTileAdded }: TileSideb
   const [isAddingTiles, setIsAddingTiles] = useState(false);
   const allowedTileNames = new Set(['Stone Floor', 'Grass Tile']);
   const defaultTileImages: Record<string, string> = {
-    'Stone Floor': '/tiles/stone-floor.svg',
-    'Grass Tile': '/tiles/grass-tile.svg',
+    'stone floor': '/tiles/stone-floor.svg',
+    'grass tile': '/tiles/grass-tile.svg',
+  };
+
+  const getFallback = (name: string) => {
+    const key = name.trim().toLowerCase();
+    if (defaultTileImages[key]) return defaultTileImages[key];
+    if (key.includes('stone')) return defaultTileImages['stone floor'];
+    if (key.includes('grass')) return defaultTileImages['grass tile'];
+    return undefined;
   };
 
   const handleAddDefaultTiles = async () => {
@@ -150,7 +155,7 @@ export default function TileSidebar({ tiles, isLoading, onTileAdded }: TileSideb
               <DraggableTile
                 key={tile.id}
                 tile={tile}
-                fallbackImage={defaultTileImages[tile.name]}
+                fallbackImage={getFallback(tile.name)}
               />
             ))
         )}
