@@ -3,9 +3,29 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import type { Project } from '../types/project';
+import { generateClientId } from '../lib/utils';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import './BattleMapWorkspace.css';
+
+type BattleMapWidget = {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  content: string;
+};
+
+type BattleMapConfig = {
+  gridColumns: number;
+  widgets: BattleMapWidget[];
+};
+
+const DEFAULT_CONFIG: BattleMapConfig = {
+  gridColumns: 12,
+  widgets: [],
+};
 
 function BattleMapWorkspace() {
   const { projectId } = useParams();
@@ -13,6 +33,8 @@ function BattleMapWorkspace() {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+  const applyingConfigRef = useRef(false);
 
   // GridStack state
   const gridRef = useRef<HTMLDivElement>(null);
@@ -41,6 +63,94 @@ function BattleMapWorkspace() {
       });
     }
   }, []);
+
+  const getCurrentWidgets = useCallback((): BattleMapWidget[] => {
+    if (!gridStackRef.current) return [];
+
+    const nodes = gridStackRef.current.engine?.nodes ?? [];
+    return nodes.map((node) => {
+      const nodeId =
+        (node.id as string | undefined) ||
+        node.el?.getAttribute('gs-id') ||
+        node.el?.dataset.widgetId ||
+        generateClientId();
+
+      if (node.el) {
+        node.el.dataset.widgetId = nodeId;
+      }
+
+      return {
+        id: nodeId,
+        x: node.x ?? 0,
+        y: node.y ?? 0,
+        w: node.w ?? 1,
+        h: node.h ?? 1,
+        content:
+          node.el?.dataset.content ||
+          node.el?.querySelector('.battlemap-widget-content')?.innerHTML ||
+          'Widget',
+      };
+    });
+  }, []);
+
+  const persistBattleMapConfig = useCallback(
+    async (nextConfig?: Partial<BattleMapConfig>) => {
+      if (!project || !user || !gridStackRef.current || applyingConfigRef.current) return;
+
+      const configToSave: BattleMapConfig = {
+        gridColumns: nextConfig?.gridColumns ?? gridColumns,
+        widgets: nextConfig?.widgets ?? getCurrentWidgets(),
+      };
+
+      await supabase
+        .from('projects')
+        .update({ battle_map_config: configToSave })
+        .eq('id', project.id)
+        .eq('user_id', user.id);
+
+      setProject((prev) =>
+        prev ? { ...prev, battle_map_config: configToSave } : prev
+      );
+    },
+    [getCurrentWidgets, gridColumns, project, user]
+  );
+
+  const applyConfigToGrid = useCallback(
+    (config: BattleMapConfig) => {
+      if (!gridStackRef.current) return;
+
+      applyingConfigRef.current = true;
+
+      try {
+        gridStackRef.current.removeAll(false);
+
+        setGridColumns(config.gridColumns || DEFAULT_CONFIG.gridColumns);
+        gridStackRef.current.column(config.gridColumns || DEFAULT_CONFIG.gridColumns);
+
+        config.widgets.forEach((widget) => {
+          const el = gridStackRef.current?.addWidget({
+            id: widget.id,
+            x: widget.x,
+            y: widget.y,
+            w: widget.w,
+            h: widget.h,
+            content: widget.content,
+          });
+
+          if (el) {
+            el.dataset.widgetId = widget.id;
+            el.dataset.content = widget.content;
+          }
+        });
+
+        setWidgetCounter((config.widgets?.length || 0) + 1);
+        syncGridGuides();
+      } finally {
+        applyingConfigRef.current = false;
+      }
+    },
+    [syncGridGuides]
+  );
 
   useEffect(() => {
     const loadProject = async () => {
@@ -92,12 +202,34 @@ function BattleMapWorkspace() {
       syncGridGuides();
     }, 0);
 
+    // Persist on drag/resize/move changes
+    gridStackRef.current?.on('change', () => {
+      persistBattleMapConfig();
+    });
+    gridStackRef.current?.on('removed', () => {
+      persistBattleMapConfig();
+    });
+
     return () => {
       if (gridStackRef.current) {
         gridStackRef.current.destroy(false);
       }
     };
-  }, [project, gridColumns, syncGridGuides]);
+  }, [project, gridColumns, syncGridGuides, persistBattleMapConfig]);
+
+  // Load saved config into GridStack once grid is ready
+  useEffect(() => {
+    if (!gridStackRef.current || !project || isConfigLoaded) return;
+
+    const savedConfig = (project as unknown as { battle_map_config?: BattleMapConfig })
+      .battle_map_config;
+
+    const configToApply: BattleMapConfig =
+      savedConfig && savedConfig.widgets ? savedConfig : DEFAULT_CONFIG;
+
+    applyConfigToGrid(configToApply);
+    setIsConfigLoaded(true);
+  }, [applyConfigToGrid, isConfigLoaded, project]);
 
   useEffect(() => {
     const handleResize = () => syncGridGuides();
@@ -108,14 +240,22 @@ function BattleMapWorkspace() {
   const handleAddWidget = () => {
     if (!gridStackRef.current) return;
 
+    const widgetId = generateClientId();
     const widget = {
+      id: widgetId,
       w: 2,
       h: 2,
       content: `<div class="battlemap-widget-content">Widget ${widgetCounter}</div>`,
     };
 
-    gridStackRef.current.addWidget(widget);
+    const el = gridStackRef.current.addWidget(widget);
+    if (el) {
+      el.dataset.widgetId = widgetId;
+      el.dataset.content = widget.content;
+    }
+
     setWidgetCounter(widgetCounter + 1);
+    persistBattleMapConfig();
   };
 
   const handleGridScaleChange = (newColumns: number) => {
@@ -126,6 +266,8 @@ function BattleMapWorkspace() {
       setTimeout(() => {
         syncGridGuides();
       }, 0);
+
+      persistBattleMapConfig({ gridColumns: newColumns });
     }
   };
 
