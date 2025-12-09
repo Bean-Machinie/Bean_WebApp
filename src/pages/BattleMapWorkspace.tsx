@@ -737,31 +737,27 @@ function BattleMapWorkspace() {
               <button
                 type="button"
                 className="battlemap-workspace__expander battlemap-workspace__expander--top"
+                aria-label="Expand rows upward"
                 onClick={() => handleExpand('top')}
-              >
-                +
-              </button>
+              />
               <button
                 type="button"
                 className="battlemap-workspace__expander battlemap-workspace__expander--bottom"
+                aria-label="Expand rows downward"
                 onClick={() => handleExpand('bottom')}
-              >
-                +
-              </button>
+              />
               <button
                 type="button"
                 className="battlemap-workspace__expander battlemap-workspace__expander--left"
+                aria-label="Expand columns left"
                 onClick={() => handleExpand('left')}
-              >
-                +
-              </button>
+              />
               <button
                 type="button"
                 className="battlemap-workspace__expander battlemap-workspace__expander--right"
+                aria-label="Expand columns right"
                 onClick={() => handleExpand('right')}
-              >
-                +
-              </button>
+              />
               <div
                 ref={gridRef}
                 className="grid-stack battlemap-workspace__grid"
