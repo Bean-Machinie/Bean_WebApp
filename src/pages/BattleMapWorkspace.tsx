@@ -1,73 +1,111 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabaseClient';
-import type { Project } from '../types/project';
-import { generateClientId } from '../lib/utils';
-import { GridStack } from 'gridstack';
+import { GridStack, GridStackNode } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
+import { useAuth } from '../context/AuthContext';
+import { generateClientId } from '../lib/utils';
+import { useBattleMap } from '../hooks/useBattleMap';
+import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
+import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
 import './BattleMapWorkspace.css';
-
-type BattleMapWidget = {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  content: string;
-};
-
-type BattleMapConfig = {
-  gridColumns: number;
-  widgets: BattleMapWidget[];
-};
-
-const DEFAULT_CONFIG: BattleMapConfig = {
-  gridColumns: 12,
-  widgets: [],
-};
 
 function BattleMapWorkspace() {
   const { projectId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [project, setProject] = useState<Project | null>(null);
-  const [isLoadingProject, setIsLoadingProject] = useState(true);
-  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
-  const applyingConfigRef = useRef(false);
 
-  // GridStack state
+  const {
+    project,
+    config,
+    setConfig,
+    isLoading,
+    isSaving,
+    error,
+    storageMode,
+    saveConfig,
+  } = useBattleMap(projectId, user?.id);
+
+  const applyingConfigRef = useRef(false);
+  const configRef = useRef<BattleMapConfig>(DEFAULT_BATTLE_MAP_CONFIG);
+  const gridColumnsRef = useRef<number>(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const gridRef = useRef<HTMLDivElement>(null);
   const gridStackRef = useRef<GridStack | null>(null);
-  const [gridColumns, setGridColumns] = useState(12);
+  const [gridColumns, setGridColumns] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
   const [widgetCounter, setWidgetCounter] = useState(1);
+  const [hasRenderedConfig, setHasRenderedConfig] = useState(false);
+  const [logEntries, setLogEntries] = useState<string[]>([]);
+  const [showLog, setShowLog] = useState(true);
+  const hasInitializedGridRef = useRef(false);
+
+  const log = useCallback(
+    (message: string, detail?: unknown) => {
+      const timestamp = new Date().toISOString().split('T')[1]?.replace('Z', '') ?? '';
+      const line = detail ? `${timestamp} ${message} | ${JSON.stringify(detail)}` : `${timestamp} ${message}`;
+      setLogEntries((prev) => [line, ...prev].slice(0, 80));
+      if (detail !== undefined) {
+        // eslint-disable-next-line no-console
+        console.log(message, detail);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log(message);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    configRef.current = config;
+    const nextColumns = config.gridColumns ?? DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
+    setGridColumns(nextColumns);
+    gridColumnsRef.current = nextColumns;
+    setWidgetCounter((config.widgets?.length ?? 0) + 1);
+  }, [config]);
+
+  useEffect(() => {
+    gridColumnsRef.current = gridColumns;
+  }, [gridColumns]);
+
+  useEffect(() => {
+    setHasRenderedConfig(false);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId) {
+      log('BattleMap mount', { projectId });
+    }
+  }, [log, projectId]);
+
+  useEffect(() => {
+    if (project) {
+      log('Project loaded', { name: project.name, id: project.id });
+    }
+  }, [log, project]);
+
+  useEffect(() => {
+    if (error) {
+      log('Error state', error);
+    }
+  }, [error, log]);
 
   const syncGridGuides = useCallback(() => {
     if (!gridStackRef.current || !gridRef.current) return;
 
     const cellWidth = gridStackRef.current.cellWidth();
 
-    // Make cells square: set height equal to width for 1:1 aspect ratio
     if (cellWidth && cellWidth > 0) {
       gridStackRef.current.cellHeight(cellWidth, false);
 
       gridRef.current.style.setProperty('--grid-cell-width', `${cellWidth}px`);
       gridRef.current.style.setProperty('--grid-cell-height', `${cellWidth}px`);
-
-      console.log('Grid sync:', {
-        gridUnitWidth: cellWidth,
-        gridUnitHeight: cellWidth,
-        width: cellWidth - 8,
-        heightValue: cellWidth - 8,
-        marginValue: 8,
-      });
     }
   }, []);
 
-  const getCurrentWidgets = useCallback((): BattleMapWidget[] => {
+  const readWidgetsFromGrid = useCallback((): BattleMapWidget[] => {
     if (!gridStackRef.current) return [];
 
-    const nodes = gridStackRef.current.engine?.nodes ?? [];
+    const nodes: GridStackNode[] = gridStackRef.current.engine?.nodes ?? [];
     return nodes.map((node) => {
       const nodeId =
         (node.id as string | undefined) ||
@@ -93,30 +131,30 @@ function BattleMapWorkspace() {
     });
   }, []);
 
-  const persistBattleMapConfig = useCallback(
-    async (nextConfig?: Partial<BattleMapConfig>) => {
-      if (!project || !user || !gridStackRef.current || applyingConfigRef.current) return;
+  const queueSave = useCallback(
+    (nextConfig: BattleMapConfig) => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
 
-      const configToSave: BattleMapConfig = {
-        gridColumns: nextConfig?.gridColumns ?? gridColumns,
-        widgets: nextConfig?.widgets ?? getCurrentWidgets(),
-      };
-
-      await supabase
-        .from('projects')
-        .update({ battle_map_config: configToSave })
-        .eq('id', project.id)
-        .eq('user_id', user.id);
-
-      setProject((prev) =>
-        prev ? { ...prev, battle_map_config: configToSave } : prev
-      );
+      saveTimeoutRef.current = setTimeout(() => {
+        saveConfig(nextConfig);
+      }, 300);
     },
-    [getCurrentWidgets, gridColumns, project, user]
+    [saveConfig],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    },
+    [],
   );
 
   const applyConfigToGrid = useCallback(
-    (config: BattleMapConfig) => {
+    (nextConfig: BattleMapConfig) => {
       if (!gridStackRef.current) return;
 
       applyingConfigRef.current = true;
@@ -124,10 +162,13 @@ function BattleMapWorkspace() {
       try {
         gridStackRef.current.removeAll(false);
 
-        setGridColumns(config.gridColumns || DEFAULT_CONFIG.gridColumns);
-        gridStackRef.current.column(config.gridColumns || DEFAULT_CONFIG.gridColumns);
+        const columns = nextConfig.gridColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
+        setGridColumns(columns);
+        gridColumnsRef.current = columns;
+        gridStackRef.current.column(columns);
+        log('Apply config to grid', { columns, widgets: nextConfig.widgets.length });
 
-        config.widgets.forEach((widget) => {
+        nextConfig.widgets.forEach((widget) => {
           const el = gridStackRef.current?.addWidget({
             id: widget.id,
             x: widget.x,
@@ -143,50 +184,35 @@ function BattleMapWorkspace() {
           }
         });
 
-        setWidgetCounter((config.widgets?.length || 0) + 1);
+        setWidgetCounter((nextConfig.widgets?.length ?? 0) + 1);
         syncGridGuides();
       } finally {
         applyingConfigRef.current = false;
       }
     },
-    [syncGridGuides]
+    [log, syncGridGuides],
   );
 
-  useEffect(() => {
-    const loadProject = async () => {
-      if (!projectId || !user) {
-        return;
-      }
+  const initGridStack = useCallback(() => {
+    if (hasInitializedGridRef.current) {
+      return undefined;
+    }
 
-      setIsLoadingProject(true);
-      const { data, error: fetchError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', projectId)
-        .eq('user_id', user.id)
-        .single();
+    if (!project) {
+      log('GridStack init skipped: project missing');
+      return undefined;
+    }
 
-      if (fetchError) {
-        console.error('Failed to load project:', fetchError);
-        setIsLoadingProject(false);
-        return;
-      }
-
-      setProject(data as Project);
-      setIsLoadingProject(false);
-    };
-
-    loadProject();
-  }, [projectId, user]);
-
-  // Initialize GridStack
-  useEffect(() => {
-    if (!gridRef.current || !project) return;
+    if (!gridRef.current) {
+      log('GridStack init skipped: gridRef missing, retrying soon');
+      requestAnimationFrame(() => initGridStack());
+      return undefined;
+    }
 
     gridStackRef.current = GridStack.init(
       {
-        column: gridColumns,
-        cellHeight: 'auto', // Will be set by syncGridGuides to match width
+        column: gridColumnsRef.current,
+        cellHeight: 'auto',
         margin: 8,
         animate: true,
         float: true,
@@ -194,42 +220,55 @@ function BattleMapWorkspace() {
           handles: 'e,se,s,sw,w',
         },
       },
-      gridRef.current
+      gridRef.current,
     );
 
-    // Ensure grid is mounted before syncing
+    hasInitializedGridRef.current = true;
+    log('GridStack initialized', { columns: gridColumnsRef.current });
+
     setTimeout(() => {
       syncGridGuides();
     }, 0);
 
-    // Persist on drag/resize/move changes
-    gridStackRef.current?.on('change', () => {
-      persistBattleMapConfig();
-    });
-    gridStackRef.current?.on('removed', () => {
-      persistBattleMapConfig();
-    });
+    const handleGridChange = () => {
+      if (applyingConfigRef.current) return;
+
+      const widgets = readWidgetsFromGrid();
+      const nextConfig: BattleMapConfig = {
+        ...configRef.current,
+        gridColumns: gridColumnsRef.current,
+        widgets,
+      };
+
+      setConfig(nextConfig);
+      queueSave(nextConfig);
+      log('Grid change persisted', { widgets: widgets.length });
+    };
+
+    gridStackRef.current.on('change', handleGridChange);
+    gridStackRef.current.on('removed', handleGridChange);
 
     return () => {
-      if (gridStackRef.current) {
-        gridStackRef.current.destroy(false);
-      }
+      gridStackRef.current?.off('change', handleGridChange);
+      gridStackRef.current?.off('removed', handleGridChange);
+      gridStackRef.current?.destroy(false);
+      gridStackRef.current = null;
+      hasInitializedGridRef.current = false;
+      log('GridStack destroyed');
     };
-  }, [project, gridColumns, syncGridGuides, persistBattleMapConfig]);
+  }, [gridColumnsRef, gridRef, log, project, queueSave, readWidgetsFromGrid, setConfig, syncGridGuides]);
 
-  // Load saved config into GridStack once grid is ready
+  useLayoutEffect(() => {
+    const cleanup = initGridStack();
+    return cleanup;
+  }, [initGridStack, project]);
+
   useEffect(() => {
-    if (!gridStackRef.current || !project || isConfigLoaded) return;
+    if (!gridStackRef.current || hasRenderedConfig) return;
 
-    const savedConfig = (project as unknown as { battle_map_config?: BattleMapConfig })
-      .battle_map_config;
-
-    const configToApply: BattleMapConfig =
-      savedConfig && savedConfig.widgets ? savedConfig : DEFAULT_CONFIG;
-
-    applyConfigToGrid(configToApply);
-    setIsConfigLoaded(true);
-  }, [applyConfigToGrid, isConfigLoaded, project]);
+    applyConfigToGrid(config);
+    setHasRenderedConfig(true);
+  }, [applyConfigToGrid, config, hasRenderedConfig]);
 
   useEffect(() => {
     const handleResize = () => syncGridGuides();
@@ -238,40 +277,74 @@ function BattleMapWorkspace() {
   }, [syncGridGuides]);
 
   const handleAddWidget = () => {
-    if (!gridStackRef.current) return;
+    if (!gridStackRef.current) {
+      log('Add widget blocked: grid not ready, retrying init');
+      initGridStack();
+      if (!gridStackRef.current) {
+        return;
+      }
+    }
 
     const widgetId = generateClientId();
     const widget = {
       id: widgetId,
+      x: 0,
+      y: 0,
       w: 2,
       h: 2,
       content: `<div class="battlemap-widget-content">Widget ${widgetCounter}</div>`,
     };
 
-    const el = gridStackRef.current.addWidget(widget);
-    if (el) {
-      el.dataset.widgetId = widgetId;
-      el.dataset.content = widget.content;
+    log('Adding widget', widget);
+
+    const el = gridStackRef.current.addWidget({ ...widget, autoPosition: true });
+    if (!el) {
+      const nextConfig: BattleMapConfig = {
+        ...configRef.current,
+        gridColumns: gridColumnsRef.current,
+        widgets: [...configRef.current.widgets, widget],
+      };
+
+      setConfig(nextConfig);
+      queueSave(nextConfig);
+      return;
     }
 
-    setWidgetCounter(widgetCounter + 1);
-    persistBattleMapConfig();
+    el.dataset.widgetId = widgetId;
+    el.dataset.content = widget.content;
+
+    const widgets = readWidgetsFromGrid();
+    const nextConfig: BattleMapConfig = {
+      ...configRef.current,
+      gridColumns: gridColumnsRef.current,
+      widgets: widgets.length ? widgets : [...configRef.current.widgets, widget],
+    };
+
+    setWidgetCounter((prev) => prev + 1);
+    setConfig(nextConfig);
+    queueSave(nextConfig);
   };
 
   const handleGridScaleChange = (newColumns: number) => {
+    log('Grid scale change', newColumns);
     setGridColumns(newColumns);
+    gridColumnsRef.current = newColumns;
+
     if (gridStackRef.current) {
       gridStackRef.current.column(newColumns);
-      // Sync to ensure cells remain square after column change
-      setTimeout(() => {
-        syncGridGuides();
-      }, 0);
-
-      persistBattleMapConfig({ gridColumns: newColumns });
+      syncGridGuides();
     }
+
+    const nextConfig: BattleMapConfig = {
+      ...configRef.current,
+      gridColumns: newColumns,
+    };
+
+    setConfig(nextConfig);
+    queueSave(nextConfig);
   };
 
-  if (isLoadingProject) {
+  if (isLoading) {
     return (
       <div className="battlemap-workspace__loading">
         <p className="battlemap-workspace__loading-text">Loading battle map...</p>
@@ -279,10 +352,12 @@ function BattleMapWorkspace() {
     );
   }
 
-  if (!project) {
+  if (!project || error) {
     return (
       <div className="battlemap-workspace__error">
-        <p className="battlemap-workspace__error-text">Battle map not found.</p>
+        <p className="battlemap-workspace__error-text">
+          {error ?? 'Battle map not found.'}
+        </p>
         <button
           className="button button--ghost battlemap-workspace__error-button"
           onClick={() => navigate('/app')}
@@ -295,7 +370,6 @@ function BattleMapWorkspace() {
 
   return (
     <div className="battlemap-workspace">
-      {/* Left Sidebar */}
       <div className="battlemap-workspace__sidebar">
         <div className="battlemap-workspace__sidebar-header">
           <button
@@ -307,7 +381,6 @@ function BattleMapWorkspace() {
           <h2 className="battlemap-workspace__project-name">{project.name}</h2>
         </div>
 
-        {/* Grid Configuration */}
         <div className="battlemap-workspace__controls">
           <div className="battlemap-workspace__control-section">
             <h3 className="battlemap-workspace__control-title">Grid Settings</h3>
@@ -330,7 +403,6 @@ function BattleMapWorkspace() {
             </div>
           </div>
 
-          {/* Widget Controls */}
           <div className="battlemap-workspace__control-section">
             <h3 className="battlemap-workspace__control-title">Widgets</h3>
             <button
@@ -339,14 +411,48 @@ function BattleMapWorkspace() {
             >
               Add Widget
             </button>
+            <p className="battlemap-workspace__hint">
+              Auto-save: {isSaving ? 'Saving...' : 'Synced'} ({storageMode} storage)
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Main Workspace Area */}
       <div className="battlemap-workspace__main">
-        <div ref={gridRef} className="grid-stack battlemap-workspace__grid">
-          {/* GridStack items will be added here dynamically */}
+        <div ref={gridRef} className="grid-stack battlemap-workspace__grid" />
+        <div className="battlemap-log">
+          <div className="battlemap-log__header">
+            <span>Debug Log</span>
+            <div className="battlemap-log__actions">
+              <button
+                className="battlemap-log__button"
+                type="button"
+                onClick={() => setShowLog((v) => !v)}
+              >
+                {showLog ? 'Hide' : 'Show'}
+              </button>
+              <button
+                className="battlemap-log__button"
+                type="button"
+                onClick={() => setLogEntries([])}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          {showLog ? (
+            <div className="battlemap-log__body">
+              {logEntries.map((entry, idx) => (
+                // eslint-disable-next-line react/no-array-index-key
+                <div className="battlemap-log__line" key={idx}>
+                  {entry}
+                </div>
+              ))}
+              {logEntries.length === 0 ? (
+                <div className="battlemap-log__line">No entries yet.</div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

@@ -28,3 +28,20 @@ export type PlacedTile = {
   // Joined data
   tile?: Tile;
 };
+
+export type BattleMapWidget = {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  content: string;
+  updated_at?: string;
+};
+
+export type BattleMapConfig = {
+  gridColumns: number;
+  widgets: BattleMapWidget[];
+  version?: number;
+  updated_at?: string;
+};
