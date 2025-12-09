@@ -4,6 +4,8 @@ import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
 
 export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridColumns: 12,
+  gridRows: 12,
+  cellSize: 80,
   widgets: [],
   version: 1,
 };
@@ -21,6 +23,8 @@ const isMissingTableError = (error: unknown) => {
 
 const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapConfig => ({
   gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
+  gridRows: Number(config?.gridRows) || DEFAULT_BATTLE_MAP_CONFIG.gridRows,
+  cellSize: Number(config?.cellSize) || DEFAULT_BATTLE_MAP_CONFIG.cellSize,
   widgets: (config?.widgets ?? []).map((widget) => ({
     id: widget.id || generateClientId(),
     x: widget.x ?? 0,
@@ -52,7 +56,7 @@ async function checkAdvancedStorageAvailability() {
 async function loadFromAdvancedTables(projectId: string, userId: string): Promise<BattleMapConfig | null> {
   const { data: configRows, error: configError } = await supabase
     .from('battle_map_configs')
-    .select('grid_columns, version, updated_at')
+    .select('grid_columns, grid_rows, cell_size, version, updated_at')
     .eq('project_id', projectId)
     .eq('user_id', userId)
     .limit(1);
@@ -99,6 +103,8 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
 
   return normalizeConfig({
     gridColumns: configRow.grid_columns,
+    gridRows: configRow.grid_rows,
+    cellSize: configRow.cell_size,
     widgets,
     version: configRow.version,
     updated_at: configRow.updated_at,
@@ -118,6 +124,8 @@ async function persistToAdvancedTables(
     project_id: projectId,
     user_id: userId,
     grid_columns: normalizedConfig.gridColumns,
+    grid_rows: normalizedConfig.gridRows,
+    cell_size: normalizedConfig.cellSize,
     version: nextVersion,
     updated_at: now,
   });
@@ -193,6 +201,8 @@ async function persistLegacySnapshot(
 ) {
   const legacyConfig = {
     gridColumns: config.gridColumns,
+    gridRows: config.gridRows,
+    cellSize: config.cellSize,
     widgets: config.widgets,
   };
 

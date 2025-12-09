@@ -41,6 +41,8 @@ export type BattleMapWidget = {
 
 export type BattleMapConfig = {
   gridColumns: number;
+  gridRows: number;
+  cellSize: number;
   widgets: BattleMapWidget[];
   version?: number;
   updated_at?: string;

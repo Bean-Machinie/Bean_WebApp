@@ -66,6 +66,25 @@
   gap: 0.5rem;
 }
 
+.battlemap-workspace__grid-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.battlemap-workspace__grid-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
 .battlemap-workspace__label {
   font-size: 0.75rem;
   font-weight: 500;
@@ -132,15 +151,52 @@
 /* Main Workspace Area */
 .battlemap-workspace__main {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   background: var(--bg-secondary);
   position: relative;
-  padding: 2rem;
+  padding: 1.5rem;
+  display: flex;
+  align-items: stretch;
+}
+
+.battlemap-workspace__viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  transition: box-shadow 0.15s ease;
+}
+
+.battlemap-workspace__viewport.is-space-held {
+  cursor: grab;
+}
+
+.battlemap-workspace__viewport.is-panning {
+  cursor: grabbing;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+.battlemap-workspace__surface {
+  position: relative;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.battlemap-workspace__grid-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  border: 2px solid color-mix(in srgb, var(--text) 35%, transparent);
+  box-sizing: border-box;
 }
 
 .battlemap-workspace__grid {
   width: 100%;
-  min-height: calc(100vh - 4rem);
+  height: 100%;
+  min-height: 100%;
   position: relative;
   --grid-cell-width: 80px;
   --grid-cell-height: 80px;
@@ -154,6 +210,51 @@
   background-size: var(--grid-cell-width) 100%, 100% var(--grid-cell-height);
   background-position: 0 0, 0 0;
   background-repeat: repeat;
+}
+
+.battlemap-workspace__expander {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-strong);
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  z-index: 2;
+}
+
+.battlemap-workspace__expander:hover {
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+  border-color: var(--primary);
+}
+
+.battlemap-workspace__expander--top {
+  top: -18px;
+  left: 50%;
+  transform: translate(-50%, 0);
+}
+
+.battlemap-workspace__expander--bottom {
+  bottom: -18px;
+  left: 50%;
+  transform: translate(-50%, 0);
+}
+
+.battlemap-workspace__expander--left {
+  left: -18px;
+  top: 50%;
+  transform: translate(0, -50%);
+}
+
+.battlemap-workspace__expander--right {
+  right: -18px;
+  top: 50%;
+  transform: translate(0, -50%);
 }
 
 .battlemap-log {

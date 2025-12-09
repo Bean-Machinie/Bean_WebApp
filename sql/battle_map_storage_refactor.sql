@@ -9,9 +9,17 @@ create table if not exists public.battle_map_configs (
   project_id uuid primary key references public.projects(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   grid_columns integer not null default 12,
+  grid_rows integer not null default 12,
+  cell_size integer not null default 80,
   version integer not null default 1,
   updated_at timestamptz not null default now()
 );
+
+alter table public.battle_map_configs
+  add column if not exists grid_rows integer not null default 12;
+
+alter table public.battle_map_configs
+  add column if not exists cell_size integer not null default 80;
 
 create table if not exists public.battle_map_widgets (
   id uuid primary key,
@@ -59,11 +67,13 @@ begin
 end $$;
 
 -- Backfill from legacy projects.battle_map_config JSON column
-insert into public.battle_map_configs (project_id, user_id, grid_columns, version, updated_at)
+insert into public.battle_map_configs (project_id, user_id, grid_columns, grid_rows, cell_size, version, updated_at)
 select
   p.id as project_id,
   p.user_id,
   coalesce((p.battle_map_config->>'gridColumns')::integer, 12) as grid_columns,
+  coalesce((p.battle_map_config->>'gridRows')::integer, (p.battle_map_config->>'gridColumns')::integer, 12) as grid_rows,
+  coalesce((p.battle_map_config->>'cellSize')::integer, 80) as cell_size,
   1 as version,
   now() as updated_at
 from public.projects p
@@ -71,6 +81,8 @@ where p.project_type = 'battle-maps'
   and p.battle_map_config is not null
 on conflict (project_id) do update
 set grid_columns = excluded.grid_columns,
+    grid_rows = excluded.grid_rows,
+    cell_size = excluded.cell_size,
     updated_at = now(),
     version = public.battle_map_configs.version + 1;
 
