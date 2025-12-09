@@ -148,6 +148,24 @@ function BattleMapWorkspace() {
     }
   }, []);
 
+  const ensureRowLimits = useCallback(
+    (rows: number) => {
+      if (!gridStackRef.current) return;
+      gridStackRef.current.updateOptions({ minRow: rows, maxRow: rows });
+      gridStackRef.current.opts.minRow = rows;
+      gridStackRef.current.opts.maxRow = rows;
+      if (gridStackRef.current.engine) {
+        // @ts-ignore sync engine bounds for dynamic row growth
+        gridStackRef.current.engine.minRow = rows;
+        // @ts-ignore sync engine bounds for dynamic row growth
+        gridStackRef.current.engine.maxRow = rows;
+        // @ts-ignore keep container height in sync with new bounds
+        gridStackRef.current._updateContainerHeight?.();
+      }
+    },
+    [],
+  );
+
   const readWidgetsFromGrid = useCallback((): BattleMapWidget[] => {
     if (!gridStackRef.current) return [];
 
@@ -218,7 +236,7 @@ function BattleMapWorkspace() {
         gridRowsRef.current = rows;
         cellSizeRef.current = size;
         gridStackRef.current.column(columns);
-        gridStackRef.current.updateOptions({ minRow: rows, maxRow: rows });
+        ensureRowLimits(rows);
         log('Apply config to grid', { columns, rows, widgets: nextConfig.widgets.length });
 
         nextConfig.widgets.forEach((widget) => {
@@ -285,6 +303,7 @@ function BattleMapWorkspace() {
     setTimeout(() => {
       syncGridGuides();
     }, 0);
+    ensureRowLimits(gridRowsRef.current);
 
     const handleGridChange = () => {
       if (applyingConfigRef.current) return;
@@ -329,9 +348,9 @@ function BattleMapWorkspace() {
 
   useEffect(() => {
     if (!gridStackRef.current) return;
-    gridStackRef.current.updateOptions({ minRow: gridRows, maxRow: gridRows });
+    ensureRowLimits(gridRows);
     syncGridGuides();
-  }, [gridRows, syncGridGuides]);
+  }, [gridRows, syncGridGuides, ensureRowLimits]);
 
   const handleAddWidget = () => {
     if (!gridStackRef.current) {
@@ -591,6 +610,7 @@ function BattleMapWorkspace() {
       }
 
       if (gridStackRef.current) {
+        ensureRowLimits(nextRows);
         applyConfigToGrid(nextConfig);
       }
 
