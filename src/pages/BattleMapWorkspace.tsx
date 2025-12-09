@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
@@ -20,6 +20,17 @@ function BattleMapWorkspace() {
   const [gridColumns, setGridColumns] = useState(12);
   const [cellHeight, setCellHeight] = useState(50);
   const [widgetCounter, setWidgetCounter] = useState(1);
+
+  const syncGridGuides = useCallback(() => {
+    if (!gridStackRef.current || !gridRef.current) return;
+
+    const width = gridStackRef.current.cellWidth();
+    const height = gridStackRef.current.cellHeight();
+    const normalizedHeight = typeof height === 'number' ? `${height}px` : height;
+
+    gridRef.current.style.setProperty('--grid-cell-width', `${width}px`);
+    gridRef.current.style.setProperty('--grid-cell-height', normalizedHeight);
+  }, []);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -66,12 +77,20 @@ function BattleMapWorkspace() {
       gridRef.current
     );
 
+    syncGridGuides();
+
     return () => {
       if (gridStackRef.current) {
         gridStackRef.current.destroy(false);
       }
     };
-  }, [project, gridColumns, cellHeight]);
+  }, [project, gridColumns, cellHeight, syncGridGuides]);
+
+  useEffect(() => {
+    const handleResize = () => syncGridGuides();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [syncGridGuides]);
 
   const handleAddWidget = () => {
     if (!gridStackRef.current) return;
@@ -90,6 +109,7 @@ function BattleMapWorkspace() {
     setGridColumns(newColumns);
     if (gridStackRef.current) {
       gridStackRef.current.column(newColumns);
+      syncGridGuides();
     }
   };
 
@@ -97,6 +117,7 @@ function BattleMapWorkspace() {
     setCellHeight(newHeight);
     if (gridStackRef.current) {
       gridStackRef.current.cellHeight(newHeight);
+      syncGridGuides();
     }
   };
 

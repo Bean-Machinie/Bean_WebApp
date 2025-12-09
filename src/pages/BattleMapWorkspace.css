@@ -133,6 +133,19 @@
 .battlemap-workspace__grid {
   width: 100%;
   min-height: 100%;
+  position: relative;
+  --grid-cell-width: 80px;
+  --grid-cell-height: 80px;
+  --grid-line-color: color-mix(in srgb, var(--text) 12%, transparent);
+  background-image: linear-gradient(
+      to right,
+      var(--grid-line-color) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, var(--grid-line-color) 1px, transparent 1px);
+  background-size: var(--grid-cell-width) 100%, 100% var(--grid-cell-height);
+  background-position: 0 0, 0 0;
+  background-repeat: repeat;
 }
 
 .battlemap-workspace__content {
@@ -171,7 +184,7 @@
 .battlemap-workspace .grid-stack-item {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 4px;
   transition: box-shadow 0.2s ease, transform 0.12s ease;
 }
 
@@ -189,7 +202,7 @@
 .battlemap-workspace .grid-stack-item-content {
   background: var(--card);
   color: var(--text);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 1rem;
   display: flex;
   align-items: center;
@@ -238,7 +251,7 @@
   background: var(--primary);
   opacity: 0.2;
   border: 2px dashed var(--primary);
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 /* Custom widget content styling */
