@@ -1,0 +1,76 @@
+/* Battle Map Workspace - Main Container */
+.battlemap-workspace {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* Left Sidebar */
+.battlemap-workspace__sidebar {
+  width: 300px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.battlemap-workspace__sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.battlemap-workspace__back-button {
+  margin-bottom: 0.75rem;
+  width: 100%;
+  color: var(--sidebar-text);
+}
+
+.battlemap-workspace__project-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sidebar-text);
+  letter-spacing: -0.01em;
+}
+
+/* Main Workspace Area */
+.battlemap-workspace__main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  position: relative;
+}
+
+.battlemap-workspace__content {
+  text-align: center;
+  color: var(--sidebar-text);
+}
+
+/* Loading and Error States */
+.battlemap-workspace__loading,
+.battlemap-workspace__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 2rem;
+  background: var(--bg);
+}
+
+.battlemap-workspace__loading-text,
+.battlemap-workspace__error-text {
+  color: var(--sidebar-text);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.battlemap-workspace__error-button {
+  margin-top: 1rem;
+}
