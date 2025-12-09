@@ -18,18 +18,28 @@ function BattleMapWorkspace() {
   const gridRef = useRef<HTMLDivElement>(null);
   const gridStackRef = useRef<GridStack | null>(null);
   const [gridColumns, setGridColumns] = useState(12);
-  const [cellHeight, setCellHeight] = useState(50);
   const [widgetCounter, setWidgetCounter] = useState(1);
 
   const syncGridGuides = useCallback(() => {
     if (!gridStackRef.current || !gridRef.current) return;
 
-    const width = gridStackRef.current.cellWidth();
-    const height = gridStackRef.current.cellHeight();
-    const normalizedHeight = typeof height === 'number' ? `${height}px` : height;
+    const cellWidth = gridStackRef.current.cellWidth();
 
-    gridRef.current.style.setProperty('--grid-cell-width', `${width}px`);
-    gridRef.current.style.setProperty('--grid-cell-height', normalizedHeight);
+    // Make cells square: set height equal to width for 1:1 aspect ratio
+    if (cellWidth && cellWidth > 0) {
+      gridStackRef.current.cellHeight(cellWidth, false);
+
+      gridRef.current.style.setProperty('--grid-cell-width', `${cellWidth}px`);
+      gridRef.current.style.setProperty('--grid-cell-height', `${cellWidth}px`);
+
+      console.log('Grid sync:', {
+        gridUnitWidth: cellWidth,
+        gridUnitHeight: cellWidth,
+        width: cellWidth - 8,
+        heightValue: cellWidth - 8,
+        marginValue: 8,
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -66,7 +76,7 @@ function BattleMapWorkspace() {
     gridStackRef.current = GridStack.init(
       {
         column: gridColumns,
-        cellHeight: cellHeight,
+        cellHeight: 'auto', // Will be set by syncGridGuides to match width
         margin: 8,
         animate: true,
         float: true,
@@ -77,14 +87,17 @@ function BattleMapWorkspace() {
       gridRef.current
     );
 
-    syncGridGuides();
+    // Ensure grid is mounted before syncing
+    setTimeout(() => {
+      syncGridGuides();
+    }, 0);
 
     return () => {
       if (gridStackRef.current) {
         gridStackRef.current.destroy(false);
       }
     };
-  }, [project, gridColumns, cellHeight, syncGridGuides]);
+  }, [project, gridColumns, syncGridGuides]);
 
   useEffect(() => {
     const handleResize = () => syncGridGuides();
@@ -105,19 +118,14 @@ function BattleMapWorkspace() {
     setWidgetCounter(widgetCounter + 1);
   };
 
-  const handleGridColumnsChange = (newColumns: number) => {
+  const handleGridScaleChange = (newColumns: number) => {
     setGridColumns(newColumns);
     if (gridStackRef.current) {
       gridStackRef.current.column(newColumns);
-      syncGridGuides();
-    }
-  };
-
-  const handleCellHeightChange = (newHeight: number) => {
-    setCellHeight(newHeight);
-    if (gridStackRef.current) {
-      gridStackRef.current.cellHeight(newHeight);
-      syncGridGuides();
+      // Sync to ensure cells remain square after column change
+      setTimeout(() => {
+        syncGridGuides();
+      }, 0);
     }
   };
 
@@ -164,30 +172,19 @@ function BattleMapWorkspace() {
 
             <div className="battlemap-workspace__control-group">
               <label className="battlemap-workspace__label">
-                Grid Columns: {gridColumns}
+                Grid Scale: {gridColumns} columns
               </label>
               <input
                 type="range"
                 className="battlemap-workspace__slider"
-                min="1"
+                min="4"
                 max="24"
                 value={gridColumns}
-                onChange={(e) => handleGridColumnsChange(Number(e.target.value))}
+                onChange={(e) => handleGridScaleChange(Number(e.target.value))}
               />
-            </div>
-
-            <div className="battlemap-workspace__control-group">
-              <label className="battlemap-workspace__label">
-                Cell Height: {cellHeight}px
-              </label>
-              <input
-                type="range"
-                className="battlemap-workspace__slider"
-                min="20"
-                max="200"
-                value={cellHeight}
-                onChange={(e) => handleCellHeightChange(Number(e.target.value))}
-              />
+              <p className="battlemap-workspace__hint">
+                Adjust grid density (cells are always square)
+              </p>
             </div>
           </div>
 
