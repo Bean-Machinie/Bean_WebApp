@@ -4,7 +4,7 @@ import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
 
 export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridColumns: 12,
-  gridRows: 12,
+  gridRows: 8,
   cellSize: 80,
   widgets: [],
   version: 1,

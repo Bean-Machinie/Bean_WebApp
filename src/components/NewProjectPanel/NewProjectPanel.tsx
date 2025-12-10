@@ -6,6 +6,8 @@ import type { Project } from '../../types/project';
 import ScrollableList, { ScrollableListItem } from '../ScrollableList/ScrollableList';
 import PixelCard from '../PixelCard/PixelCard';
 import { generateClientId } from '../../lib/utils';
+import { DEFAULT_BATTLE_MAP_CONFIG, persistBattleMapState } from '../../services/battleMapStorage';
+import type { BattleMapConfig } from '../../types/battlemap';
 import './NewProjectPanel.css';
 
 type NewProjectPanelProps = {
@@ -43,6 +45,8 @@ function NewProjectPanel({
   const [canvasWidth, setCanvasWidth] = useState(1000);
   const [canvasHeight, setCanvasHeight] = useState(1000);
   const [canvasColor, setCanvasColor] = useState('#ffffff');
+  const [battleMapColumns, setBattleMapColumns] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
+  const [battleMapRows, setBattleMapRows] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
 
   // Generate auto-placeholder for canvas projects
   // Count the actual canvas projects from the database
@@ -62,9 +66,12 @@ function NewProjectPanel({
     setCanvasWidth(1000);
     setCanvasHeight(1000);
     setCanvasColor('#ffffff');
+    setBattleMapColumns(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
+    setBattleMapRows(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
   }, [isOpen]);
 
   const isCanvasProject = selectedProjectTypeId === 'canvas';
+  const isBattleMapProject = selectedProjectTypeId === 'battle-maps';
 
   // Calculate preview dimensions to fit within a square preview box
   // The preview box is 280x280px (defined in CSS)
@@ -104,13 +111,24 @@ function NewProjectPanel({
       return;
     }
 
-    const config = isCanvasProject
+    const normalizedColumns =
+      Math.max(1, battleMapColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
+    const normalizedRows = Math.max(1, battleMapRows || DEFAULT_BATTLE_MAP_CONFIG.gridRows);
+
+    const config: Partial<BattleMapConfig> | Record<string, unknown> = isCanvasProject
       ? {
           width: canvasWidth,
           height: canvasHeight,
           backgroundColor: canvasColor,
         }
-      : {};
+      : isBattleMapProject
+        ? {
+            gridColumns: normalizedColumns,
+            gridRows: normalizedRows,
+            cellSize: DEFAULT_BATTLE_MAP_CONFIG.cellSize,
+            widgets: [],
+          }
+        : {};
 
     const insertPayload = {
       user_id: user.id,
@@ -140,8 +158,8 @@ function NewProjectPanel({
     }
 
     // For battle-maps projects, create the initial battle map
-    if (selectedProjectTypeId === 'battle-maps') {
-      await createInitialBattleMap(createdProject.id);
+    if (isBattleMapProject) {
+      await createInitialBattleMap(createdProject.id, normalizedColumns, normalizedRows);
     }
 
     onProjectCreated?.(createdProject);
@@ -188,15 +206,33 @@ function NewProjectPanel({
     }
   };
 
-  const createInitialBattleMap = async (projectId: string) => {
+  const createInitialBattleMap = async (
+    projectId: string,
+    gridColumns: number,
+    gridRows: number,
+  ) => {
     if (!user) return;
 
+    const initialConfig: BattleMapConfig = {
+      gridColumns,
+      gridRows,
+      cellSize: DEFAULT_BATTLE_MAP_CONFIG.cellSize,
+      widgets: [],
+      version: DEFAULT_BATTLE_MAP_CONFIG.version,
+    };
+
     try {
+      await persistBattleMapState({
+        projectId,
+        userId: user.id,
+        config: initialConfig,
+      });
+
       await supabase.from('battle_maps').insert({
         project_id: projectId,
-        width: 30,
-        height: 30,
-        tile_size: 48,
+        width: gridColumns,
+        height: gridRows,
+        tile_size: DEFAULT_BATTLE_MAP_CONFIG.cellSize,
         grid_type: 'square',
       });
     } catch (error) {
@@ -371,6 +407,46 @@ function NewProjectPanel({
                   className="new-project-form__input"
                 />
               </div>
+
+              {isBattleMapProject ? (
+                <>
+                  <div className="new-project-form__grid">
+                    <div className="new-project-form__group">
+                      <label className="new-project-form__label" htmlFor="battlemap-columns">
+                        Columns
+                      </label>
+                      <input
+                        id="battlemap-columns"
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={battleMapColumns}
+                        onChange={(event) => setBattleMapColumns(Number(event.target.value))}
+                        className="new-project-form__input"
+                        required
+                      />
+                    </div>
+                    <div className="new-project-form__group">
+                      <label className="new-project-form__label" htmlFor="battlemap-rows">
+                        Rows
+                      </label>
+                      <input
+                        id="battlemap-rows"
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={battleMapRows}
+                        onChange={(event) => setBattleMapRows(Number(event.target.value))}
+                        className="new-project-form__input"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <p className="new-project-form__optional">
+                    Set the starting grid size (default 12 columns by 8 rows). You can expand later.
+                  </p>
+                </>
+              ) : null}
 
               {error ? <p className="new-project-form__error">{error}</p> : null}
 
