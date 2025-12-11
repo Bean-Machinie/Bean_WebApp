@@ -525,6 +525,12 @@
   border-radius: 4px;
 }
 
+.battlemap-workspace .grid-stack-placeholder {
+  background: var(--placeholder-color, var(--primary)) !important;
+  border: 2px dashed var(--placeholder-color, var(--primary)) !important;
+  opacity: 0.2;
+}
+
 /* Custom widget content styling */
 .battlemap-widget-content {
   width: 100%;
