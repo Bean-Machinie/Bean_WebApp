@@ -323,71 +323,73 @@
   transform: translate(0, -50%);
 }
 
-.battlemap-log {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  width: min(420px, 90vw);
-  max-height: 40vh;
-  background: color-mix(in srgb, var(--bg) 92%, var(--text) 8%);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--text) 14%, transparent);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 200;
+.battlemap-delete-panel {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  width: 96px;
+  height: 96px;
+  border-radius: 12px;
+  border: 2px dashed var(--danger-border);
+  background: color-mix(in srgb, var(--danger-surface) 82%, transparent);
+  color: var(--danger);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--danger) 12%, transparent);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+  cursor: default;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.9;
 }
 
-.battlemap-log__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  background: color-mix(in srgb, var(--bg) 85%, var(--text) 15%);
-  color: var(--text-strong);
-  font-weight: 700;
-  font-size: 0.9rem;
+.battlemap-delete-panel.is-active {
+  background: var(--danger);
+  border-color: var(--danger-border);
+  color: var(--text-contrast, #ffffff);
+  box-shadow: 0 16px 32px color-mix(in srgb, var(--danger) 22%, transparent);
+  transform: translateY(-4px) scale(1.04);
+  opacity: 1;
 }
 
-.battlemap-log__actions {
-  display: flex;
-  gap: 0.5rem;
+.battlemap-delete-panel__icon {
+  width: 44px;
+  height: 44px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg width='800' height='800' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M18 6V16.2C18 17.8802 18 18.7202 17.673 19.362C17.3854 19.9265 16.9265 20.3854 16.362 20.673C15.7202 21 14.8802 21 13.2 21H10.8C9.11984 21 8.27976 21 7.63803 20.673C7.07354 20.3854 6.6146 19.9265 6.32698 19.362C6 18.7202 6 17.8802 6 16.2V6M14 10V17M10 10V17' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg width='800' height='800' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4 6H20M16 6L15.7294 5.18807C15.4671 4.40125 15.3359 4.00784 15.0927 3.71698C14.8779 3.46013 14.6021 3.26132 14.2905 3.13878C13.9376 3 13.523 3 12.6936 3H11.3064C10.477 3 10.0624 3 9.70951 3.13878C9.39792 3.26132 9.12208 3.46013 8.90729 3.71698C8.66405 4.00784 8.53292 4.40125 8.27064 5.18807L8 6M18 6V16.2C18 17.8802 18 18.7202 17.673 19.362C17.3854 19.9265 16.9265 20.3854 16.362 20.673C15.7202 21 14.8802 21 13.2 21H10.8C9.11984 21 8.27976 21 7.63803 20.673C7.07354 20.3854 6.6146 19.9265 6.32698 19.362C6 18.7202 6 17.8802 6 16.2V6M14 10V17M10 10V17' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
-.battlemap-log__button {
-  background: var(--card);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 0.2rem 0.5rem;
-  font-size: 0.75rem;
-  border-radius: 4px;
-  cursor: pointer;
+.battlemap-workspace__grid-wrapper,
+.battlemap-workspace__grid {
+  position: relative;
 }
 
-.battlemap-log__button:hover {
-  border-color: var(--primary);
-  color: var(--primary);
+.battlemap-workspace .grid-stack-item {
+  z-index: 3;
 }
 
-.battlemap-log__body {
-  padding: 0.5rem 0.75rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.75rem;
+.battlemap-workspace .grid-stack-item.is-over-delete-zone {
+  transform: var(--gridstack-transform, none) scale(0.92);
+  opacity: 0.9;
+  box-shadow: 0 10px 18px color-mix(in srgb, var(--danger) 18%, transparent);
 }
 
-.battlemap-log__line {
-  color: var(--text);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  padding-bottom: 0.25rem;
+.battlemap-workspace .grid-stack-item.is-being-deleted {
+  pointer-events: none;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  transform: var(--gridstack-transform, none) translate(var(--delete-offset-x, 0), var(--delete-offset-y, 0)) scale(0.25);
+  opacity: 0;
 }
 
-.battlemap-log__line:last-child {
-  border-bottom: none;
+.battlemap-widget-ghost {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  transform: translate(0, 0) scale(1);
+  opacity: 1;
+}
+.battlemap-widget-ghost.is-being-deleted {
+  transform: translate(var(--delete-offset-x, 0), var(--delete-offset-y, 0)) scale(0.1);
+  opacity: 0;
 }
 
 .battlemap-workspace__content {

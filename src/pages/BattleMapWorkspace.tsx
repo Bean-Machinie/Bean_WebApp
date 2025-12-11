@@ -158,6 +158,37 @@ const resetPlaceholderAppearance = (gridEl: HTMLDivElement | null) => {
   }
 };
 
+const setDeleteHoverClass = (el: HTMLElement | undefined | null, isOverDelete: boolean) => {
+  if (!el) return;
+  if (isOverDelete) {
+    const currentTransform = getComputedStyle(el).transform || 'none';
+    el.style.setProperty('--gridstack-transform', currentTransform);
+    el.classList.add('is-over-delete-zone');
+  } else {
+    el.classList.remove('is-over-delete-zone');
+    el.style.removeProperty('--gridstack-transform');
+  }
+};
+
+const extractClientPoint = (event: unknown) => {
+  if (typeof event !== 'object' || event === null) {
+    return { clientX: undefined as number | undefined, clientY: undefined as number | undefined };
+  }
+
+  if ('clientX' in event && 'clientY' in event) {
+    const { clientX, clientY } = event as { clientX?: number; clientY?: number };
+    return { clientX, clientY };
+  }
+
+  const maybeTouchEvent = event as TouchEvent;
+  const touch = maybeTouchEvent.touches?.[0] ?? maybeTouchEvent.changedTouches?.[0];
+  if (touch) {
+    return { clientX: touch.clientX, clientY: touch.clientY };
+  }
+
+  return { clientX: undefined as number | undefined, clientY: undefined as number | undefined };
+};
+
 function BattleMapWorkspace() {
   const { projectId } = useParams();
   const { user } = useAuth();
@@ -198,24 +229,99 @@ function BattleMapWorkspace() {
   const [isPanning, setIsPanning] = useState(false);
   const [widgetCounter, setWidgetCounter] = useState(1);
   const [hasRenderedConfig, setHasRenderedConfig] = useState(false);
-  const [logEntries, setLogEntries] = useState<string[]>([]);
-  const [showLog, setShowLog] = useState(true);
+  const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
   const hasInitializedGridRef = useRef(false);
   const initialStaticRef = useRef(false);
   const hasCenteredRef = useRef(false);
   const widgetCounterRef = useRef(widgetCounter);
+  const deleteZoneRef = useRef<HTMLDivElement>(null);
+  const deleteZoneActiveRef = useRef(false);
+  const lastPointerRef = useRef<{ x?: number; y?: number }>({ x: undefined, y: undefined });
+
+  const isPointInsideDeleteZone = useCallback((clientX?: number, clientY?: number) => {
+    const zone = deleteZoneRef.current;
+    if (!zone) return false;
+    if (clientX === undefined || clientY === undefined) return false;
+    const rect = zone.getBoundingClientRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+  }, []);
+
+  const isEventInsideDeleteZone = useCallback(
+    (event: unknown) => {
+      const { clientX, clientY } = extractClientPoint(event);
+      const x = clientX ?? lastPointerRef.current.x;
+      const y = clientY ?? lastPointerRef.current.y;
+      return isPointInsideDeleteZone(x, y);
+    },
+    [isPointInsideDeleteZone],
+  );
+
+  const updateDeleteZoneHighlight = useCallback(
+    (event: unknown) => {
+      const { clientX, clientY } = extractClientPoint(event);
+      if (clientX !== undefined && clientY !== undefined) {
+        lastPointerRef.current = { x: clientX, y: clientY };
+      }
+      const active = isPointInsideDeleteZone(
+        clientX ?? lastPointerRef.current.x,
+        clientY ?? lastPointerRef.current.y,
+      );
+      deleteZoneActiveRef.current = active;
+      setIsDeleteZoneActive(active);
+      return active;
+    },
+    [isPointInsideDeleteZone],
+  );
+
+  const animateDeleteAndRemoveWidget = useCallback((el: HTMLElement, onDone?: () => void) => {
+    const zone = deleteZoneRef.current;
+    if (!gridStackRef.current) {
+      gridStackRef.current?.removeWidget(el, true);
+      onDone?.();
+      return;
+    }
+
+    const widgetRect = el.getBoundingClientRect();
+    const targetRect = zone?.getBoundingClientRect();
+
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.classList.add('battlemap-widget-ghost');
+    clone.style.position = 'fixed';
+    clone.style.top = `${widgetRect.top}px`;
+    clone.style.left = `${widgetRect.left}px`;
+    clone.style.width = `${widgetRect.width}px`;
+    clone.style.height = `${widgetRect.height}px`;
+    clone.style.transform = 'none';
+    clone.style.zIndex = '999';
+    document.body.appendChild(clone);
+
+    gridStackRef.current.removeWidget(el, true);
+    onDone?.();
+
+    if (targetRect) {
+      const deltaX = targetRect.left + targetRect.width / 2 - (widgetRect.left + widgetRect.width / 2);
+      const deltaY = targetRect.top + targetRect.height / 2 - (widgetRect.top + widgetRect.height / 2);
+      requestAnimationFrame(() => {
+        clone.style.setProperty('--delete-offset-x', `${deltaX}px`);
+        clone.style.setProperty('--delete-offset-y', `${deltaY}px`);
+        clone.classList.add('is-being-deleted');
+      });
+      setTimeout(() => clone.remove(), 220);
+    } else {
+      clone.remove();
+    }
+  }, []);
 
   const log = useCallback(
     (message: string, detail?: unknown) => {
       const timestamp = new Date().toISOString().split('T')[1]?.replace('Z', '') ?? '';
       const line = detail ? `${timestamp} ${message} | ${JSON.stringify(detail)}` : `${timestamp} ${message}`;
-      setLogEntries((prev) => [line, ...prev].slice(0, 80));
       if (detail !== undefined) {
         // eslint-disable-next-line no-console
-        console.log(message, detail);
+        console.log(line, detail);
       } else {
         // eslint-disable-next-line no-console
-        console.log(message);
+        console.log(line);
       }
     },
     [],
@@ -602,16 +708,29 @@ function BattleMapWorkspace() {
     gridStackRef.current.on('change', handleGridChange);
     gridStackRef.current.on('removed', handleGridChange);
     gridStackRef.current.on('dropped', handleDropped);
-    const handleDragStart = (_event: unknown, el?: HTMLElement) => {
+    const handleDragStart = (event: unknown, el?: HTMLElement) => {
       updatePlaceholderAppearance(gridRef.current, el ?? null);
+      const active = updateDeleteZoneHighlight(event);
+      setDeleteHoverClass(el, active);
     };
-    const handleDrag = (_event: unknown, el?: HTMLElement) => {
+    const handleDrag = (event: unknown, el?: HTMLElement) => {
       updatePlaceholderAppearance(gridRef.current, el ?? null);
+      const active = updateDeleteZoneHighlight(event);
+      setDeleteHoverClass(el, active);
     };
     const handleResizeStart = (_event: unknown, el?: HTMLElement) => {
       updatePlaceholderAppearance(gridRef.current, el ?? null);
     };
-    const handleDragStop = () => resetPlaceholderAppearance(gridRef.current);
+    const handleDragStop = (event: unknown, el?: HTMLElement) => {
+      const shouldDelete = deleteZoneActiveRef.current || isEventInsideDeleteZone(event);
+      deleteZoneActiveRef.current = false;
+      setIsDeleteZoneActive(false);
+      setDeleteHoverClass(el, false);
+      resetPlaceholderAppearance(gridRef.current);
+      if (shouldDelete && el && gridStackRef.current) {
+        animateDeleteAndRemoveWidget(el, handleGridChange);
+      }
+    };
     const handleResizeStop = () => resetPlaceholderAppearance(gridRef.current);
 
     gridStackRef.current.on('dragstart', handleDragStart);
@@ -1103,40 +1222,14 @@ function BattleMapWorkspace() {
               />
             </div>
           </div>
-        </div>
-        <div className="battlemap-log">
-          <div className="battlemap-log__header">
-            <span>Debug Log</span>
-            <div className="battlemap-log__actions">
-              <button
-                className="battlemap-log__button"
-                type="button"
-                onClick={() => setShowLog((v) => !v)}
-              >
-                {showLog ? 'Hide' : 'Show'}
-              </button>
-              <button
-                className="battlemap-log__button"
-                type="button"
-                onClick={() => setLogEntries([])}
-              >
-                Clear
-              </button>
-            </div>
+          <div
+            ref={deleteZoneRef}
+            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}`}
+            aria-label="Drop widgets here to delete them"
+            role="presentation"
+          >
+            <span className="battlemap-delete-panel__icon" aria-hidden />
           </div>
-          {showLog ? (
-            <div className="battlemap-log__body">
-              {logEntries.map((entry, idx) => (
-                // eslint-disable-next-line react/no-array-index-key
-                <div className="battlemap-log__line" key={idx}>
-                  {entry}
-                </div>
-              ))}
-              {logEntries.length === 0 ? (
-                <div className="battlemap-log__line">No entries yet.</div>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </div>
     </div>
