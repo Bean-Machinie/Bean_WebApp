@@ -11,7 +11,13 @@ import { GridStack, GridStackNode } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { useAuth } from '../context/AuthContext';
 import { generateClientId } from '../lib/utils';
-import { createWidgetContent, mergeAppearanceIntoContent, resolveAppearance } from '../lib/battlemapAppearance';
+import {
+  FIXED_WIDGET_APPEARANCE,
+  DYNAMIC_WIDGET_APPEARANCE,
+  createWidgetContent,
+  mergeAppearanceIntoContent,
+  resolveAppearance,
+} from '../lib/battlemapAppearance';
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
@@ -66,6 +72,62 @@ const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
 const getWidgetContent = (label: string, widget: Partial<BattleMapWidget>) => {
   const appearance = resolveAppearance(widget);
   return mergeAppearanceIntoContent(createWidgetContent(label, appearance), appearance);
+};
+
+const updatePlaceholderAppearance = (gridEl: HTMLDivElement | null, sourceEl?: HTMLElement | null) => {
+  if (!gridEl || !sourceEl || !(sourceEl instanceof Element)) return;
+
+  const safeStyleValue = (el: Element | null | undefined, prop: string) => {
+    if (!el) return '';
+    try {
+      return getComputedStyle(el).getPropertyValue(prop).trim();
+    } catch {
+      return '';
+    }
+  };
+
+  const safeBgColor = (el: Element | null | undefined) => {
+    if (!el) return '';
+    try {
+      return getComputedStyle(el).backgroundColor;
+    } catch {
+      return '';
+    }
+  };
+
+  const isFixed =
+    sourceEl.classList.contains('is-fixed-widget') ||
+    sourceEl.dataset.isFixed === 'true' ||
+    sourceEl.closest('.battlemap-workspace__widget-template')?.dataset.isFixed === 'true';
+
+  const innerGridItem = sourceEl.querySelector<HTMLElement>('.grid-stack-item');
+  const contentEl = sourceEl.querySelector<HTMLElement>('.grid-stack-item-content');
+
+  const appearanceBg =
+    safeStyleValue(sourceEl, '--widget-bg') ||
+    safeStyleValue(innerGridItem, '--widget-bg') ||
+    safeBgColor(contentEl) ||
+    safeBgColor(sourceEl);
+
+  const fallbackColor = isFixed ? FIXED_WIDGET_APPEARANCE.backgroundColor : DYNAMIC_WIDGET_APPEARANCE.backgroundColor;
+  const bg = appearanceBg || fallbackColor || '#0000ff';
+
+  gridEl.style.setProperty('--placeholder-color', bg);
+  const placeholderContent = gridEl.querySelector<HTMLElement>('.grid-stack-placeholder > .placeholder-content');
+  if (placeholderContent) {
+    placeholderContent.style.background = bg;
+    placeholderContent.style.borderColor = bg;
+  }
+};
+
+const resetPlaceholderAppearance = (gridEl: HTMLDivElement | null) => {
+  if (!gridEl) return;
+  gridEl.style.removeProperty('--placeholder-color');
+  const placeholderContent = gridEl.querySelector<HTMLElement>('.grid-stack-placeholder > .placeholder-content');
+  if (placeholderContent) {
+    placeholderContent.style.removeProperty('background');
+    placeholderContent.style.removeProperty('border-color');
+  }
 };
 
 function BattleMapWorkspace() {
@@ -130,6 +192,10 @@ function BattleMapWorkspace() {
     },
     [],
   );
+
+  const handleTemplatePointerDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    updatePlaceholderAppearance(gridRef.current, event.currentTarget);
+  }, []);
 
   useEffect(() => {
     configRef.current = config;
@@ -507,11 +573,33 @@ function BattleMapWorkspace() {
     gridStackRef.current.on('change', handleGridChange);
     gridStackRef.current.on('removed', handleGridChange);
     gridStackRef.current.on('dropped', handleDropped);
+    const handleDragStart = (_event: unknown, el?: HTMLElement) => {
+      updatePlaceholderAppearance(gridRef.current, el ?? null);
+    };
+    const handleDrag = (_event: unknown, el?: HTMLElement) => {
+      updatePlaceholderAppearance(gridRef.current, el ?? null);
+    };
+    const handleResizeStart = (_event: unknown, el?: HTMLElement) => {
+      updatePlaceholderAppearance(gridRef.current, el ?? null);
+    };
+    const handleDragStop = () => resetPlaceholderAppearance(gridRef.current);
+    const handleResizeStop = () => resetPlaceholderAppearance(gridRef.current);
+
+    gridStackRef.current.on('dragstart', handleDragStart);
+    gridStackRef.current.on('drag', handleDrag);
+    gridStackRef.current.on('resizestart', handleResizeStart);
+    gridStackRef.current.on('dragstop', handleDragStop);
+    gridStackRef.current.on('resizestop', handleResizeStop);
 
     return () => {
       gridStackRef.current?.off('change', handleGridChange);
       gridStackRef.current?.off('removed', handleGridChange);
       gridStackRef.current?.off('dropped', handleDropped);
+      gridStackRef.current?.off('dragstart', handleDragStart);
+      gridStackRef.current?.off('drag', handleDrag);
+      gridStackRef.current?.off('dragstop', handleDragStop);
+      gridStackRef.current?.off('resizestart', handleResizeStart);
+      gridStackRef.current?.off('resizestop', handleResizeStop);
       gridStackRef.current?.destroy(false);
       gridStackRef.current = null;
       hasInitializedGridRef.current = false;
@@ -910,11 +998,10 @@ function BattleMapWorkspace() {
                 data-gs-height="2"
                 data-is-fixed="true"
                 data-gs-auto-position="true"
+                onMouseDown={handleTemplatePointerDown}
+                aria-label="Fixed 2 by 2 widget"
               >
-                <div className="battlemap-workspace__widget-template-inner grid-stack-item-content">
-                  <span className="battlemap-workspace__widget-template-title">2 x 2</span>
-                  <span className="battlemap-workspace__widget-template-subtitle">Drag to grid</span>
-                </div>
+                <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
               </div>
               <p className="battlemap-workspace__hint">
                 Drag and drop for an endless supply of fixed 2x2 widgets.
