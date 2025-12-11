@@ -172,6 +172,7 @@
   background-image: var(--widget-bg-image);
   background-size: 100% 100%;
   background-position: center;
+  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -198,6 +199,7 @@
   background-image: var(--widget-bg-image);
   background-size: 100% 100%;
   background-position: center;
+  background-repeat: no-repeat;
   color: var(--widget-text);
   display: block;
 }
@@ -491,16 +493,17 @@
 }
 
 .battlemap-workspace__widget-template.grid-stack-item {
-  background: var(--widget-bg) !important;
-  background-image: var(--widget-bg-image) !important;
+  background: transparent !important;
+  background-image: none !important;
   border-color: transparent !important;
 }
 
 .battlemap-workspace__widget-template .grid-stack-item-content {
   background: var(--widget-bg) !important;
   background-image: var(--widget-bg-image) !important;
-  background-size: 100% 100%;
-  background-position: center;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
   color: var(--widget-text) !important;
 }
 

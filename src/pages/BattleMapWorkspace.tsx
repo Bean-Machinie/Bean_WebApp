@@ -36,8 +36,11 @@ const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
   const contentContainer = el.querySelector('.grid-stack-item-content') as HTMLElement | null;
   if (contentContainer) {
     contentContainer.innerHTML = content;
+    contentContainer.style.backgroundSize = '100% 100%';
+    contentContainer.style.backgroundRepeat = 'no-repeat';
+    contentContainer.style.backgroundPosition = 'center';
   } else {
-    el.innerHTML = `<div class="grid-stack-item-content">${content}</div>`;
+    el.innerHTML = `<div class="grid-stack-item-content" style="background-size:100% 100%;background-repeat:no-repeat;background-position:center;">${content}</div>`;
   }
 
   el.dataset.widgetId = widget.id;
