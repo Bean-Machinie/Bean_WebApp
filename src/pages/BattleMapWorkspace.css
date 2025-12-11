@@ -545,8 +545,9 @@
 .battlemap-workspace .grid-stack-placeholder > .placeholder-content {
   background: var(--placeholder-color, var(--primary)) !important;
   background-image: var(--placeholder-image, none) !important;
-  background-size: cover;
-  background-position: center;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
   opacity: 0.2;
   border: 2px dashed var(--placeholder-color, var(--primary)) !important;
   border-radius: 4px;
@@ -555,8 +556,9 @@
 .battlemap-workspace .grid-stack-placeholder {
   background: var(--placeholder-color, var(--primary)) !important;
   background-image: var(--placeholder-image, none) !important;
-  background-size: cover;
-  background-position: center;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
   border: 2px dashed var(--placeholder-color, var(--primary)) !important;
   opacity: 0.2;
 }
