@@ -323,9 +323,9 @@ function BattleMapWorkspace() {
             w: isFixed ? 2 : widget.w,
             h: isFixed ? 2 : widget.h,
             content: widget.content,
-            minW: isFixed ? 2 : widget.w,
+            minW: isFixed ? 2 : 1,
             maxW: isFixed ? 2 : undefined,
-            minH: isFixed ? 2 : widget.h,
+            minH: isFixed ? 2 : 1,
             maxH: isFixed ? 2 : undefined,
             // @ts-ignore
             noResize: isFixed ? true : undefined,

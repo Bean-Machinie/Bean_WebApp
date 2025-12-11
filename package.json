@@ -28,7 +28,7 @@
     "lucide-react": "^0.554.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-konva": "^17.0.2-0",
+    "react-konva": "^18.2.14",
     "react-router-dom": "^7.9.6",
     "tailwind-merge": "^3.4.0"
   },
