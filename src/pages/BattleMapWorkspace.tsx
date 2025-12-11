@@ -26,9 +26,11 @@ import './BattleMapWorkspace.css';
 const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
   const appearance = resolveAppearance(widget);
   const contentSource =
-    widget.content && widget.content.trim().length
-      ? widget.content
-      : createWidgetContent(`Widget ${widget.id}`, appearance);
+    widget.isFixed === true
+      ? '<div class="battlemap-widget-content"></div>'
+      : widget.content && widget.content.trim().length
+        ? widget.content
+        : createWidgetContent(`Widget ${widget.id}`, appearance);
   const content = mergeAppearanceIntoContent(contentSource, appearance);
 
   const contentContainer = el.querySelector('.grid-stack-item-content') as HTMLElement | null;
@@ -109,24 +111,47 @@ const updatePlaceholderAppearance = (gridEl: HTMLDivElement | null, sourceEl?: H
     safeBgColor(contentEl) ||
     safeBgColor(sourceEl);
 
+  const appearanceImage =
+    safeStyleValue(sourceEl, '--widget-bg-image') ||
+    safeStyleValue(innerGridItem, '--widget-bg-image') ||
+    (isFixed && FIXED_WIDGET_APPEARANCE.backgroundImageUrl
+      ? `url("${FIXED_WIDGET_APPEARANCE.backgroundImageUrl}")`
+      : '');
+
   const fallbackColor = isFixed ? FIXED_WIDGET_APPEARANCE.backgroundColor : DYNAMIC_WIDGET_APPEARANCE.backgroundColor;
   const bg = appearanceBg || fallbackColor || '#0000ff';
 
   gridEl.style.setProperty('--placeholder-color', bg);
+  if (appearanceImage) {
+    gridEl.style.setProperty('--placeholder-image', appearanceImage);
+  } else {
+    gridEl.style.removeProperty('--placeholder-image');
+  }
   const placeholderContent = gridEl.querySelector<HTMLElement>('.grid-stack-placeholder > .placeholder-content');
   if (placeholderContent) {
     placeholderContent.style.background = bg;
     placeholderContent.style.borderColor = bg;
+    if (appearanceImage) {
+      placeholderContent.style.backgroundImage = appearanceImage;
+      placeholderContent.style.backgroundSize = 'cover';
+      placeholderContent.style.backgroundPosition = 'center';
+    } else {
+      placeholderContent.style.removeProperty('background-image');
+    }
   }
 };
 
 const resetPlaceholderAppearance = (gridEl: HTMLDivElement | null) => {
   if (!gridEl) return;
   gridEl.style.removeProperty('--placeholder-color');
+  gridEl.style.removeProperty('--placeholder-image');
   const placeholderContent = gridEl.querySelector<HTMLElement>('.grid-stack-placeholder > .placeholder-content');
   if (placeholderContent) {
     placeholderContent.style.removeProperty('background');
     placeholderContent.style.removeProperty('border-color');
+    placeholderContent.style.removeProperty('background-image');
+    placeholderContent.style.removeProperty('background-size');
+    placeholderContent.style.removeProperty('background-position');
   }
 };
 
@@ -306,14 +331,13 @@ function BattleMapWorkspace() {
 
       nodes.forEach((node) => {
         const widgetId = generateClientId();
-        const label = `Widget ${nextCounter}`;
         const widget: BattleMapWidget = {
           id: widgetId,
           x: node.x ?? 0,
           y: node.y ?? 0,
           w: 2,
           h: 2,
-          content: getWidgetContent(label, { isFixed: true }),
+          content: mergeAppearanceIntoContent('<div class="battlemap-widget-content"></div>', resolveAppearance({ isFixed: true })),
           appearance: resolveAppearance({ isFixed: true }),
           isFixed: true,
         };
@@ -447,9 +471,11 @@ function BattleMapWorkspace() {
         const isFixed = widget.isFixed === true;
         const appearance = resolveAppearance(widget);
         const content = mergeAppearanceIntoContent(
-          widget.content && widget.content.trim().length
-            ? widget.content
-            : createWidgetContent(widget.id ? `Widget ${widget.id}` : 'Widget', appearance),
+          isFixed
+            ? '<div class="battlemap-widget-content"></div>'
+            : widget.content && widget.content.trim().length
+              ? widget.content
+              : createWidgetContent(widget.id ? `Widget ${widget.id}` : 'Widget', appearance),
           appearance,
         );
         const widgetOptions = {
@@ -503,7 +529,7 @@ function BattleMapWorkspace() {
       {
         column: gridColumnsRef.current,
         cellHeight: 'auto',
-        margin: 8,
+        margin: 0,
         animate: true,
         float: true,
         minRow: gridRowsRef.current,

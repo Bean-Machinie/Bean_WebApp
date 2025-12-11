@@ -10,6 +10,7 @@ export const FIXED_WIDGET_APPEARANCE: WidgetAppearance = {
   backgroundColor: '#6b6f7b',
   borderColor: '#6b6f7b',
   textColor: '#ffffff',
+  backgroundImageUrl: '/assets/widgets/stone_tile.webp',
 };
 
 const stripAppearanceAttributes = (html: string) =>
