@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient';
 import { generateClientId } from '../lib/utils';
+import { mergeAppearanceIntoContent, parseAppearanceFromContent, resolveAppearance } from '../lib/battlemapAppearance';
 import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
 
 export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
@@ -32,16 +33,30 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
   gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
   gridRows: Number(config?.gridRows) || DEFAULT_BATTLE_MAP_CONFIG.gridRows,
   cellSize: Number(config?.cellSize) || DEFAULT_BATTLE_MAP_CONFIG.cellSize,
-  widgets: (config?.widgets ?? []).map((widget) => ({
-    id: widget.id || generateClientId(),
-    x: widget.x ?? 0,
-    y: widget.y ?? 0,
-    w: widget.w ?? 1,
-    h: widget.h ?? 1,
-    content: widget.content ?? '',
-    isFixed: widget.isFixed ?? false,
-    updated_at: widget.updated_at,
-  })),
+  widgets: (config?.widgets ?? []).map((widget) => {
+    const appearanceFromContent = parseAppearanceFromContent(widget.content ?? '');
+    const resolvedAppearance = resolveAppearance({
+      ...widget,
+      appearance: widget.appearance ?? appearanceFromContent,
+    });
+    const baseContent =
+      widget.content && widget.content.trim().length
+        ? widget.content
+        : `<div class="battlemap-widget-content">Widget</div>`;
+    const content = mergeAppearanceIntoContent(baseContent, resolvedAppearance);
+
+    return {
+      id: widget.id || generateClientId(),
+      x: widget.x ?? 0,
+      y: widget.y ?? 0,
+      w: widget.w ?? 1,
+      h: widget.h ?? 1,
+      content,
+      appearance: resolvedAppearance,
+      isFixed: widget.isFixed ?? false,
+      updated_at: widget.updated_at,
+    };
+  }),
   version: config?.version ?? DEFAULT_BATTLE_MAP_CONFIG.version,
   updated_at: config?.updated_at,
 });
@@ -184,19 +199,22 @@ async function persistToAdvancedTables(
     throw configError;
   }
 
-  const widgetsForUpsert = normalizedConfig.widgets.map((widget, index) => ({
-    id: widget.id || generateClientId(),
-    project_id: projectId,
-    user_id: userId,
-    x: widget.x ?? 0,
-    y: widget.y ?? 0,
-    w: widget.w ?? 1,
-    h: widget.h ?? 1,
-    content: widget.content ?? '',
-    ...(hasIsFixedColumn ? { is_fixed: widget.isFixed ?? false } : {}),
-    sort_index: index,
-    updated_at: now,
-  }));
+  const widgetsForUpsert = normalizedConfig.widgets.map((widget, index) => {
+    const resolvedAppearance = resolveAppearance(widget);
+    return {
+      id: widget.id || generateClientId(),
+      project_id: projectId,
+      user_id: userId,
+      x: widget.x ?? 0,
+      y: widget.y ?? 0,
+      w: widget.w ?? 1,
+      h: widget.h ?? 1,
+      content: mergeAppearanceIntoContent(widget.content ?? '', resolvedAppearance),
+      ...(hasIsFixedColumn ? { is_fixed: widget.isFixed ?? false } : {}),
+      sort_index: index,
+      updated_at: now,
+    };
+  });
 
   const { error: widgetError } = await supabase
     .from('battle_map_widgets')
@@ -261,6 +279,7 @@ async function persistToAdvancedTables(
       w,
       h,
       content,
+      appearance: normalizedConfig.widgets.find((w) => w.id === id)?.appearance,
       isFixed: normalizedConfig.widgets.find((w) => w.id === id)?.isFixed ?? false,
       updated_at: now,
     })),

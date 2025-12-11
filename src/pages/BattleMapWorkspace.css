@@ -163,8 +163,8 @@
   height: calc(var(--grid-cell-height, 80px) * 2);
   aspect-ratio: 1 / 1;
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, #0000ff 65%, var(--border));
-  background: color-mix(in srgb, #0000ff 18%, var(--card));
+  border: 1px solid color-mix(in srgb, #6b6f7b 80%, var(--border));
+  background: color-mix(in srgb, #6b6f7b 20%, var(--card));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -175,8 +175,8 @@
 
 .battlemap-workspace__widget-template:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, #0000ff 75%, var(--primary));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--text) 12%, transparent);
+  border-color: color-mix(in srgb, #6b6f7b 85%, var(--primary));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--text) 14%, transparent);
 }
 
 .battlemap-workspace__widget-template:active {
@@ -187,8 +187,8 @@
   width: 100%;
   height: 100%;
   border-radius: 6px;
-  background: color-mix(in srgb, #0000ff 30%, var(--card));
-  color: #ffffff;
+  background: color-mix(in srgb, #6b6f7b 45%, var(--card));
+  color: #f8fafc;
   display: grid;
   place-items: center;
   text-align: center;
@@ -426,8 +426,11 @@
 
 /* Override GridStack default styles with theme variables */
 .battlemap-workspace .grid-stack-item {
-  background: #0000ff;
-  border: 1px solid #0000ff;
+  --widget-bg: #0000ff;
+  --widget-border: #0000ff;
+  --widget-text: #ffffff;
+  background: var(--widget-bg);
+  border: 1px solid var(--widget-border);
   border-radius: 4px;
   transition: box-shadow 0.2s ease, transform 0.12s ease;
   overflow: hidden;
@@ -446,8 +449,12 @@
 }
 
 .battlemap-workspace .grid-stack-item-content {
-  background: #0000ff;
-  color: #ffffff;
+  background: var(--widget-bg);
+  background-image: var(--widget-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  color: var(--widget-text);
   border-radius: 4px;
   padding: 0.75rem;
   display: flex;
@@ -465,7 +472,10 @@
 }
 
 .battlemap-workspace .grid-stack-item.is-fixed-widget {
-  border: 1px solid #0000ff;
+  --widget-bg: #6b6f7b;
+  --widget-border: #6b6f7b;
+  --widget-text: #ffffff;
+  border: 1px solid var(--widget-border);
 }
 
 /* GridStack resize handles */
@@ -519,7 +529,7 @@
   justify-content: center;
   font-size: 1rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--widget-text, #ffffff);
   text-align: center;
   user-select: none;
 }

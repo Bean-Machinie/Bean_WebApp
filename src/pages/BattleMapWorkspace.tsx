@@ -11,10 +11,62 @@ import { GridStack, GridStackNode } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { useAuth } from '../context/AuthContext';
 import { generateClientId } from '../lib/utils';
+import { createWidgetContent, mergeAppearanceIntoContent, resolveAppearance } from '../lib/battlemapAppearance';
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
 import './BattleMapWorkspace.css';
+
+const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
+  const appearance = resolveAppearance(widget);
+  const contentSource =
+    widget.content && widget.content.trim().length
+      ? widget.content
+      : createWidgetContent(`Widget ${widget.id}`, appearance);
+  const content = mergeAppearanceIntoContent(contentSource, appearance);
+
+  const contentContainer = el.querySelector('.grid-stack-item-content') as HTMLElement | null;
+  if (contentContainer) {
+    contentContainer.innerHTML = content;
+  } else {
+    el.innerHTML = `<div class="grid-stack-item-content">${content}</div>`;
+  }
+
+  el.dataset.widgetId = widget.id;
+  el.dataset.content = content;
+
+  if (widget.isFixed) {
+    el.dataset.isFixed = 'true';
+    el.setAttribute('gs-no-resize', 'true');
+    el.setAttribute('gs-min-w', '2');
+    el.setAttribute('gs-max-w', '2');
+    el.setAttribute('gs-min-h', '2');
+    el.setAttribute('gs-max-h', '2');
+    el.classList.add('is-fixed-widget');
+  } else {
+    el.dataset.isFixed = 'false';
+    el.removeAttribute('gs-no-resize');
+    el.removeAttribute('gs-min-w');
+    el.removeAttribute('gs-max-w');
+    el.removeAttribute('gs-min-h');
+    el.removeAttribute('gs-max-h');
+    el.classList.remove('is-fixed-widget');
+  }
+
+  el.style.setProperty('--widget-bg', appearance.backgroundColor ?? '');
+  el.style.setProperty('--widget-border', appearance.borderColor ?? appearance.backgroundColor ?? '');
+  el.style.setProperty('--widget-text', appearance.textColor ?? '');
+  if (appearance.backgroundImageUrl) {
+    el.style.setProperty('--widget-bg-image', `url("${appearance.backgroundImageUrl}")`);
+  } else {
+    el.style.removeProperty('--widget-bg-image');
+  }
+};
+
+const getWidgetContent = (label: string, widget: Partial<BattleMapWidget>) => {
+  const appearance = resolveAppearance(widget);
+  return mergeAppearanceIntoContent(createWidgetContent(label, appearance), appearance);
+};
 
 function BattleMapWorkspace() {
   const { projectId } = useParams();
@@ -189,7 +241,16 @@ function BattleMapWorkspace() {
       nodes.forEach((node) => {
         const widgetId = generateClientId();
         const label = `Widget ${nextCounter}`;
-        const content = `<div class="battlemap-widget-content">${label}</div>`;
+        const widget: BattleMapWidget = {
+          id: widgetId,
+          x: node.x ?? 0,
+          y: node.y ?? 0,
+          w: 2,
+          h: 2,
+          content: getWidgetContent(label, { isFixed: true }),
+          appearance: resolveAppearance({ isFixed: true }),
+          isFixed: true,
+        };
         nextCounter += 1;
 
         node.id = widgetId;
@@ -205,22 +266,10 @@ function BattleMapWorkspace() {
 
         const el = node.el as HTMLElement | undefined;
         if (el) {
-          el.dataset.widgetId = widgetId;
-          el.dataset.content = content;
+          hydrateWidgetElement(widget, el);
           el.setAttribute('gs-id', widgetId);
-          el.setAttribute('data-is-fixed', 'true');
-          el.setAttribute('gs-no-resize', 'true');
-          el.setAttribute('gs-min-w', '2');
-          el.setAttribute('gs-max-w', '2');
-          el.setAttribute('gs-min-h', '2');
-          el.setAttribute('gs-max-h', '2');
-          el.classList.add('is-fixed-widget');
-          const contentContainer = el.querySelector('.grid-stack-item-content');
-          if (contentContainer) {
-            contentContainer.innerHTML = content;
-          } else {
-            el.innerHTML = `<div class="grid-stack-item-content">${content}</div>`;
-          }
+          node.x = Number(el.getAttribute('gs-x')) || node.x;
+          node.y = Number(el.getAttribute('gs-y')) || node.y;
         }
 
         (node as unknown as { noResize?: boolean }).noResize = true;
@@ -255,6 +304,22 @@ function BattleMapWorkspace() {
         // @ts-ignore
         (node.noResize === true || node.el?.classList.contains('is-fixed-widget') || node.el?.dataset.isFixed === 'true');
 
+      const rawBgImage = node.el?.style.getPropertyValue('--widget-bg-image').trim();
+      const appearance = {
+        backgroundColor: node.el?.style.getPropertyValue('--widget-bg').trim() || undefined,
+        borderColor: node.el?.style.getPropertyValue('--widget-border').trim() || undefined,
+        textColor: node.el?.style.getPropertyValue('--widget-text').trim() || undefined,
+        backgroundImageUrl:
+          rawBgImage && rawBgImage !== 'none'
+            ? rawBgImage.replace(/^url\(["']?/, '').replace(/["']?\)$/, '')
+            : undefined,
+      };
+      const hasAppearance = Object.values(appearance).some(Boolean);
+      const content =
+        node.el?.dataset.content ||
+        node.el?.querySelector('.battlemap-widget-content')?.outerHTML ||
+        '<div class="battlemap-widget-content">Widget</div>';
+
       return {
         id: nodeId,
         x: node.x ?? 0,
@@ -262,10 +327,8 @@ function BattleMapWorkspace() {
         w: node.w ?? 1,
         h: node.h ?? 1,
         isFixed,
-        content:
-          node.el?.dataset.content ||
-          node.el?.querySelector('.battlemap-widget-content')?.innerHTML ||
-          'Widget',
+        content,
+        appearance: hasAppearance ? appearance : undefined,
       };
     });
   }, []);
@@ -312,39 +375,36 @@ function BattleMapWorkspace() {
         cellSizeRef.current = size;
         gridStackRef.current.column(columns);
         ensureRowLimits(rows);
-        log('Apply config to grid', { columns, rows, widgets: nextConfig.widgets.length });
+      log('Apply config to grid', { columns, rows, widgets: nextConfig.widgets.length });
 
-        nextConfig.widgets.forEach((widget) => {
-          const isFixed = widget.isFixed === true;
-          const widgetOptions = {
-            id: widget.id,
-            x: widget.x,
-            y: widget.y,
-            w: isFixed ? 2 : widget.w,
-            h: isFixed ? 2 : widget.h,
-            content: widget.content,
-            minW: isFixed ? 2 : 1,
-            maxW: isFixed ? 2 : undefined,
-            minH: isFixed ? 2 : 1,
-            maxH: isFixed ? 2 : undefined,
-            // @ts-ignore
+      nextConfig.widgets.forEach((widget) => {
+        const isFixed = widget.isFixed === true;
+        const appearance = resolveAppearance(widget);
+        const content = mergeAppearanceIntoContent(
+          widget.content && widget.content.trim().length
+            ? widget.content
+            : createWidgetContent(widget.id ? `Widget ${widget.id}` : 'Widget', appearance),
+          appearance,
+        );
+        const widgetOptions = {
+          id: widget.id,
+          x: widget.x,
+          y: widget.y,
+          w: isFixed ? 2 : widget.w,
+          h: isFixed ? 2 : widget.h,
+          content,
+          minW: isFixed ? 2 : 1,
+          maxW: isFixed ? 2 : undefined,
+          minH: isFixed ? 2 : 1,
+          maxH: isFixed ? 2 : undefined,
+          // @ts-ignore
             noResize: isFixed ? true : undefined,
           };
 
           const el = gridStackRef.current?.addWidget(widgetOptions);
 
           if (el) {
-            el.dataset.widgetId = widget.id;
-            el.dataset.content = widget.content;
-            if (isFixed) {
-              el.dataset.isFixed = 'true';
-              el.setAttribute('gs-no-resize', 'true');
-              el.setAttribute('gs-min-w', '2');
-              el.setAttribute('gs-max-w', '2');
-              el.setAttribute('gs-min-h', '2');
-              el.setAttribute('gs-max-h', '2');
-              el.classList.add('is-fixed-widget');
-            }
+            hydrateWidgetElement({ ...widget, appearance, content, isFixed }, el);
           }
         });
 
@@ -496,6 +556,8 @@ function BattleMapWorkspace() {
     }
 
     const widgetId = generateClientId();
+    const appearance = resolveAppearance({ isFixed: false });
+    const label = `Widget ${widgetCounter}`;
     const widget = {
       id: widgetId,
       x: 0,
@@ -503,19 +565,24 @@ function BattleMapWorkspace() {
       w: 2,
       h: 2,
       isFixed: false,
-      content: `<div class="battlemap-widget-content">Widget ${widgetCounter}</div>`,
+    };
+    const content = getWidgetContent(label, widget);
+    const widgetWithContent: BattleMapWidget = {
+      ...widget,
+      appearance,
+      content,
     };
 
-    log('Adding widget', widget);
+    log('Adding widget', widgetWithContent);
 
-    const el = gridStackRef.current.addWidget({ ...widget, autoPosition: true });
+    const el = gridStackRef.current.addWidget({ ...widgetWithContent, content, autoPosition: true });
     if (!el) {
       const nextConfig: BattleMapConfig = {
         ...configRef.current,
         gridColumns: gridColumnsRef.current,
         gridRows: gridRowsRef.current,
         cellSize: cellSizeRef.current,
-        widgets: [...configRef.current.widgets, widget],
+        widgets: [...configRef.current.widgets, widgetWithContent],
       };
 
       setConfig(nextConfig);
@@ -523,8 +590,7 @@ function BattleMapWorkspace() {
       return;
     }
 
-    el.dataset.widgetId = widgetId;
-    el.dataset.content = widget.content;
+    hydrateWidgetElement(widgetWithContent, el);
 
     const widgets = readWidgetsFromGrid();
     const nextConfig: BattleMapConfig = {
@@ -532,7 +598,7 @@ function BattleMapWorkspace() {
       gridColumns: gridColumnsRef.current,
       gridRows: gridRowsRef.current,
       cellSize: cellSizeRef.current,
-      widgets: widgets.length ? widgets : [...configRef.current.widgets, widget],
+      widgets: widgets.length ? widgets : [...configRef.current.widgets, widgetWithContent],
     };
 
     setWidgetCounter((prev) => prev + 1);

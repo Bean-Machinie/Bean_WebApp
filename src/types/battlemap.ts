@@ -29,6 +29,13 @@ export type PlacedTile = {
   tile?: Tile;
 };
 
+export type WidgetAppearance = {
+  backgroundColor?: string;
+  borderColor?: string;
+  textColor?: string;
+  backgroundImageUrl?: string;
+};
+
 export type BattleMapWidget = {
   id: string;
   x: number;
@@ -36,6 +43,7 @@ export type BattleMapWidget = {
   w: number;
   h: number;
   content: string;
+  appearance?: WidgetAppearance;
   isFixed?: boolean;
   updated_at?: string;
 };
