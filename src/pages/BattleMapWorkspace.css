@@ -548,7 +548,7 @@
   background-size: 100% 100% !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
-  opacity: 0.2;
+  opacity: 0;
   border: 2px dashed var(--placeholder-color, var(--primary)) !important;
   border-radius: 4px;
 }
@@ -560,7 +560,7 @@
   background-position: center !important;
   background-repeat: no-repeat !important;
   border: 2px dashed var(--placeholder-color, var(--primary)) !important;
-  opacity: 0.2;
+  opacity: 0.6;
 }
 
 /* Custom widget content styling */
