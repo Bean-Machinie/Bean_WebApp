@@ -14,11 +14,18 @@ type StorageMode = 'advanced' | 'legacy';
 
 let hasCheckedAdvancedStorage = false;
 let supportsAdvancedStorageCache = true;
+let hasIsFixedColumn = true;
 
 const isMissingTableError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
   const message = (error as { message?: string }).message?.toLowerCase() ?? '';
   return message.includes('does not exist') || message.includes('42p01');
+};
+
+const isMissingColumnError = (error: unknown, column: string) => {
+  if (!error || typeof error !== 'object') return false;
+  const message = (error as { message?: string }).message?.toLowerCase() ?? '';
+  return message.includes('does not exist') && message.includes(column.toLowerCase());
 };
 
 const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapConfig => ({
@@ -32,6 +39,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
     w: widget.w ?? 1,
     h: widget.h ?? 1,
     content: widget.content ?? '',
+    isFixed: widget.isFixed ?? false,
     updated_at: widget.updated_at,
   })),
   version: config?.version ?? DEFAULT_BATTLE_MAP_CONFIG.version,
@@ -75,14 +83,51 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     return null;
   }
 
+  const widgetSelect = hasIsFixedColumn
+    ? 'id, x, y, w, h, content, is_fixed, updated_at, sort_index'
+    : 'id, x, y, w, h, content, updated_at, sort_index';
+
   const { data: widgetRows, error: widgetError } = await supabase
     .from('battle_map_widgets')
-    .select('id, x, y, w, h, content, updated_at, sort_index')
+    .select(widgetSelect)
     .eq('project_id', projectId)
     .eq('user_id', userId)
     .order('sort_index', { ascending: true });
 
   if (widgetError) {
+    if (isMissingColumnError(widgetError, 'is_fixed')) {
+      hasIsFixedColumn = false;
+      const retry = await supabase
+        .from('battle_map_widgets')
+        .select('id, x, y, w, h, content, updated_at, sort_index')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .order('sort_index', { ascending: true });
+
+      if (retry.error) {
+        throw retry.error;
+      }
+
+      return normalizeConfig({
+        gridColumns: configRow.grid_columns,
+        gridRows: configRow.grid_rows,
+        cellSize: configRow.cell_size,
+        widgets:
+          retry.data?.map((widget) => ({
+            id: widget.id,
+            x: widget.x,
+            y: widget.y,
+            w: widget.w,
+            h: widget.h,
+            content: widget.content ?? '',
+            updated_at: widget.updated_at,
+            isFixed: false,
+          })) ?? [],
+        version: configRow.version,
+        updated_at: configRow.updated_at,
+      });
+    }
+
     if (isMissingTableError(widgetError)) {
       supportsAdvancedStorageCache = false;
       return null;
@@ -98,6 +143,7 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
       w: widget.w,
       h: widget.h,
       content: widget.content ?? '',
+      isFixed: hasIsFixedColumn ? widget.is_fixed ?? false : false,
       updated_at: widget.updated_at,
     })) ?? [];
 
@@ -147,6 +193,7 @@ async function persistToAdvancedTables(
     w: widget.w ?? 1,
     h: widget.h ?? 1,
     content: widget.content ?? '',
+    ...(hasIsFixedColumn ? { is_fixed: widget.isFixed ?? false } : {}),
     sort_index: index,
     updated_at: now,
   }));
@@ -156,6 +203,33 @@ async function persistToAdvancedTables(
     .upsert(widgetsForUpsert, { onConflict: 'id' });
 
   if (widgetError) {
+    if (isMissingColumnError(widgetError, 'is_fixed')) {
+      hasIsFixedColumn = false;
+      const retryWidgets = normalizedConfig.widgets.map((widget, index) => ({
+        id: widget.id || generateClientId(),
+        project_id: projectId,
+        user_id: userId,
+        x: widget.x ?? 0,
+        y: widget.y ?? 0,
+        w: widget.w ?? 1,
+        h: widget.h ?? 1,
+        content: widget.content ?? '',
+        sort_index: index,
+        updated_at: now,
+      }));
+
+      const retryResult = await supabase
+        .from('battle_map_widgets')
+        .upsert(retryWidgets, { onConflict: 'id' });
+
+      if (retryResult.error) {
+        throw retryResult.error;
+      }
+
+      supportsAdvancedStorageCache = false;
+      return normalizedConfig;
+    }
+
     if (isMissingTableError(widgetError)) {
       supportsAdvancedStorageCache = false;
       return normalizedConfig;
@@ -187,6 +261,7 @@ async function persistToAdvancedTables(
       w,
       h,
       content,
+      isFixed: normalizedConfig.widgets.find((w) => w.id === id)?.isFixed ?? false,
       updated_at: now,
     })),
     version: nextVersion,

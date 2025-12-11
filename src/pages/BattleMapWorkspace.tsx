@@ -20,6 +20,7 @@ function BattleMapWorkspace() {
   const { projectId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const widgetTemplateSelector = '.battlemap-workspace__widget-template';
 
   const {
     project,
@@ -60,6 +61,7 @@ function BattleMapWorkspace() {
   const hasInitializedGridRef = useRef(false);
   const initialStaticRef = useRef(false);
   const hasCenteredRef = useRef(false);
+  const widgetCounterRef = useRef(widgetCounter);
 
   const log = useCallback(
     (message: string, detail?: unknown) => {
@@ -134,6 +136,10 @@ function BattleMapWorkspace() {
     }
   }, [error, log]);
 
+  useEffect(() => {
+    widgetCounterRef.current = widgetCounter;
+  }, [widgetCounter]);
+
   const syncGridGuides = useCallback(() => {
     if (!gridStackRef.current || !gridRef.current) return;
 
@@ -144,6 +150,14 @@ function BattleMapWorkspace() {
 
       gridRef.current.style.setProperty('--grid-cell-width', `${cellWidth}px`);
       gridRef.current.style.setProperty('--grid-cell-height', `${cellWidth}px`);
+
+      const workspaceEl = gridRef.current.closest('.battlemap-workspace');
+      if (workspaceEl) {
+        workspaceEl.setAttribute('data-grid-cell-width', `${cellWidth}`);
+        workspaceEl.style.setProperty('--grid-cell-width', `${cellWidth}px`);
+        workspaceEl.style.setProperty('--grid-cell-height', `${cellWidth}px`);
+      }
+
       gridRef.current.style.backgroundPosition = '0 0, 0 0';
     }
   }, []);
@@ -166,6 +180,58 @@ function BattleMapWorkspace() {
     [],
   );
 
+  const applyTemplateToNodes = useCallback(
+    (nodes: GridStackNode[]) => {
+      if (!nodes.length) return;
+
+      let nextCounter = widgetCounterRef.current;
+
+      nodes.forEach((node) => {
+        const widgetId = generateClientId();
+        const label = `Widget ${nextCounter}`;
+        const content = `<div class="battlemap-widget-content">${label}</div>`;
+        nextCounter += 1;
+
+        node.id = widgetId;
+        node.w = 2;
+        node.h = 2;
+        node.minW = 2;
+        node.maxW = 2;
+        node.minH = 2;
+        node.maxH = 2;
+        // keep draggable but disallow resize
+        // @ts-ignore GridStack node option
+        node.noResize = true;
+
+        const el = node.el as HTMLElement | undefined;
+        if (el) {
+          el.dataset.widgetId = widgetId;
+          el.dataset.content = content;
+          el.setAttribute('gs-id', widgetId);
+          el.setAttribute('data-is-fixed', 'true');
+          el.setAttribute('gs-no-resize', 'true');
+          el.setAttribute('gs-min-w', '2');
+          el.setAttribute('gs-max-w', '2');
+          el.setAttribute('gs-min-h', '2');
+          el.setAttribute('gs-max-h', '2');
+          el.classList.add('is-fixed-widget');
+          const contentContainer = el.querySelector('.grid-stack-item-content');
+          if (contentContainer) {
+            contentContainer.innerHTML = content;
+          } else {
+            el.innerHTML = `<div class="grid-stack-item-content">${content}</div>`;
+          }
+        }
+
+        (node as unknown as { noResize?: boolean }).noResize = true;
+      });
+
+      widgetCounterRef.current = nextCounter;
+      setWidgetCounter(nextCounter);
+    },
+    [setWidgetCounter],
+  );
+
   const readWidgetsFromGrid = useCallback((): BattleMapWidget[] => {
     if (!gridStackRef.current) return [];
 
@@ -181,12 +247,21 @@ function BattleMapWorkspace() {
         node.el.dataset.widgetId = nodeId;
       }
 
+      const isFixed =
+        node.minW === 2 &&
+        node.maxW === 2 &&
+        node.minH === 2 &&
+        node.maxH === 2 &&
+        // @ts-ignore
+        (node.noResize === true || node.el?.classList.contains('is-fixed-widget') || node.el?.dataset.isFixed === 'true');
+
       return {
         id: nodeId,
         x: node.x ?? 0,
         y: node.y ?? 0,
         w: node.w ?? 1,
         h: node.h ?? 1,
+        isFixed,
         content:
           node.el?.dataset.content ||
           node.el?.querySelector('.battlemap-widget-content')?.innerHTML ||
@@ -240,18 +315,36 @@ function BattleMapWorkspace() {
         log('Apply config to grid', { columns, rows, widgets: nextConfig.widgets.length });
 
         nextConfig.widgets.forEach((widget) => {
-          const el = gridStackRef.current?.addWidget({
+          const isFixed = widget.isFixed === true;
+          const widgetOptions = {
             id: widget.id,
             x: widget.x,
             y: widget.y,
-            w: widget.w,
-            h: widget.h,
+            w: isFixed ? 2 : widget.w,
+            h: isFixed ? 2 : widget.h,
             content: widget.content,
-          });
+            minW: isFixed ? 2 : widget.w,
+            maxW: isFixed ? 2 : undefined,
+            minH: isFixed ? 2 : widget.h,
+            maxH: isFixed ? 2 : undefined,
+            // @ts-ignore
+            noResize: isFixed ? true : undefined,
+          };
+
+          const el = gridStackRef.current?.addWidget(widgetOptions);
 
           if (el) {
             el.dataset.widgetId = widget.id;
             el.dataset.content = widget.content;
+            if (isFixed) {
+              el.dataset.isFixed = 'true';
+              el.setAttribute('gs-no-resize', 'true');
+              el.setAttribute('gs-min-w', '2');
+              el.setAttribute('gs-max-w', '2');
+              el.setAttribute('gs-min-h', '2');
+              el.setAttribute('gs-max-h', '2');
+              el.classList.add('is-fixed-widget');
+            }
           }
         });
 
@@ -289,6 +382,15 @@ function BattleMapWorkspace() {
         float: true,
         minRow: gridRowsRef.current,
         maxRow: gridRowsRef.current,
+        acceptWidgets: true,
+        dragIn: widgetTemplateSelector,
+        dragInOptions: {
+          helper: 'clone',
+          appendTo: 'body',
+          revert: 'invalid',
+          scroll: false,
+        },
+        dragInDefault: { w: 2, h: 2, minW: 2, maxW: 2, minH: 2, maxH: 2, noResize: true },
         resizable: {
           handles: 'e,se,s,sw,w',
         },
@@ -299,6 +401,14 @@ function BattleMapWorkspace() {
     hasInitializedGridRef.current = true;
     initialStaticRef.current = gridStackRef.current.opts.staticGrid ?? false;
     log('GridStack initialized', { columns: gridColumnsRef.current });
+
+    GridStack.setupDragIn(widgetTemplateSelector, {
+      helper: 'clone',
+      appendTo: 'body',
+      revert: 'invalid',
+      scroll: false,
+    });
+    log('GridStack drag-in configured', { selector: widgetTemplateSelector });
 
     setTimeout(() => {
       syncGridGuides();
@@ -322,18 +432,42 @@ function BattleMapWorkspace() {
       log('Grid change persisted', { widgets: widgets.length });
     };
 
+    const handleDropped = (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      _event: any,
+      _previousWidget: GridStackNode | undefined,
+      newWidget?: GridStackNode | GridStackNode[],
+    ) => {
+      if (!newWidget) return;
+      const nodes = Array.isArray(newWidget) ? newWidget : [newWidget];
+      applyTemplateToNodes(nodes);
+      handleGridChange();
+    };
+
     gridStackRef.current.on('change', handleGridChange);
     gridStackRef.current.on('removed', handleGridChange);
+    gridStackRef.current.on('dropped', handleDropped);
 
     return () => {
       gridStackRef.current?.off('change', handleGridChange);
       gridStackRef.current?.off('removed', handleGridChange);
+      gridStackRef.current?.off('dropped', handleDropped);
       gridStackRef.current?.destroy(false);
       gridStackRef.current = null;
       hasInitializedGridRef.current = false;
       log('GridStack destroyed');
     };
-  }, [gridColumnsRef, gridRef, log, project, queueSave, readWidgetsFromGrid, setConfig, syncGridGuides]);
+  }, [
+    applyTemplateToNodes,
+    gridColumnsRef,
+    gridRef,
+    log,
+    project,
+    queueSave,
+    readWidgetsFromGrid,
+    setConfig,
+    syncGridGuides,
+  ]);
 
   useLayoutEffect(() => {
     const cleanup = initGridStack();
@@ -368,6 +502,7 @@ function BattleMapWorkspace() {
       y: 0,
       w: 2,
       h: 2,
+      isFixed: false,
       content: `<div class="battlemap-widget-content">Widget ${widgetCounter}</div>`,
     };
 
@@ -701,6 +836,24 @@ function BattleMapWorkspace() {
             >
               Add Widget
             </button>
+            <div className="battlemap-workspace__widget-tray">
+              <p className="battlemap-workspace__label">Fixed 2x2 Widget</p>
+              <div
+                className="battlemap-workspace__widget-template grid-stack-item"
+                data-gs-width="2"
+                data-gs-height="2"
+                data-is-fixed="true"
+                data-gs-auto-position="true"
+              >
+                <div className="battlemap-workspace__widget-template-inner grid-stack-item-content">
+                  <span className="battlemap-workspace__widget-template-title">2 x 2</span>
+                  <span className="battlemap-workspace__widget-template-subtitle">Drag to grid</span>
+                </div>
+              </div>
+              <p className="battlemap-workspace__hint">
+                Drag and drop for an endless supply of fixed 2x2 widgets.
+              </p>
+            </div>
             <p className="battlemap-workspace__hint">
               Auto-save: {isSaving ? 'Saving...' : 'Synced'} ({storageMode} storage)
             </p>

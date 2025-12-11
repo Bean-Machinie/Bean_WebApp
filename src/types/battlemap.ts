@@ -36,6 +36,7 @@ export type BattleMapWidget = {
   w: number;
   h: number;
   content: string;
+  isFixed?: boolean;
   updated_at?: string;
 };
 

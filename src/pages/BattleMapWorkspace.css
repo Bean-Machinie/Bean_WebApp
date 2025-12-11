@@ -148,6 +148,65 @@
   width: 100%;
 }
 
+.battlemap-workspace__widget-tray {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--bg) 85%, var(--card) 15%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.battlemap-workspace__widget-template {
+  width: calc(var(--grid-cell-width, 80px) * 2);
+  height: calc(var(--grid-cell-height, 80px) * 2);
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #0000ff 65%, var(--border));
+  background: color-mix(in srgb, #0000ff 18%, var(--card));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.battlemap-workspace__widget-template:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, #0000ff 75%, var(--primary));
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.battlemap-workspace__widget-template:active {
+  cursor: grabbing;
+}
+
+.battlemap-workspace__widget-template-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: color-mix(in srgb, #0000ff 30%, var(--card));
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-weight: 700;
+  gap: 0.2rem;
+  font-size: 0.95rem;
+}
+
+.battlemap-workspace__widget-template-title {
+  letter-spacing: 0.04em;
+}
+
+.battlemap-workspace__widget-template-subtitle {
+  font-size: 0.75rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
 /* Main Workspace Area */
 .battlemap-workspace__main {
   flex: 1;
@@ -371,6 +430,8 @@
   border: 1px solid #0000ff;
   border-radius: 4px;
   transition: box-shadow 0.2s ease, transform 0.12s ease;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .battlemap-workspace .grid-stack-item:hover {
@@ -388,13 +449,23 @@
   background: #0000ff;
   color: #ffffff;
   border-radius: 4px;
-  padding: 1rem;
+  padding: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
   overflow: hidden;
   inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.battlemap-workspace .grid-stack-item.is-fixed-widget .ui-resizable-handle {
+  display: none !important;
+}
+
+.battlemap-workspace .grid-stack-item.is-fixed-widget {
+  border: 1px solid #0000ff;
 }
 
 /* GridStack resize handles */
