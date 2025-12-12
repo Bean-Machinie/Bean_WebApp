@@ -368,6 +368,7 @@
 
 .battlemap-workspace .grid-stack-item {
   z-index: 20;
+  transform-origin: center center !important;
 }
 
 .battlemap-workspace .grid-stack-item.ui-draggable-dragging {
@@ -375,38 +376,43 @@
 }
 
 .battlemap-workspace .grid-stack-item.is-over-delete-zone {
-  transform: var(--gridstack-transform, none);
+  transform: scale(0.75) !important;
+  opacity: 0.6;
   box-shadow: 0 14px 22px color-mix(in srgb, var(--danger) 25%, transparent);
+  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
 }
 
 .battlemap-workspace .grid-stack-item.is-over-delete-zone .grid-stack-item-content {
-  transform: scale(0.78);
-  opacity: 0.5;
+  transform: scale(0.95);
+  opacity: 0.6;
+  transition: transform 0.12s ease, opacity 0.12s ease;
 }
 
 .battlemap-workspace .grid-stack-item-removing,
 .battlemap-workspace .grid-stack-item.grid-stack-item-removing .grid-stack-item-content {
-  opacity: 1 !important;
-  filter: blur(2px);
-  transform: scale(0.75);
-  transition: transform 0.12s ease, opacity 0.12s ease, filter 0.12s ease;
+  opacity: 0.5 !important;
+  filter: blur(1px);
+  transform: scale(0.75) !important;
+  transition: transform 0.14s ease, opacity 0.14s ease, filter 0.14s ease;
 }
 
 .battlemap-workspace .grid-stack-item.is-being-deleted {
   pointer-events: none;
-  transition: transform 0.18s ease, opacity 0.18s ease;
-  transform: var(--gridstack-transform, none) translate(var(--delete-offset-x, 0), var(--delete-offset-y, 0)) scale(0.25);
+  transform: translate(var(--delete-offset-x, 0), var(--delete-offset-y, 0)) scale(0.2) !important;
   opacity: 0;
+  filter: blur(2px);
+  transition: transform 0.08s ease, opacity 0.08s ease, filter 0.08s ease;
 }
 
 .battlemap-widget-ghost {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.28s ease, opacity 0.28s ease, filter 0.28s ease;
   transform: translate(0, 0) scale(1);
   opacity: 1;
 }
 .battlemap-widget-ghost.is-being-deleted {
-  transform: translate(var(--delete-offset-x, 0), var(--delete-offset-y, 0)) scale(0.1);
+  transform: translate(var(--delete-offset-x, 0), var(--delete-offset-y, 0)) scale(0.06);
   opacity: 0;
+  filter: blur(3px);
 }
 
 .battlemap-workspace__content {

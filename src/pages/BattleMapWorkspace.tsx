@@ -270,43 +270,24 @@ function BattleMapWorkspace() {
     [isPointInsideDeleteZone],
   );
 
-  const animateDeleteAndRemoveWidget = useCallback((el: HTMLElement, onDone?: () => void) => {
+  const isElementOverDeleteZone = useCallback((el: HTMLElement | null | undefined) => {
     const zone = deleteZoneRef.current;
-    if (!gridStackRef.current) {
-      gridStackRef.current?.removeWidget(el, true);
-      onDone?.();
-      return;
-    }
-
+    if (!zone || !el) return false;
     const widgetRect = el.getBoundingClientRect();
-    const targetRect = zone?.getBoundingClientRect();
+    const zoneRect = zone.getBoundingClientRect();
+    const noOverlap =
+      widgetRect.right < zoneRect.left ||
+      widgetRect.left > zoneRect.right ||
+      widgetRect.bottom < zoneRect.top ||
+      widgetRect.top > zoneRect.bottom;
+    return !noOverlap;
+  }, []);
 
-    const clone = el.cloneNode(true) as HTMLElement;
-    clone.classList.add('battlemap-widget-ghost');
-    clone.style.position = 'fixed';
-    clone.style.top = `${widgetRect.top}px`;
-    clone.style.left = `${widgetRect.left}px`;
-    clone.style.width = `${widgetRect.width}px`;
-    clone.style.height = `${widgetRect.height}px`;
-    clone.style.transform = 'none';
-    clone.style.zIndex = '999';
-    document.body.appendChild(clone);
-
-    gridStackRef.current.removeWidget(el, true);
+  const animateDeleteAndRemoveWidget = useCallback((el: HTMLElement, onDone?: () => void) => {
+    // Remove immediately without linger
+    gridStackRef.current?.removeWidget(el, true);
+    el.remove();
     onDone?.();
-
-    if (targetRect) {
-      const deltaX = targetRect.left + targetRect.width / 2 - (widgetRect.left + widgetRect.width / 2);
-      const deltaY = targetRect.top + targetRect.height / 2 - (widgetRect.top + widgetRect.height / 2);
-      requestAnimationFrame(() => {
-        clone.style.setProperty('--delete-offset-x', `${deltaX}px`);
-        clone.style.setProperty('--delete-offset-y', `${deltaY}px`);
-        clone.classList.add('is-being-deleted');
-      });
-      setTimeout(() => clone.remove(), 220);
-    } else {
-      clone.remove();
-    }
   }, []);
 
   const log = useCallback(
@@ -704,23 +685,38 @@ function BattleMapWorkspace() {
     };
 
     gridStackRef.current.on('change', handleGridChange);
-    gridStackRef.current.on('removed', handleGridChange);
+    const handleRemoved = (_event: unknown, items?: GridStackNode[]) => {
+      if (items) {
+        items.forEach((item) => {
+          const el = (item as GridStackNode)?.el as HTMLElement | undefined;
+          if (el) {
+            el.classList.add('is-being-deleted');
+            setTimeout(() => {
+              el.remove();
+            }, 200);
+          }
+        });
+      }
+      handleGridChange();
+    };
+    gridStackRef.current.on('removed', handleRemoved);
     gridStackRef.current.on('dropped', handleDropped);
     const handleDragStart = (event: unknown, el?: HTMLElement) => {
       updatePlaceholderAppearance(gridRef.current, el ?? null);
-      const active = updateDeleteZoneHighlight(event);
+      const active = updateDeleteZoneHighlight(event) || isElementOverDeleteZone(el ?? null);
       setDeleteHoverClass(el, active);
     };
     const handleDrag = (event: unknown, el?: HTMLElement) => {
       updatePlaceholderAppearance(gridRef.current, el ?? null);
-      const active = updateDeleteZoneHighlight(event);
+      const active = updateDeleteZoneHighlight(event) || isElementOverDeleteZone(el ?? null);
       setDeleteHoverClass(el, active);
     };
     const handleResizeStart = (_event: unknown, el?: HTMLElement) => {
       updatePlaceholderAppearance(gridRef.current, el ?? null);
     };
     const handleDragStop = (event: unknown, el?: HTMLElement) => {
-      const shouldDelete = deleteZoneActiveRef.current || isEventInsideDeleteZone(event);
+      const shouldDelete =
+        deleteZoneActiveRef.current || isEventInsideDeleteZone(event) || isElementOverDeleteZone(el ?? null);
       deleteZoneActiveRef.current = false;
       setIsDeleteZoneActive(false);
       setDeleteHoverClass(el, false);
@@ -739,7 +735,7 @@ function BattleMapWorkspace() {
 
     return () => {
       gridStackRef.current?.off('change', handleGridChange);
-      gridStackRef.current?.off('removed', handleGridChange);
+      gridStackRef.current?.off('removed', handleRemoved);
       gridStackRef.current?.off('dropped', handleDropped);
       gridStackRef.current?.off('dragstart', handleDragStart);
       gridStackRef.current?.off('drag', handleDrag);
@@ -755,6 +751,7 @@ function BattleMapWorkspace() {
     applyTemplateToNodes,
     gridColumnsRef,
     gridRef,
+    isElementOverDeleteZone,
     log,
     project,
     queueSave,
