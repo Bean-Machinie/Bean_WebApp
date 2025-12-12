@@ -238,6 +238,7 @@
   position: relative;
   transform-origin: 0 0;
   will-change: transform;
+  z-index: 2;
 }
 
 .battlemap-workspace__grid-wrapper {
@@ -366,7 +367,11 @@
 }
 
 .battlemap-workspace .grid-stack-item {
-  z-index: 3;
+  z-index: 20;
+}
+
+.battlemap-workspace .grid-stack-item.ui-draggable-dragging {
+  z-index: 30 !important;
 }
 
 .battlemap-workspace .grid-stack-item.is-over-delete-zone {
