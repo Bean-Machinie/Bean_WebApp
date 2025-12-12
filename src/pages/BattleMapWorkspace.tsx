@@ -1093,67 +1093,45 @@ function BattleMapWorkspace() {
           <h2 className="battlemap-workspace__project-name">{project.name}</h2>
         </div>
 
-        <div className="battlemap-workspace__controls">
-          <div className="battlemap-workspace__control-section">
-            <h3 className="battlemap-workspace__control-title">Grid Settings</h3>
-
-            <div className="battlemap-workspace__grid-meta">
-              <div className="battlemap-workspace__grid-meta-row">
-                <span>Columns</span>
-                <span>{gridColumns}</span>
-              </div>
-              <div className="battlemap-workspace__grid-meta-row">
-                <span>Rows</span>
-                <span>{gridRows}</span>
-              </div>
-              <div className="battlemap-workspace__grid-meta-row">
-                <span>Cell Size</span>
-                <span>{cellSize}px</span>
-              </div>
-              <p className="battlemap-workspace__hint">
-                Hold Space to pan, scroll to zoom. Widgets stay locked while panning.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => {
-                centerView(true);
-              }}
-            >
-              Reset View
-            </button>
+        <div className="battlemap-workspace__tiles-panel">
+          <div className="battlemap-workspace__tiles-header">
+            <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
-
-          <div className="battlemap-workspace__control-section">
-            <h3 className="battlemap-workspace__control-title">Widgets</h3>
-            <button
-              className="button button--primary battlemap-workspace__add-widget-btn"
-              onClick={handleAddWidget}
-            >
-              Add Widget
-            </button>
-            <div className="battlemap-workspace__widget-tray">
-              <p className="battlemap-workspace__label">Fixed 2x2 Widget</p>
-              <div
-                className="battlemap-workspace__widget-template grid-stack-item"
-                data-gs-width="2"
-                data-gs-height="2"
-                data-is-fixed="true"
-                data-gs-auto-position="true"
-                onMouseDown={handleTemplatePointerDown}
-                aria-label="Fixed 2 by 2 widget"
-              >
-                <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
+          <div className="battlemap-workspace__tiles-scroll">
+            <div className="battlemap-workspace__tile-group">
+              <div className="battlemap-workspace__tile-group-title">Stone Tiles</div>
+              <div className="battlemap-workspace__widget-tray">
+                <p className="battlemap-workspace__label">Fixed 2x2 Widget</p>
+                <div
+                  className="battlemap-workspace__widget-template grid-stack-item"
+                  data-gs-width="2"
+                  data-gs-height="2"
+                  data-is-fixed="true"
+                  data-gs-auto-position="true"
+                  onMouseDown={handleTemplatePointerDown}
+                  aria-label="Fixed 2 by 2 widget"
+                >
+                  <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
+                </div>
+                <p className="battlemap-workspace__hint">
+                  Drag and drop for an endless supply of fixed 2x2 widgets.
+                </p>
               </div>
-              <p className="battlemap-workspace__hint">
-                Drag and drop for an endless supply of fixed 2x2 widgets.
-              </p>
             </div>
-            <p className="battlemap-workspace__hint">
-              Auto-save: {isSaving ? 'Saving...' : 'Synced'} ({storageMode} storage)
-            </p>
+
+            <div className="battlemap-workspace__tile-group">
+              <div className="battlemap-workspace__tile-group-title">Dirt Tiles</div>
+              <div className="battlemap-workspace__tile-placeholder">Space reserved for upcoming tiles.</div>
+            </div>
+
+            <div className="battlemap-workspace__tile-group">
+              <div className="battlemap-workspace__tile-group-title">Road Tiles</div>
+              <div className="battlemap-workspace__tile-placeholder">Space reserved for upcoming tiles.</div>
+            </div>
           </div>
+          <p className="battlemap-workspace__hint battlemap-workspace__autosave">
+            Auto-save: {isSaving ? 'Saving...' : 'Synced'} ({storageMode} storage)
+          </p>
         </div>
       </div>
 
@@ -1217,17 +1195,48 @@ function BattleMapWorkspace() {
               />
             </div>
           </div>
-        <div
-          id="trash-dropzone"
-          ref={deleteZoneRef}
-          className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}`}
-          aria-label="Drop widgets here to delete them"
-          role="presentation"
-        >
-          <span className="battlemap-delete-panel__icon" aria-hidden />
+          <div
+            id="trash-dropzone"
+            ref={deleteZoneRef}
+            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}`}
+            aria-label="Drop widgets here to delete them"
+            role="presentation"
+          >
+            <span className="battlemap-delete-panel__icon" aria-hidden />
+          </div>
         </div>
       </div>
-    </div>
+      <div className="battlemap-workspace__right-sidebar">
+        <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
+          <h3 className="battlemap-workspace__control-title">Grid Settings</h3>
+          <div className="battlemap-workspace__grid-meta">
+            <div className="battlemap-workspace__grid-meta-row">
+              <span>Columns</span>
+              <span>{gridColumns}</span>
+            </div>
+            <div className="battlemap-workspace__grid-meta-row">
+              <span>Rows</span>
+              <span>{gridRows}</span>
+            </div>
+            <div className="battlemap-workspace__grid-meta-row">
+              <span>Cell Size</span>
+              <span>{cellSize}px</span>
+            </div>
+            <p className="battlemap-workspace__hint">
+              Hold Space to pan, scroll to zoom. Widgets stay locked while panning.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="button button--ghost battlemap-workspace__reset-button"
+            onClick={() => {
+              centerView(true);
+            }}
+          >
+            Reset View
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
