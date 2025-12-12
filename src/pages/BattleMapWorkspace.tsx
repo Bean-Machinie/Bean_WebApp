@@ -161,12 +161,9 @@ const resetPlaceholderAppearance = (gridEl: HTMLDivElement | null) => {
 const setDeleteHoverClass = (el: HTMLElement | undefined | null, isOverDelete: boolean) => {
   if (!el) return;
   if (isOverDelete) {
-    const currentTransform = getComputedStyle(el).transform || 'none';
-    el.style.setProperty('--gridstack-transform', currentTransform);
     el.classList.add('is-over-delete-zone');
   } else {
     el.classList.remove('is-over-delete-zone');
-    el.style.removeProperty('--gridstack-transform');
   }
 };
 
@@ -644,6 +641,7 @@ function BattleMapWorkspace() {
         minRow: gridRowsRef.current,
         maxRow: gridRowsRef.current,
         acceptWidgets: true,
+        removable: '.battlemap-delete-panel',
         dragIn: widgetTemplateSelector,
         dragInOptions: {
           helper: 'clone',
@@ -1222,16 +1220,17 @@ function BattleMapWorkspace() {
               />
             </div>
           </div>
-          <div
-            ref={deleteZoneRef}
-            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}`}
-            aria-label="Drop widgets here to delete them"
-            role="presentation"
-          >
-            <span className="battlemap-delete-panel__icon" aria-hidden />
-          </div>
+        <div
+          id="trash-dropzone"
+          ref={deleteZoneRef}
+          className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}`}
+          aria-label="Drop widgets here to delete them"
+          role="presentation"
+        >
+          <span className="battlemap-delete-panel__icon" aria-hidden />
         </div>
       </div>
+    </div>
     </div>
   );
 }
