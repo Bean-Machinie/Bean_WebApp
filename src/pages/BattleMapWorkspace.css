@@ -225,13 +225,17 @@
   --widget-text: #f8fafc;
   --widget-bg-image: url('/assets/widgets/stone_tile.webp');
   --widget-preview-scale: 0.4;
-  width: calc(var(--grid-cell-width, 80px) * 2 * var(--widget-preview-scale));
-  height: calc(var(--grid-cell-height, 80px) * 2 * var(--widget-preview-scale));
+  --tile-preview-scale: var(--widget-preview-scale);
+  --tile-cols: 2;
+  --tile-rows: 2;
+  --tile-image: var(--widget-bg-image);
+  width: calc(var(--grid-cell-width, 80px) * var(--tile-cols, 2) * var(--tile-preview-scale, 1));
+  height: calc(var(--grid-cell-height, 80px) * var(--tile-rows, 2) * var(--tile-preview-scale, 1));
   aspect-ratio: 1 / 1;
   border-radius: 0;
   border: none;
   background: #6b6f7b;
-  background-image: var(--widget-bg-image);
+  background-image: var(--tile-image);
   background-size: 100% 100%;
   background-position: center;
   background-repeat: no-repeat;
@@ -248,7 +252,7 @@
   height: 100%;
   border-radius: 0;
   background: #6b6f7b;
-  background-image: var(--widget-bg-image);
+  background-image: var(--tile-image);
   background-size: 100% 100%;
   background-position: center;
   background-repeat: no-repeat;
@@ -261,6 +265,7 @@
 .battlemap-workspace__widget-template:hover {
   transform: scale(1.05);
 }
+
 
 /* Main Workspace Area */
 .battlemap-workspace__main {

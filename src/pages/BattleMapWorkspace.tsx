@@ -21,6 +21,7 @@ import {
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
+import { TILE_PREVIEW_SCALE, TILE_SETS } from '../data/tiles/tileSets';
 import './BattleMapWorkspace.css';
 
 const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
@@ -49,10 +50,10 @@ const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
   if (widget.isFixed) {
     el.dataset.isFixed = 'true';
     el.setAttribute('gs-no-resize', 'true');
-    el.setAttribute('gs-min-w', '2');
-    el.setAttribute('gs-max-w', '2');
-    el.setAttribute('gs-min-h', '2');
-    el.setAttribute('gs-max-h', '2');
+    el.setAttribute('gs-min-w', `${widget.w ?? 1}`);
+    el.setAttribute('gs-max-w', `${widget.w ?? 1}`);
+    el.setAttribute('gs-min-h', `${widget.h ?? 1}`);
+    el.setAttribute('gs-max-h', `${widget.h ?? 1}`);
     el.classList.add('is-fixed-widget');
   } else {
     el.dataset.isFixed = 'false';
@@ -417,31 +418,63 @@ function BattleMapWorkspace() {
       let nextCounter = widgetCounterRef.current;
 
       nodes.forEach((node) => {
+        const el = node.el as HTMLElement | undefined;
+        const cols =
+          node.w ??
+          (Number(el?.getAttribute('gs-w')) ||
+            Number(el?.dataset.tileCols) ||
+            Number(el?.dataset.gsWidth) ||
+            2);
+        const rows =
+          node.h ??
+          (Number(el?.getAttribute('gs-h')) ||
+            Number(el?.dataset.tileRows) ||
+            Number(el?.dataset.gsHeight) ||
+            2);
+        const isFixed =
+          el?.dataset.isFixed === 'true' ||
+          el?.getAttribute('gs-no-resize') === 'true' ||
+          el?.classList.contains('is-fixed-widget') ||
+          false;
+        const tileImage = el?.dataset.tileImage || FIXED_WIDGET_APPEARANCE.backgroundImageUrl;
+
         const widgetId = generateClientId();
         const widget: BattleMapWidget = {
           id: widgetId,
           x: node.x ?? 0,
           y: node.y ?? 0,
-          w: 2,
-          h: 2,
+          w: cols,
+          h: rows,
           content: mergeAppearanceIntoContent('<div class="battlemap-widget-content"></div>', resolveAppearance({ isFixed: true })),
-          appearance: resolveAppearance({ isFixed: true }),
-          isFixed: true,
+          appearance: {
+            ...resolveAppearance({ isFixed }),
+            ...(tileImage ? { backgroundImageUrl: tileImage } : {}),
+          },
+          isFixed,
         };
         nextCounter += 1;
 
         node.id = widgetId;
-        node.w = 2;
-        node.h = 2;
-        node.minW = 2;
-        node.maxW = 2;
-        node.minH = 2;
-        node.maxH = 2;
-        // keep draggable but disallow resize
-        // @ts-ignore GridStack node option
-        node.noResize = true;
+        node.w = cols;
+        node.h = rows;
+        if (isFixed) {
+          node.minW = cols;
+          node.maxW = cols;
+          node.minH = rows;
+          node.maxH = rows;
+          // keep draggable but disallow resize
+          // @ts-ignore GridStack node option
+          node.noResize = true;
+        } else {
+          // allow resizing for non-fixed widgets
+          node.minW = undefined;
+          node.maxW = undefined;
+          node.minH = undefined;
+          node.maxH = undefined;
+          // @ts-ignore GridStack node option
+          node.noResize = false;
+        }
 
-        const el = node.el as HTMLElement | undefined;
         if (el) {
           el.classList.remove('battlemap-workspace__widget-template');
           hydrateWidgetElement(widget, el);
@@ -450,7 +483,7 @@ function BattleMapWorkspace() {
           node.y = Number(el.getAttribute('gs-y')) || node.y;
         }
 
-        (node as unknown as { noResize?: boolean }).noResize = true;
+        (node as unknown as { noResize?: boolean }).noResize = isFixed;
       });
 
       widgetCounterRef.current = nextCounter;
@@ -475,12 +508,16 @@ function BattleMapWorkspace() {
       }
 
       const isFixed =
-        node.minW === 2 &&
-        node.maxW === 2 &&
-        node.minH === 2 &&
-        node.maxH === 2 &&
+        (node.minW !== undefined &&
+          node.maxW !== undefined &&
+          node.minH !== undefined &&
+          node.maxH !== undefined &&
+          node.minW === node.maxW &&
+          node.minH === node.maxH) ||
         // @ts-ignore
-        (node.noResize === true || node.el?.classList.contains('is-fixed-widget') || node.el?.dataset.isFixed === 'true');
+        node.noResize === true ||
+        node.el?.classList.contains('is-fixed-widget') ||
+        node.el?.dataset.isFixed === 'true';
 
       const rawBgImage = node.el?.style.getPropertyValue('--widget-bg-image').trim();
       const appearance = {
@@ -558,35 +595,40 @@ function BattleMapWorkspace() {
       nextConfig.widgets.forEach((widget) => {
         const isFixed = widget.isFixed === true;
         const appearance = resolveAppearance(widget);
+        const fallbackLabel = widget.id ? `Widget ${widget.id}` : 'Widget';
         const content = mergeAppearanceIntoContent(
           isFixed
             ? '<div class="battlemap-widget-content"></div>'
             : widget.content && widget.content.trim().length
               ? widget.content
-              : createWidgetContent(widget.id ? `Widget ${widget.id}` : 'Widget', appearance),
+              : createWidgetContent(fallbackLabel, appearance),
           appearance,
         );
+
+        const w = widget.w ?? 1;
+        const h = widget.h ?? 1;
+
         const widgetOptions = {
           id: widget.id,
           x: widget.x,
           y: widget.y,
-          w: isFixed ? 2 : widget.w,
-          h: isFixed ? 2 : widget.h,
+          w: isFixed ? w : w,
+          h: isFixed ? h : h,
           content,
-          minW: isFixed ? 2 : 1,
-          maxW: isFixed ? 2 : undefined,
-          minH: isFixed ? 2 : 1,
-          maxH: isFixed ? 2 : undefined,
+          minW: isFixed ? w : 1,
+          maxW: isFixed ? w : undefined,
+          minH: isFixed ? h : 1,
+          maxH: isFixed ? h : undefined,
           // @ts-ignore
-            noResize: isFixed ? true : undefined,
-          };
+          noResize: isFixed ? true : undefined,
+        };
 
-          const el = gridStackRef.current?.addWidget(widgetOptions);
+        const el = gridStackRef.current?.addWidget(widgetOptions);
 
-          if (el) {
-            hydrateWidgetElement({ ...widget, appearance, content, isFixed }, el);
-          }
-        });
+        if (el) {
+          hydrateWidgetElement({ ...widget, appearance, content, isFixed, w, h }, el);
+        }
+      });
 
         setWidgetCounter((nextConfig.widgets?.length ?? 0) + 1);
         syncGridGuides();
@@ -631,7 +673,7 @@ function BattleMapWorkspace() {
           revert: 'invalid',
           scroll: false,
         },
-        dragInDefault: { w: 2, h: 2, minW: 2, maxW: 2, minH: 2, maxH: 2, noResize: true },
+        dragInDefault: { w: 1, h: 1 },
         resizable: {
           handles: 'e,se,s,sw,w',
         },
@@ -1099,32 +1141,40 @@ function BattleMapWorkspace() {
             <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
           <div className="battlemap-workspace__tiles-scroll">
-            <div className="battlemap-workspace__tile-group">
-              <div className="battlemap-workspace__tile-group-title">Stone Tiles</div>
-              <div className="battlemap-workspace__widget-tray">
-                <div
-                  className="battlemap-workspace__widget-template grid-stack-item"
-                  gs-w="2"
-                  gs-h="2"
-                  data-is-fixed="true"
-                  gs-auto-position="true"
-                  onMouseDown={handleTemplatePointerDown}
-                  aria-label="Fixed 2 by 2 widget"
-                >
-                  <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
+            {TILE_SETS.map((set) => (
+              <div key={set.title} className="battlemap-workspace__tile-group">
+                <div className="battlemap-workspace__tile-group-title">{set.title}</div>
+                <div className="battlemap-workspace__widget-tray">
+                  {set.tiles.map((tile) => (
+                    <div key={tile.id} className="battlemap-workspace__widget-template-wrapper">
+                      <p className="battlemap-workspace__label">{tile.label}</p>
+                      <div
+                        className="battlemap-workspace__widget-template grid-stack-item"
+                        gs-w={tile.cols}
+                        gs-h={tile.rows}
+                        data-tile-cols={tile.cols}
+                        data-tile-rows={tile.rows}
+                        data-tile-image={tile.image}
+                        data-is-fixed={tile.isFixed}
+                        gs-auto-position="true"
+                        onMouseDown={handleTemplatePointerDown}
+                        aria-label={`${tile.label} tile`}
+                        style={
+                          {
+                            '--tile-preview-scale': TILE_PREVIEW_SCALE,
+                            '--tile-cols': tile.cols,
+                            '--tile-rows': tile.rows,
+                            '--tile-image': `url("${tile.image}")`,
+                          } as React.CSSProperties
+                        }
+                      >
+                        <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
-
-            <div className="battlemap-workspace__tile-group">
-              <div className="battlemap-workspace__tile-group-title">Dirt Tiles</div>
-              <div className="battlemap-workspace__tile-placeholder">Space reserved for upcoming tiles.</div>
-            </div>
-
-            <div className="battlemap-workspace__tile-group">
-              <div className="battlemap-workspace__tile-group-title">Road Tiles</div>
-              <div className="battlemap-workspace__tile-placeholder">Space reserved for upcoming tiles.</div>
-            </div>
+            ))}
           </div>
           <p className="battlemap-workspace__hint battlemap-workspace__autosave">
             Auto-save: {isSaving ? 'Saving...' : 'Synced'} ({storageMode} storage)
