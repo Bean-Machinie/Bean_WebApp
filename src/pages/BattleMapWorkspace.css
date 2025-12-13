@@ -480,6 +480,24 @@
   filter: blur(3px);
 }
 
+.battlemap-workspace.is-delete-mode .grid-stack-item {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 32%, transparent),
+    0 10px 24px color-mix(in srgb, var(--danger) 18%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  transition: box-shadow 0.18s ease, outline 0.18s ease;
+}
+
+.battlemap-workspace.is-delete-mode .grid-stack-item-content {
+  filter: saturate(1.05);
+}
+
+.battlemap-delete-panel.is-toggle-active {
+  background: color-mix(in srgb, var(--danger) 22%, var(--danger-surface) 78%);
+  border-color: var(--danger);
+  color: var(--text-contrast, #ffffff);
+  box-shadow: 0 16px 32px color-mix(in srgb, var(--danger) 28%, transparent);
+}
+
 .battlemap-workspace__content {
   text-align: center;
   color: var(--sidebar-text);

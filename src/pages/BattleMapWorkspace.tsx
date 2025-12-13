@@ -228,6 +228,8 @@ function BattleMapWorkspace() {
   const [widgetCounter, setWidgetCounter] = useState(1);
   const [hasRenderedConfig, setHasRenderedConfig] = useState(false);
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [isDeleteDrag, setIsDeleteDrag] = useState(false);
   const hasInitializedGridRef = useRef(false);
   const initialStaticRef = useRef(false);
   const hasCenteredRef = useRef(false);
@@ -309,6 +311,52 @@ function BattleMapWorkspace() {
   const handleTemplatePointerDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     updatePlaceholderAppearance(gridRef.current, event.currentTarget);
   }, []);
+
+  const deleteWidgetAtPoint = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isDeleteMode) return;
+      if (clientX === undefined || clientY === undefined) return;
+      const target = document.elementFromPoint(clientX, clientY);
+      if (!target) return;
+      const widgetEl = target.closest('.grid-stack-item') as HTMLElement | null;
+      if (widgetEl && gridRef.current?.contains(widgetEl)) {
+        animateDeleteAndRemoveWidget(widgetEl, () => {
+          // defer to ensure DOM removal settles before persisting
+          setTimeout(() => persistAfterDelete(), 0);
+        });
+      }
+    },
+    [animateDeleteAndRemoveWidget, isDeleteMode],
+  );
+
+  const handleDeleteModeToggle = useCallback(() => {
+    setIsDeleteMode((prev) => !prev);
+    setIsDeleteDrag(false);
+  }, []);
+
+  const handleDeleteGridMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isDeleteMode) return;
+      event.preventDefault();
+      setIsDeleteDrag(true);
+      deleteWidgetAtPoint(event.clientX, event.clientY);
+    },
+    [deleteWidgetAtPoint, isDeleteMode],
+  );
+
+  const handleDeleteGridMouseMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isDeleteMode || !isDeleteDrag) return;
+      event.preventDefault();
+      deleteWidgetAtPoint(event.clientX, event.clientY);
+    },
+    [deleteWidgetAtPoint, isDeleteDrag, isDeleteMode],
+  );
+
+  const handleDeleteGridMouseUp = useCallback(() => {
+    if (!isDeleteMode) return;
+    setIsDeleteDrag(false);
+  }, [isDeleteMode]);
 
   useEffect(() => {
     configRef.current = config;
@@ -569,6 +617,20 @@ function BattleMapWorkspace() {
     },
     [],
   );
+
+  const persistAfterDelete = useCallback(() => {
+    if (applyingConfigRef.current) return;
+    const widgets = readWidgetsFromGrid();
+    const nextConfig: BattleMapConfig = {
+      ...configRef.current,
+      gridColumns: gridColumnsRef.current,
+      gridRows: gridRowsRef.current,
+      cellSize: cellSizeRef.current,
+      widgets,
+    };
+    setConfig(nextConfig);
+    queueSave(nextConfig);
+  }, [queueSave, readWidgetsFromGrid, setConfig]);
 
   const applyConfigToGrid = useCallback(
     (nextConfig: BattleMapConfig) => {
@@ -1026,9 +1088,9 @@ function BattleMapWorkspace() {
 
   useEffect(() => {
     if (!gridStackRef.current) return;
-    const shouldBeStatic = initialStaticRef.current || isSpaceHeld || isPanning;
+    const shouldBeStatic = initialStaticRef.current || isSpaceHeld || isPanning || isDeleteMode;
     gridStackRef.current.setStatic(shouldBeStatic);
-  }, [isPanning, isSpaceHeld]);
+  }, [isDeleteMode, isPanning, isSpaceHeld]);
 
   useEffect(() => {
     if (!isPanning) return undefined;
@@ -1124,7 +1186,7 @@ function BattleMapWorkspace() {
   }
 
   return (
-    <div className="battlemap-workspace">
+    <div className={`battlemap-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
       <div className="battlemap-workspace__sidebar">
         <div className="battlemap-workspace__sidebar-header">
           <button
@@ -1208,6 +1270,10 @@ function BattleMapWorkspace() {
             <div
               className="battlemap-workspace__grid-wrapper"
               style={{ width: '100%', height: '100%' }}
+              onMouseDown={handleDeleteGridMouseDown}
+              onMouseMove={handleDeleteGridMouseMove}
+              onMouseUp={handleDeleteGridMouseUp}
+              onMouseLeave={handleDeleteGridMouseUp}
             >
               <button
                 type="button"
@@ -1246,9 +1312,12 @@ function BattleMapWorkspace() {
           <div
             id="trash-dropzone"
             ref={deleteZoneRef}
-            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}`}
+            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}${
+              isDeleteMode ? ' is-toggle-active' : ''
+            }`}
             aria-label="Drop widgets here to delete them"
             role="presentation"
+            onClick={handleDeleteModeToggle}
           >
             <span className="battlemap-delete-panel__icon" aria-hidden />
           </div>
