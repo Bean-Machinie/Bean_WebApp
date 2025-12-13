@@ -443,6 +443,7 @@ function BattleMapWorkspace() {
 
         const el = node.el as HTMLElement | undefined;
         if (el) {
+          el.classList.remove('battlemap-workspace__widget-template');
           hydrateWidgetElement(widget, el);
           el.setAttribute('gs-id', widgetId);
           node.x = Number(el.getAttribute('gs-x')) || node.x;
@@ -1104,10 +1105,10 @@ function BattleMapWorkspace() {
                 <p className="battlemap-workspace__label">Fixed 2x2 Widget</p>
                 <div
                   className="battlemap-workspace__widget-template grid-stack-item"
-                  data-gs-width="2"
-                  data-gs-height="2"
+                  gs-w="2"
+                  gs-h="2"
                   data-is-fixed="true"
-                  data-gs-auto-position="true"
+                  gs-auto-position="true"
                   onMouseDown={handleTemplatePointerDown}
                   aria-label="Fixed 2 by 2 widget"
                 >

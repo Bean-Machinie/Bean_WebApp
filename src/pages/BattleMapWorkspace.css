@@ -443,7 +443,7 @@
 }
 
 .battlemap-workspace .grid-stack-item.is-over-delete-zone .grid-stack-item-content {
-  transform: scale(0.95);
+  transform: scale(0.75);
   opacity: 0.6;
   transition: transform 0.12s ease, opacity 0.12s ease;
 }
@@ -451,7 +451,7 @@
 .battlemap-workspace .grid-stack-item-removing,
 .battlemap-workspace .grid-stack-item.grid-stack-item-removing .grid-stack-item-content {
   opacity: 0.5 !important;
-  filter: blur(1px);
+  filter: blur(2px);
   transform: scale(0.75) !important;
   transition: transform 0.14s ease, opacity 0.14s ease, filter 0.14s ease;
 }
@@ -600,6 +600,28 @@
   background-repeat: no-repeat;
   background-position: center;
   border-radius: 0;
+}
+
+.battlemap-workspace__widget-template {
+  --widget-bg: #6b6f7b !important;
+  --widget-border: #6b6f7b !important;
+  --widget-text: #f8fafc !important;
+  --widget-bg-image: url('/assets/widgets/stone_tile.webp');
+}
+
+.battlemap-workspace__widget-template.grid-stack-item {
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+.battlemap-workspace__widget-template .grid-stack-item-content {
+  background: var(--widget-bg) !important;
+  background-image: var(--widget-bg-image) !important;
+  background-size: 100% 100% !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  color: var(--widget-text) !important;
 }
 
 /* GridStack resize handles */
