@@ -8,4 +8,8 @@ export const TILE_SETS: TileGroup[] = [
     title: 'Stone Tiles',
     tiles: stoneTiles, 
   },
+  {
+    title: 'Stone Tiles',
+    tiles: stoneTiles, 
+  },
 ];

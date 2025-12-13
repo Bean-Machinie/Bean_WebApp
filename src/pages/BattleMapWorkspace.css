@@ -74,28 +74,49 @@
 
 .battlemap-workspace__tile-group {
   border: 1px solid var(--sidebar-border);
-  border-radius: 10px;
-  padding: 0.75rem;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--sidebar-bg) 85%, var(--card) 15%);
+  display: block;
+  overflow: hidden;
+}
+
+.battlemap-workspace__tile-group-toggle {
+  width: 100%;
+  border: none;
+  background: color-mix(in srgb, var(--sidebar-bg) 90%, transparent);
+  padding: 0.75rem 0.9rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease;
+  list-style: none;
+}
+
+.battlemap-workspace__tile-group-toggle:hover {
+  background: color-mix(in srgb, var(--sidebar-border) 22%, transparent);
+  color: var(--text-strong);
 }
 
 .battlemap-workspace__tile-group-title {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: var(--sidebar-text);
   letter-spacing: 0.02em;
 }
 
-.battlemap-workspace__tile-placeholder {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  padding: 0.5rem;
-  border: 1px dashed var(--sidebar-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--sidebar-bg) 90%, transparent);
+.battlemap-workspace__tile-group-chevron {
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 2px solid currentColor;
+  border-left: transparent;
+  border-top: transparent;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.battlemap-workspace__tile-group[open] .battlemap-workspace__tile-group-chevron {
+  transform: rotate(-135deg);
 }
 
 /* Sidebar Controls */
@@ -210,13 +231,40 @@
 }
 
 .battlemap-workspace__widget-tray {
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  padding: 0.75rem;
+  border-top: 1px solid var(--sidebar-border);
+  padding: 0.85rem 0.85rem;
   background: color-mix(in srgb, var(--bg) 85%, var(--card) 15%);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.9rem 0.85rem;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-height 0.22s ease, opacity 0.2s ease, padding 0.2s ease;
+}
+
+.battlemap-workspace__tile-group[open] .battlemap-workspace__widget-tray {
+  max-height: 1200px;
+  opacity: 1;
+  padding: 0.85rem 0.85rem 0.95rem;
+  pointer-events: auto;
+}
+
+.battlemap-workspace__widget-template-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  text-align: center;
+}
+
+.battlemap-workspace__label {
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.04em;
+  color: var(--sidebar-text);
 }
 
 .battlemap-workspace__widget-template {

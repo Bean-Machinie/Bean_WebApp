@@ -1204,8 +1204,11 @@ function BattleMapWorkspace() {
           </div>
           <div className="battlemap-workspace__tiles-scroll">
             {TILE_SETS.map((set) => (
-              <div key={set.title} className="battlemap-workspace__tile-group">
-                <div className="battlemap-workspace__tile-group-title">{set.title}</div>
+              <details key={set.title} className="battlemap-workspace__tile-group">
+                <summary className="battlemap-workspace__tile-group-toggle">
+                  <span className="battlemap-workspace__tile-group-title">{set.title}</span>
+                  <span className="battlemap-workspace__tile-group-chevron" aria-hidden />
+                </summary>
                 <div className="battlemap-workspace__widget-tray">
                   {set.tiles.map((tile) => (
                     <div key={tile.id} className="battlemap-workspace__widget-template-wrapper">
@@ -1236,7 +1239,7 @@ function BattleMapWorkspace() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </details>
             ))}
           </div>
           <p className="battlemap-workspace__hint battlemap-workspace__autosave">
