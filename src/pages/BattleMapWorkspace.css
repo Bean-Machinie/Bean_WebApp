@@ -258,7 +258,7 @@
   transition: transform 0.12s ease;
 }
 
-.battlemap-workspace__widget-template:hover .battlemap-workspace__widget-template-inner {
+.battlemap-workspace__widget-template:hover {
   transform: scale(1.05);
 }
 
