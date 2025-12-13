@@ -1165,6 +1165,7 @@ function BattleMapWorkspace() {
                             '--tile-cols': tile.cols,
                             '--tile-rows': tile.rows,
                             '--tile-image': `url("${tile.image}")`,
+                            '--widget-bg-image': `url("${tile.image}")`,
                           } as React.CSSProperties
                         }
                       >
