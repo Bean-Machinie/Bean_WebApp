@@ -223,6 +223,9 @@ function BattleMapWorkspace() {
   const [cellSize, setCellSize] = useState(DEFAULT_BATTLE_MAP_CONFIG.cellSize);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
+  );
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [widgetCounter, setWidgetCounter] = useState(1);
@@ -357,6 +360,10 @@ function BattleMapWorkspace() {
     if (!isDeleteMode) return;
     setIsDeleteDrag(false);
   }, [isDeleteMode]);
+
+  const toggleAccordion = useCallback((title: string) => {
+    setAccordionOpen((prev) => ({ ...prev, [title]: !prev[title] }));
+  }, []);
 
   useEffect(() => {
     configRef.current = config;
@@ -1204,12 +1211,31 @@ function BattleMapWorkspace() {
           </div>
           <div className="battlemap-workspace__tiles-scroll">
             {TILE_SETS.map((set) => (
-              <details key={set.title} className="battlemap-workspace__tile-group">
-                <summary className="battlemap-workspace__tile-group-toggle">
+              <div
+                key={set.title}
+                className={`battlemap-workspace__tile-group${accordionOpen[set.title] ? ' is-open' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="battlemap-workspace__tile-group-toggle"
+                  onClick={() => toggleAccordion(set.title)}
+                  aria-expanded={accordionOpen[set.title] ?? false}
+                  aria-controls={`tile-group-${set.title}`}
+                >
                   <span className="battlemap-workspace__tile-group-title">{set.title}</span>
-                  <span className="battlemap-workspace__tile-group-chevron" aria-hidden />
-                </summary>
-                <div className="battlemap-workspace__widget-tray">
+                  <span
+                    className={`battlemap-workspace__tile-group-chevron${
+                      accordionOpen[set.title] ? ' is-open' : ''
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+                <div
+                  id={`tile-group-${set.title}`}
+                  className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
+                  role="region"
+                  aria-label={`${set.title} tiles`}
+                >
                   {set.tiles.map((tile) => (
                     <div key={tile.id} className="battlemap-workspace__widget-template-wrapper">
                       <p className="battlemap-workspace__label">{tile.label}</p>
@@ -1239,7 +1265,7 @@ function BattleMapWorkspace() {
                     </div>
                   ))}
                 </div>
-              </details>
+              </div>
             ))}
           </div>
           <p className="battlemap-workspace__hint battlemap-workspace__autosave">

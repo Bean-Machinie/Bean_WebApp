@@ -115,7 +115,7 @@
   transition: transform 0.18s ease;
 }
 
-.battlemap-workspace__tile-group[open] .battlemap-workspace__tile-group-chevron {
+.battlemap-workspace__tile-group.is-open .battlemap-workspace__tile-group-chevron {
   transform: rotate(-135deg);
 }
 
@@ -230,7 +230,7 @@
   width: 100%;
 }
 
-.battlemap-workspace__widget-tray {
+.battlemap-workspace__tile-group > .battlemap-workspace__widget-tray {
   border-top: 1px solid var(--sidebar-border);
   padding: 0.85rem 0.85rem;
   background: color-mix(in srgb, var(--bg) 85%, var(--card) 15%);
@@ -241,14 +241,25 @@
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-  transition: max-height 0.22s ease, opacity 0.2s ease, padding 0.2s ease;
+  transform: translateY(-6px);
+  transition:
+    max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s ease,
+    padding 0.24s ease,
+    transform 0.26s ease;
 }
 
-.battlemap-workspace__tile-group[open] .battlemap-workspace__widget-tray {
+.battlemap-workspace__tile-group:not(.is-open) > .battlemap-workspace__widget-tray {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.battlemap-workspace__tile-group.is-open > .battlemap-workspace__widget-tray {
   max-height: 1200px;
   opacity: 1;
   padding: 0.85rem 0.85rem 0.95rem;
   pointer-events: auto;
+  transform: translateY(0);
 }
 
 .battlemap-workspace__widget-template-wrapper {
