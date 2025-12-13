@@ -2,7 +2,7 @@ import type { TileDefinition } from './types';
 
 export const stoneTiles: TileDefinition[] = [
   {
-    id: 'stone-2x2',
+    id: 'stone-1x1',
     label: 'Small Stone',
     cols: 1,
     rows: 1,
