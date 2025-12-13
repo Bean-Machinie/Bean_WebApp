@@ -1102,7 +1102,6 @@ function BattleMapWorkspace() {
             <div className="battlemap-workspace__tile-group">
               <div className="battlemap-workspace__tile-group-title">Stone Tiles</div>
               <div className="battlemap-workspace__widget-tray">
-                <p className="battlemap-workspace__label">Fixed 2x2 Widget</p>
                 <div
                   className="battlemap-workspace__widget-template grid-stack-item"
                   gs-w="2"
@@ -1114,9 +1113,6 @@ function BattleMapWorkspace() {
                 >
                   <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
                 </div>
-                <p className="battlemap-workspace__hint">
-                  Drag and drop for an endless supply of fixed 2x2 widgets.
-                </p>
               </div>
             </div>
 
@@ -1223,9 +1219,6 @@ function BattleMapWorkspace() {
               <span>Cell Size</span>
               <span>{cellSize}px</span>
             </div>
-            <p className="battlemap-workspace__hint">
-              Hold Space to pan, scroll to zoom. Widgets stay locked while panning.
-            </p>
           </div>
           <button
             type="button"
