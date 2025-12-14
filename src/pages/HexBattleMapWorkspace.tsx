@@ -452,6 +452,18 @@ function HexBattleMapWorkspace() {
     return tileMap.get(dragPayload.widget.tileId)?.image ?? dragPayload.widget.appearance?.backgroundImageUrl ?? null;
   }, [dragPayload, tileMap]);
 
+  const dragPreviewHexShape = useMemo(() => {
+    const corners = geometry.hexToCorners({ q: 0, r: 0 });
+    const minX = Math.min(...corners.map((c) => c.x));
+    const maxX = Math.max(...corners.map((c) => c.x));
+    const minY = Math.min(...corners.map((c) => c.y));
+    const maxY = Math.max(...corners.map((c) => c.y));
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const points = corners.map((corner) => `${corner.x - minX},${corner.y - minY}`).join(' ');
+    return { width, height, points };
+  }, [geometry]);
+
   if (isLoading) {
     return (
       <div className="battlemap-workspace__loading">
@@ -653,11 +665,33 @@ function HexBattleMapWorkspace() {
               style={{
                 left: `${dragPosition.x}px`,
                 top: `${dragPosition.y}px`,
-                backgroundImage: `url("${dragPreviewImage}")`,
-                width: `${geometry.hexWidth * scale}px`,
-                height: `${geometry.hexHeight * scale}px`,
+                width: `${dragPreviewHexShape.width}px`,
+                height: `${dragPreviewHexShape.height}px`,
+                transform: `translate(-50%, -50%) scale(${scale})`,
               }}
-            />
+            >
+              <svg
+                width={dragPreviewHexShape.width}
+                height={dragPreviewHexShape.height}
+                viewBox={`0 0 ${dragPreviewHexShape.width} ${dragPreviewHexShape.height}`}
+              >
+                <defs>
+                  <clipPath id="drag-preview-clip">
+                    <polygon points={dragPreviewHexShape.points} />
+                  </clipPath>
+                </defs>
+                <image
+                  href={dragPreviewImage}
+                  x={0}
+                  y={0}
+                  width={dragPreviewHexShape.width}
+                  height={dragPreviewHexShape.height}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath="url(#drag-preview-clip)"
+                />
+                <polygon className="hex-workspace__tile-border" points={dragPreviewHexShape.points} />
+              </svg>
+            </div>
           ) : null}
         </div>
       </div>

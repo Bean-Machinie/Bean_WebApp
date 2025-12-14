@@ -83,16 +83,11 @@
 
 .hex-workspace__drag-preview {
   position: fixed;
-  width: 64px;
-  height: 64px;
-  background-size: cover;
-  background-position: center;
-  clip-path: polygon(25% 6.7%, 75% 6.7%, 100% 50%, 75% 93.3%, 25% 93.3%, 0% 50%);
-  border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+  display: inline-block;
   pointer-events: none;
   transform: translate(-50%, -50%);
-  box-shadow: var(--tile-shadow);
   z-index: 20;
+  background: transparent;
 }
 
 .battlemap-workspace__widget-template--hex {
