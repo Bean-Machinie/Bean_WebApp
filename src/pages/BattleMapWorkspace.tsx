@@ -1,362 +1,289 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
-import type {
-  CSSProperties,
-  MouseEvent as ReactMouseEvent,
-  WheelEvent as ReactWheelEvent,
-} from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { GridStack, GridStackNode } from 'gridstack';
-import 'gridstack/dist/gridstack.min.css';
 import { useAuth } from '../context/AuthContext';
-import { generateClientId } from '../lib/utils';
-import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
-import {
-  FIXED_WIDGET_APPEARANCE,
-  DYNAMIC_WIDGET_APPEARANCE,
-  createWidgetContent,
-  mergeAppearanceIntoContent,
-  resolveAppearance,
-} from '../lib/battlemapAppearance';
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
-import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
+import type { BattleMapConfig, BattleMapWidget, SquareCell } from '../types/battlemap';
 import type { TileDefinition } from '../data/tiles/types';
-import { TILE_PREVIEW_SCALE, TILE_SETS } from '../data/tiles/tileSets';
+import { TILE_SETS } from '../data/tiles/tileSets';
+import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
+import { generateClientId } from '../lib/utils';
 import './BattleMapWorkspace.css';
 
 const TILE_PREVIEW_COLUMNS = 3;
 
-type TilePreviewPlacement = {
-  tile: TileDefinition;
-  col: number;
-  row: number;
-  spanCols: number;
-  spanRows: number;
-};
+type DragPayload =
+  | { type: 'palette'; tile: TileDefinition }
+  | { type: 'widget'; widget: BattleMapWidget };
 
-const ensureRows = (grid: boolean[][], rowsNeeded: number, columns: number) => {
-  while (grid.length < rowsNeeded) {
-    grid.push(Array.from({ length: columns }, () => false));
-  }
-};
+const packTilesForPreview = (tiles: TileDefinition[], columns: number) => {
+  const placements: Array<{ tile: TileDefinition; col: number; row: number }> = [];
+  let col = 0;
+  let row = 0;
 
-const canPlace = (
-  grid: boolean[][],
-  startRow: number,
-  startCol: number,
-  spanCols: number,
-  spanRows: number,
-  columns: number,
-) => {
-  if (startCol + spanCols > columns) return false;
-  ensureRows(grid, startRow + spanRows, columns);
-  for (let r = startRow; r < startRow + spanRows; r += 1) {
-    for (let c = startCol; c < startCol + spanCols; c += 1) {
-      if (grid[r][c]) return false;
+  tiles.forEach((tile, index) => {
+    placements.push({ tile, col, row });
+    col += 1;
+    if (col >= columns) {
+      col = 0;
+      row += 1;
     }
-  }
-  return true;
-};
-
-const markPlacement = (
-  grid: boolean[][],
-  startRow: number,
-  startCol: number,
-  spanCols: number,
-  spanRows: number,
-  columns: number,
-) => {
-  ensureRows(grid, startRow + spanRows, columns);
-  for (let r = startRow; r < startRow + spanRows; r += 1) {
-    for (let c = startCol; c < startCol + spanCols; c += 1) {
-      grid[r][c] = true;
-    }
-  }
-};
-
-const packTilesForPreview = (tiles: TileDefinition[], columns: number): TilePreviewPlacement[] => {
-  const occupancy: boolean[][] = [];
-  const placements: TilePreviewPlacement[] = [];
-
-  tiles.forEach((tile) => {
-    const spanCols = Math.min(Math.max(tile.cols, 1), columns);
-    const spanRows = Math.max(tile.rows, 1);
-    let row = 0;
-    let col = 0;
-
-    // Scan left-to-right, top-to-bottom until we find enough free cells.
-    // Because we always expand rows when needed, this loop will terminate.
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      if (canPlace(occupancy, row, col, spanCols, spanRows, columns)) {
-        markPlacement(occupancy, row, col, spanCols, spanRows, columns);
-        placements.push({ tile, col, row, spanCols, spanRows });
-        break;
-      }
-
-      col += 1;
-      if (col >= columns) {
-        col = 0;
-        row += 1;
-      }
+    if (index === tiles.length - 1 && col !== 0) {
+      row += 1;
+      col = 0;
     }
   });
 
   return placements;
 };
 
-const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
-  const appearance = resolveAppearance(widget);
-  const contentSource =
-    widget.isFixed === true
-      ? '<div class="battlemap-widget-content"></div>'
-      : widget.content && widget.content.trim().length
-        ? widget.content
-        : createWidgetContent(`Widget ${widget.id}`, appearance);
-  const content = mergeAppearanceIntoContent(contentSource, appearance);
-
-  const contentContainer = el.querySelector('.grid-stack-item-content') as HTMLElement | null;
-  if (contentContainer) {
-    contentContainer.innerHTML = content;
-    contentContainer.style.backgroundSize = '100% 100%';
-    contentContainer.style.backgroundRepeat = 'no-repeat';
-    contentContainer.style.backgroundPosition = 'center';
-  } else {
-    el.innerHTML = `<div class="grid-stack-item-content" style="background-size:100% 100%;background-repeat:no-repeat;background-position:center;">${content}</div>`;
-  }
-
-  el.dataset.widgetId = widget.id;
-  el.dataset.content = content;
-
-  if (widget.isFixed) {
-    el.dataset.isFixed = 'true';
-    el.setAttribute('gs-no-resize', 'true');
-    el.setAttribute('gs-min-w', `${widget.w ?? 1}`);
-    el.setAttribute('gs-max-w', `${widget.w ?? 1}`);
-    el.setAttribute('gs-min-h', `${widget.h ?? 1}`);
-    el.setAttribute('gs-max-h', `${widget.h ?? 1}`);
-    el.classList.add('is-fixed-widget');
-  } else {
-    el.dataset.isFixed = 'false';
-    el.removeAttribute('gs-no-resize');
-    el.removeAttribute('gs-min-w');
-    el.removeAttribute('gs-max-w');
-    el.removeAttribute('gs-min-h');
-    el.removeAttribute('gs-max-h');
-    el.classList.remove('is-fixed-widget');
-  }
-
-  el.style.setProperty('--widget-bg', appearance.backgroundColor ?? '');
-  el.style.setProperty('--widget-border', appearance.borderColor ?? appearance.backgroundColor ?? '');
-  el.style.setProperty('--widget-text', appearance.textColor ?? '');
-  if (appearance.backgroundImageUrl) {
-    el.style.setProperty('--widget-bg-image', `url("${appearance.backgroundImageUrl}")`);
-  } else {
-    el.style.removeProperty('--widget-bg-image');
-  }
-};
-
-const getWidgetContent = (label: string, widget: Partial<BattleMapWidget>) => {
-  const appearance = resolveAppearance(widget);
-  return mergeAppearanceIntoContent(createWidgetContent(label, appearance), appearance);
-};
-
-const updatePlaceholderAppearance = (gridEl: HTMLDivElement | null, sourceEl?: HTMLElement | null) => {
-  if (!gridEl || !sourceEl || !(sourceEl instanceof Element)) return;
-
-  const safeStyleValue = (el: Element | null | undefined, prop: string) => {
-    if (!el) return '';
-    try {
-      return getComputedStyle(el).getPropertyValue(prop).trim();
-    } catch {
-      return '';
-    }
-  };
-
-  const safeBgColor = (el: Element | null | undefined) => {
-    if (!el) return '';
-    try {
-      return getComputedStyle(el).backgroundColor;
-    } catch {
-      return '';
-    }
-  };
-
-  const isFixed =
-    sourceEl.classList.contains('is-fixed-widget') ||
-    sourceEl.dataset.isFixed === 'true' ||
-    sourceEl.closest('.battlemap-workspace__widget-template')?.dataset.isFixed === 'true';
-
-  const innerGridItem = sourceEl.querySelector<HTMLElement>('.grid-stack-item');
-  const contentEl = sourceEl.querySelector<HTMLElement>('.grid-stack-item-content');
-
-  const appearanceBg =
-    safeStyleValue(sourceEl, '--widget-bg') ||
-    safeStyleValue(innerGridItem, '--widget-bg') ||
-    safeBgColor(contentEl) ||
-    safeBgColor(sourceEl);
-
-  const appearanceImage =
-    safeStyleValue(sourceEl, '--widget-bg-image') ||
-    safeStyleValue(innerGridItem, '--widget-bg-image') ||
-    (isFixed && FIXED_WIDGET_APPEARANCE.backgroundImageUrl
-      ? `url("${FIXED_WIDGET_APPEARANCE.backgroundImageUrl}")`
-      : '');
-
-  const fallbackColor = isFixed ? FIXED_WIDGET_APPEARANCE.backgroundColor : DYNAMIC_WIDGET_APPEARANCE.backgroundColor;
-  const bg = appearanceBg || fallbackColor || '#0000ff';
-
-  gridEl.style.setProperty('--placeholder-color', bg);
-  if (appearanceImage) {
-    gridEl.style.setProperty('--placeholder-image', appearanceImage);
-  } else {
-    gridEl.style.removeProperty('--placeholder-image');
-  }
-  const placeholderContent = gridEl.querySelector<HTMLElement>('.grid-stack-placeholder > .placeholder-content');
-  if (placeholderContent) {
-    placeholderContent.style.background = bg;
-    placeholderContent.style.borderColor = bg;
-    if (appearanceImage) {
-      placeholderContent.style.backgroundImage = appearanceImage;
-      placeholderContent.style.backgroundSize = 'cover';
-      placeholderContent.style.backgroundPosition = 'center';
-    } else {
-      placeholderContent.style.removeProperty('background-image');
-    }
-  }
-};
-
-const resetPlaceholderAppearance = (gridEl: HTMLDivElement | null) => {
-  if (!gridEl) return;
-  gridEl.style.removeProperty('--placeholder-color');
-  gridEl.style.removeProperty('--placeholder-image');
-  const placeholderContent = gridEl.querySelector<HTMLElement>('.grid-stack-placeholder > .placeholder-content');
-  if (placeholderContent) {
-    placeholderContent.style.removeProperty('background');
-    placeholderContent.style.removeProperty('border-color');
-    placeholderContent.style.removeProperty('background-image');
-    placeholderContent.style.removeProperty('background-size');
-    placeholderContent.style.removeProperty('background-position');
-  }
-};
-
-const setDeleteHoverClass = (el: HTMLElement | undefined | null, isOverDelete: boolean) => {
-  if (!el) return;
-  if (isOverDelete) {
-    el.classList.add('is-over-delete-zone');
-  } else {
-    el.classList.remove('is-over-delete-zone');
-  }
-};
-
-const extractClientPoint = (event: unknown) => {
-  if (typeof event !== 'object' || event === null) {
-    return { clientX: undefined as number | undefined, clientY: undefined as number | undefined };
-  }
-
-  if ('clientX' in event && 'clientY' in event) {
-    const { clientX, clientY } = event as { clientX?: number; clientY?: number };
-    return { clientX, clientY };
-  }
-
-  const maybeTouchEvent = event as TouchEvent;
-  const touch = maybeTouchEvent.touches?.[0] ?? maybeTouchEvent.changedTouches?.[0];
-  if (touch) {
-    return { clientX: touch.clientX, clientY: touch.clientY };
-  }
-
-  return { clientX: undefined as number | undefined, clientY: undefined as number | undefined };
-};
-
 function BattleMapWorkspace() {
   const { projectId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const widgetTemplateSelector = '.battlemap-workspace__widget-template';
-
   const {
     project,
     config,
-    setConfig,
     isLoading,
     isSaving,
     error,
-    storageMode,
     saveConfig,
   } = useBattleMap(projectId, user?.id);
 
-  const applyingConfigRef = useRef(false);
-  const configRef = useRef<BattleMapConfig>(DEFAULT_BATTLE_MAP_CONFIG);
-  const gridColumnsRef = useRef<number>(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
-  const gridRowsRef = useRef<number>(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
-  const cellSizeRef = useRef<number>(DEFAULT_BATTLE_MAP_CONFIG.cellSize);
-  const scaleRef = useRef(1);
-  const panRef = useRef({ x: 0, y: 0 });
-  const exportImageCacheRef = useRef<Map<string, string>>(new Map());
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const squareConfig: BattleMapConfig =
+    config.gridType === 'square' ? config : DEFAULT_BATTLE_MAP_CONFIG;
+  const gridColumns = squareConfig.gridColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
+  const gridRows = squareConfig.gridRows || DEFAULT_BATTLE_MAP_CONFIG.gridRows;
+  const cellSize = squareConfig.cellSize || DEFAULT_BATTLE_MAP_CONFIG.cellSize;
 
-  const gridRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const surfaceRef = useRef<HTMLDivElement>(null);
-  const gridStackRef = useRef<GridStack | null>(null);
-  const [gridColumns, setGridColumns] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
-  const [gridRows, setGridRows] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
-  const [cellSize, setCellSize] = useState(DEFAULT_BATTLE_MAP_CONFIG.cellSize);
+  const [widgets, setWidgets] = useState<BattleMapWidget[]>(squareConfig.widgets ?? []);
+  const [hoverCell, setHoverCell] = useState<SquareCell | null>(null);
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
+  const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
+  const [draggingOrigin, setDraggingOrigin] = useState<SquareCell | null>(null);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>(
     () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
   );
-  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
-  const [widgetCounter, setWidgetCounter] = useState(1);
-  const [hasRenderedConfig, setHasRenderedConfig] = useState(false);
-  const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+  const [hoverVisible, setHoverVisible] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [isDeleteDrag, setIsDeleteDrag] = useState(false);
-  const hasInitializedGridRef = useRef(false);
-  const initialStaticRef = useRef(false);
-  const hasCenteredRef = useRef(false);
-  const widgetCounterRef = useRef(widgetCounter);
-  const deleteZoneRef = useRef<HTMLDivElement>(null);
-  const deleteZoneActiveRef = useRef(false);
-  const lastPointerRef = useRef<{ x?: number; y?: number }>({ x: undefined, y: undefined });
+  const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+  const [isExpandMode, setIsExpandMode] = useState(false);
+  const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
 
-  const isPointInsideDeleteZone = useCallback((clientX?: number, clientY?: number) => {
-    const zone = deleteZoneRef.current;
-    if (!zone) return false;
-    if (clientX === undefined || clientY === undefined) return false;
-    const rect = zone.getBoundingClientRect();
-    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+  const tileMap = useMemo(() => {
+    const map = new Map<string, TileDefinition>();
+    TILE_SETS.forEach((set) => {
+      set.tiles.forEach((tile) => {
+        map.set(tile.id, tile);
+      });
+    });
+    return map;
   }, []);
 
-  const isEventInsideDeleteZone = useCallback(
-    (event: unknown) => {
-      const { clientX, clientY } = extractClientPoint(event);
-      const x = clientX ?? lastPointerRef.current.x;
-      const y = clientY ?? lastPointerRef.current.y;
-      return isPointInsideDeleteZone(x, y);
+  const [allowedCells, setAllowedCells] = useState<SquareCell[]>(() => {
+    if (squareConfig.allowedSquareCells && squareConfig.allowedSquareCells.length > 0) {
+      return squareConfig.allowedSquareCells;
+    }
+    const cells: SquareCell[] = [];
+    for (let y = 0; y < gridRows; y += 1) {
+      for (let x = 0; x < gridColumns; x += 1) {
+        cells.push({ x, y });
+      }
+    }
+    return cells;
+  });
+
+  const gridBounds = useMemo(() => {
+    if (!allowedCells.length) return null;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    allowedCells.forEach((cell) => {
+      const x = cell.x * cellSize;
+      const y = cell.y * cellSize;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + cellSize);
+      maxY = Math.max(maxY, y + cellSize);
+    });
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }, [allowedCells, cellSize]);
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const deleteZoneRef = useRef<HTMLDivElement>(null);
+  const deleteZoneActiveRef = useRef(false);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const hasCenteredRef = useRef(false);
+  const lastBoundsRef = useRef(gridBounds);
+  const exportImageCacheRef = useRef<Map<string, string>>(new Map());
+
+  const persistWidgets = useCallback(
+    async (updatedWidgets: BattleMapWidget[]) => {
+      const nextConfig: BattleMapConfig = {
+        gridType: 'square',
+        gridColumns,
+        gridRows,
+        cellSize,
+        widgets: updatedWidgets,
+        allowedSquareCells: allowedCells,
+        version: squareConfig.version,
+        updated_at: squareConfig.updated_at,
+      };
+
+      await saveConfig(nextConfig);
     },
-    [isPointInsideDeleteZone],
+    [allowedCells, cellSize, gridColumns, gridRows, saveConfig, squareConfig.updated_at, squareConfig.version],
+  );
+
+  useEffect(() => {
+    if (config.gridType === 'square') {
+      setWidgets(config.widgets ?? []);
+      if (config.allowedSquareCells && config.allowedSquareCells.length > 0) {
+        setAllowedCells(config.allowedSquareCells);
+      }
+    }
+  }, [config]);
+
+  const toWorldPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      return {
+        x: (clientX - rect.left - pan.x) / scale,
+        y: (clientY - rect.top - pan.y) / scale,
+      };
+    },
+    [pan.x, pan.y, scale],
+  );
+
+  const pointToCell = useCallback(
+    (worldX: number, worldY: number): SquareCell => {
+      return {
+        x: Math.floor(worldX / cellSize),
+        y: Math.floor(worldY / cellSize),
+      };
+    },
+    [cellSize],
+  );
+
+  const recenterGrid = useCallback((scaleOverride?: number) => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect || !gridBounds) return;
+    const effectiveScale = scaleOverride ?? scale;
+    const centerX = gridBounds.minX + gridBounds.width / 2;
+    const centerY = gridBounds.minY + gridBounds.height / 2;
+    setPan({
+      x: rect.width / 2 - centerX * effectiveScale,
+      y: rect.height / 2 - centerY * effectiveScale,
+    });
+  }, [gridBounds, scale]);
+
+  const handleDelete = useCallback(
+    (widgetId: string) => {
+      const nextWidgets = widgets.filter((widget) => widget.id !== widgetId);
+      setWidgets(nextWidgets);
+      persistWidgets(nextWidgets);
+      setSelectedWidgetId(null);
+      setStatusMessage('Tile deleted.');
+    },
+    [persistWidgets, widgets],
+  );
+
+  const deleteCellAtPoint = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const targetCell = pointToCell(point.x, point.y);
+      const occupant = widgets.find(
+        (widget) => widget.x === targetCell.x && widget.y === targetCell.y,
+      );
+      if (occupant) {
+        handleDelete(occupant.id);
+      }
+    },
+    [handleDelete, pointToCell, toWorldPoint, widgets],
+  );
+
+  const persistAllowedCells = useCallback(
+    async (cells: SquareCell[]) => {
+      const nextConfig: BattleMapConfig = {
+        gridType: 'square',
+        gridColumns,
+        gridRows,
+        cellSize,
+        widgets,
+        allowedSquareCells: cells,
+        version: squareConfig.version,
+        updated_at: squareConfig.updated_at,
+      };
+
+      await saveConfig(nextConfig);
+    },
+    [cellSize, gridColumns, gridRows, saveConfig, squareConfig.updated_at, squareConfig.version, widgets],
+  );
+
+  const addCellAtPoint = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const targetCell = pointToCell(point.x, point.y);
+
+      const alreadyExists = allowedCells.some(
+        (cell) => cell.x === targetCell.x && cell.y === targetCell.y,
+      );
+
+      if (alreadyExists) {
+        setStatusMessage('Grid cell already exists at this location.');
+        return;
+      }
+
+      const newCells = [...allowedCells, targetCell];
+      setAllowedCells(newCells);
+      persistAllowedCells(newCells);
+      setStatusMessage('Added grid cell.');
+    },
+    [allowedCells, persistAllowedCells, pointToCell, toWorldPoint],
+  );
+
+  const isPointInsideDeleteZone = useCallback(
+    (clientX?: number, clientY?: number) => {
+      const zone = deleteZoneRef.current;
+      if (!zone || clientX === undefined || clientY === undefined) return false;
+      const rect = zone.getBoundingClientRect();
+      return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+    },
+    [],
   );
 
   const updateDeleteZoneHighlight = useCallback(
-    (event: unknown) => {
-      const { clientX, clientY } = extractClientPoint(event);
-      if (clientX !== undefined && clientY !== undefined) {
-        lastPointerRef.current = { x: clientX, y: clientY };
-      }
-      const active = isPointInsideDeleteZone(
-        clientX ?? lastPointerRef.current.x,
-        clientY ?? lastPointerRef.current.y,
-      );
+    (clientX?: number, clientY?: number) => {
+      const active = isPointInsideDeleteZone(clientX, clientY);
       deleteZoneActiveRef.current = active;
       setIsDeleteZoneActive(active);
       return active;
@@ -364,1018 +291,391 @@ function BattleMapWorkspace() {
     [isPointInsideDeleteZone],
   );
 
-  const isElementOverDeleteZone = useCallback((el: HTMLElement | null | undefined) => {
-    const zone = deleteZoneRef.current;
-    if (!zone || !el) return false;
-    const widgetRect = el.getBoundingClientRect();
-    const zoneRect = zone.getBoundingClientRect();
-    const noOverlap =
-      widgetRect.right < zoneRect.left ||
-      widgetRect.left > zoneRect.right ||
-      widgetRect.bottom < zoneRect.top ||
-      widgetRect.top > zoneRect.bottom;
-    return !noOverlap;
-  }, []);
-
-  const animateDeleteAndRemoveWidget = useCallback((el: HTMLElement, onDone?: () => void) => {
-    // Remove immediately without linger
-    gridStackRef.current?.removeWidget(el, true);
-    el.remove();
-    onDone?.();
-  }, []);
-
-  const log = useCallback(
-    (message: string, detail?: unknown) => {
-      const timestamp = new Date().toISOString().split('T')[1]?.replace('Z', '') ?? '';
-      const line = detail ? `${timestamp} ${message} | ${JSON.stringify(detail)}` : `${timestamp} ${message}`;
-      if (detail !== undefined) {
-        // eslint-disable-next-line no-console
-        console.log(line, detail);
-      } else {
-        // eslint-disable-next-line no-console
-        console.log(line);
+  useEffect(() => {
+    const handleResize = () => {
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (rect) {
+        if (!hasCenteredRef.current || lastBoundsRef.current !== gridBounds) {
+          recenterGrid();
+          hasCenteredRef.current = true;
+          lastBoundsRef.current = gridBounds;
+        }
       }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [gridBounds, recenterGrid]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        setIsSpaceHeld(true);
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedWidgetId) {
+        event.preventDefault();
+        handleDelete(selectedWidgetId);
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        setIsSpaceHeld(false);
+        setIsPanning(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleDelete, selectedWidgetId]);
+
+  useEffect(() => {
+    if (!dragPayload) return undefined;
+
+    const handleMove = (event: MouseEvent) => {
+      setDragPosition({ x: event.clientX, y: event.clientY });
+      const point = toWorldPoint(event.clientX, event.clientY);
+      if (!point) {
+        setHoverCell(null);
+        setHoverVisible(false);
+        updateDeleteZoneHighlight(event.clientX, event.clientY);
+        return;
+      }
+      const cellAtPoint = pointToCell(point.x, point.y);
+      const isValidCell = allowedCells.some(
+        (cell) => cell.x === cellAtPoint.x && cell.y === cellAtPoint.y,
+      );
+      setHoverCell(cellAtPoint);
+      setHoverVisible(isValidCell);
+      updateDeleteZoneHighlight(event.clientX, event.clientY);
+    };
+
+    const handleUp = (event: MouseEvent) => {
+      setDragPosition({ x: event.clientX, y: event.clientY });
+      const activeDelete = updateDeleteZoneHighlight(event.clientX, event.clientY);
+      const point = toWorldPoint(event.clientX, event.clientY);
+      const targetCell = point ? pointToCell(point.x, point.y) : hoverCell;
+      const isWithinBounds = targetCell
+        ? allowedCells.some((cell) => cell.x === targetCell.x && cell.y === targetCell.y)
+        : false;
+
+      if (activeDelete && dragPayload?.type === 'widget') {
+        handleDelete(dragPayload.widget.id);
+      } else if (targetCell && isWithinBounds) {
+        const occupant = widgets.find(
+          (widget) => widget.x === targetCell.x && widget.y === targetCell.y,
+        );
+
+        if (dragPayload.type === 'palette') {
+          if (occupant) {
+            setStatusMessage('That cell is already occupied.');
+          } else {
+            const newWidget: BattleMapWidget = {
+              id: generateClientId(),
+              x: targetCell.x,
+              y: targetCell.y,
+              w: 1,
+              h: 1,
+              content: '',
+              tileId: dragPayload.tile.id,
+              appearance: {
+                backgroundImageUrl: dragPayload.tile.image,
+              },
+            };
+            const nextWidgets = [...widgets, newWidget];
+            setWidgets(nextWidgets);
+            persistWidgets(nextWidgets);
+            setStatusMessage('Placed tile on grid.');
+          }
+        } else {
+          const origin = draggingOrigin ?? dragPayload.widget;
+          const isSameSpot = origin.x === targetCell.x && origin.y === targetCell.y;
+          if (occupant && occupant.id !== dragPayload.widget.id) {
+            const nextWidgets = widgets.map((widget) => {
+              if (widget.id === dragPayload.widget.id) {
+                return { ...widget, x: targetCell.x, y: targetCell.y };
+              }
+              if (widget.id === occupant.id) {
+                return { ...widget, x: origin.x, y: origin.y };
+              }
+              return widget;
+            });
+            setWidgets(nextWidgets);
+            persistWidgets(nextWidgets);
+            setStatusMessage('Swapped tiles.');
+          } else if (!isSameSpot) {
+            const nextWidgets = widgets.map((widget) =>
+              widget.id === dragPayload.widget.id
+                ? { ...widget, x: targetCell.x, y: targetCell.y }
+                : widget,
+            );
+            setWidgets(nextWidgets);
+            persistWidgets(nextWidgets);
+            setStatusMessage('Moved tile.');
+          }
+        }
+      } else if (dragPayload.type === 'widget') {
+        setStatusMessage('Outside the grid. Returning tile to its spot.');
+      } else if (dragPayload.type === 'palette') {
+        setStatusMessage('Drop tiles inside the grid.');
+      }
+
+      setDragPayload(null);
+      setDraggingOrigin(null);
+      setHoverCell(null);
+      setHoverVisible(false);
+      setDragPosition(null);
+      setIsDeleteZoneActive(false);
+      deleteZoneActiveRef.current = false;
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      setIsDeleteDrag(false);
+    };
+  }, [
+    allowedCells,
+    dragPayload,
+    draggingOrigin,
+    handleDelete,
+    hoverCell,
+    persistWidgets,
+    pointToCell,
+    setIsDeleteDrag,
+    toWorldPoint,
+    updateDeleteZoneHighlight,
+    widgets,
+  ]);
+
+  const handlePanStart = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isSpaceHeld) return;
+      event.preventDefault();
+      setIsPanning(true);
+      panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
     },
-    [],
+    [isSpaceHeld, pan.x, pan.y],
   );
 
-  const handleTemplatePointerDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    updatePlaceholderAppearance(gridRef.current, event.currentTarget);
-  }, []);
-
-  const deleteWidgetAtPoint = useCallback(
-    (clientX?: number, clientY?: number) => {
-      if (!isDeleteMode) return;
-      if (clientX === undefined || clientY === undefined) return;
-      const target = document.elementFromPoint(clientX, clientY);
-      if (!target) return;
-      const widgetEl = target.closest('.grid-stack-item') as HTMLElement | null;
-      if (widgetEl && gridRef.current?.contains(widgetEl)) {
-        animateDeleteAndRemoveWidget(widgetEl, () => {
-          // defer to ensure DOM removal settles before persisting
-          setTimeout(() => persistAfterDelete(), 0);
-        });
-      }
+  const handlePanMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isPanning || !panStartRef.current) return;
+      const dx = event.clientX - panStartRef.current.x;
+      const dy = event.clientY - panStartRef.current.y;
+      setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
     },
-    [animateDeleteAndRemoveWidget, isDeleteMode],
+    [isPanning],
   );
 
-  const handleDeleteModeToggle = useCallback(() => {
-    setIsDeleteMode((prev) => !prev);
-    setIsDeleteDrag(false);
+  const stopPan = useCallback(() => {
+    setIsPanning(false);
+    panStartRef.current = null;
   }, []);
 
-  const handleDeleteGridMouseDown = useCallback(
+  const handleDeleteDragStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       if (!isDeleteMode) return;
       event.preventDefault();
       setIsDeleteDrag(true);
-      deleteWidgetAtPoint(event.clientX, event.clientY);
+      deleteCellAtPoint(event.clientX, event.clientY);
     },
-    [deleteWidgetAtPoint, isDeleteMode],
+    [deleteCellAtPoint, isDeleteMode],
   );
 
-  const handleDeleteGridMouseMove = useCallback(
+  const handleDeleteDragMove = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       if (!isDeleteMode || !isDeleteDrag) return;
       event.preventDefault();
-      deleteWidgetAtPoint(event.clientX, event.clientY);
+      deleteCellAtPoint(event.clientX, event.clientY);
     },
-    [deleteWidgetAtPoint, isDeleteDrag, isDeleteMode],
+    [deleteCellAtPoint, isDeleteDrag, isDeleteMode],
   );
 
-  const handleDeleteGridMouseUp = useCallback(() => {
+  const handleDeleteDragEnd = useCallback(() => {
     if (!isDeleteMode) return;
     setIsDeleteDrag(false);
   }, [isDeleteMode]);
 
-  const toggleAccordion = useCallback((title: string) => {
-    setAccordionOpen((prev) => ({ ...prev, [title]: !prev[title] }));
-  }, []);
-
-  useEffect(() => {
-    configRef.current = config;
-    const nextColumns = config.gridColumns ?? DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
-    const nextRows = config.gridRows ?? DEFAULT_BATTLE_MAP_CONFIG.gridRows;
-    const nextCellSize = config.cellSize ?? DEFAULT_BATTLE_MAP_CONFIG.cellSize;
-    setGridColumns(nextColumns);
-    setGridRows(nextRows);
-    setCellSize(nextCellSize);
-    gridColumnsRef.current = nextColumns;
-    gridRowsRef.current = nextRows;
-    cellSizeRef.current = nextCellSize;
-    setWidgetCounter((config.widgets?.length ?? 0) + 1);
-  }, [config]);
-
-  useEffect(() => {
-    gridColumnsRef.current = gridColumns;
-  }, [gridColumns]);
-
-  useEffect(() => {
-    gridRowsRef.current = gridRows;
-  }, [gridRows]);
-
-  useEffect(() => {
-    cellSizeRef.current = cellSize;
-  }, [cellSize]);
-
-  useEffect(() => {
-    setHasRenderedConfig(false);
-    hasCenteredRef.current = false;
-  }, [projectId]);
-
-  useEffect(() => {
-    const originPan = { x: 0, y: 0 };
-    setPan(originPan);
-    panRef.current = originPan;
-    setScale(1);
-    scaleRef.current = 1;
-  }, [projectId]);
-
-  useEffect(() => {
-    if (projectId) {
-      log('BattleMap mount', { projectId });
-    }
-  }, [log, projectId]);
-
-  useEffect(() => {
-    if (project) {
-      log('Project loaded', { name: project.name, id: project.id });
-    }
-  }, [log, project]);
-
-  useEffect(() => {
-    if (error) {
-      log('Error state', error);
-    }
-  }, [error, log]);
-
-  useEffect(() => {
-    widgetCounterRef.current = widgetCounter;
-  }, [widgetCounter]);
-
-  const syncGridGuides = useCallback(() => {
-    if (!gridStackRef.current || !gridRef.current) return;
-
-    const cellWidth = gridStackRef.current.cellWidth() || cellSizeRef.current;
-
-    if (cellWidth && cellWidth > 0) {
-      gridStackRef.current.cellHeight(cellWidth, false);
-
-      gridRef.current.style.setProperty('--grid-cell-width', `${cellWidth}px`);
-      gridRef.current.style.setProperty('--grid-cell-height', `${cellWidth}px`);
-
-      const workspaceEl = gridRef.current.closest('.battlemap-workspace');
-      if (workspaceEl) {
-        workspaceEl.setAttribute('data-grid-cell-width', `${cellWidth}`);
-        workspaceEl.style.setProperty('--grid-cell-width', `${cellWidth}px`);
-        workspaceEl.style.setProperty('--grid-cell-height', `${cellWidth}px`);
-      }
-
-      gridRef.current.style.backgroundPosition = '0 0, 0 0';
-    }
-  }, []);
-
-  const ensureRowLimits = useCallback(
-    (rows: number) => {
-      if (!gridStackRef.current) return;
-      gridStackRef.current.updateOptions({ minRow: rows, maxRow: rows });
-      gridStackRef.current.opts.minRow = rows;
-      gridStackRef.current.opts.maxRow = rows;
-      if (gridStackRef.current.engine) {
-        // @ts-ignore sync engine bounds for dynamic row growth
-        gridStackRef.current.engine.minRow = rows;
-        // @ts-ignore sync engine bounds for dynamic row growth
-        gridStackRef.current.engine.maxRow = rows;
-        // @ts-ignore keep container height in sync with new bounds
-        gridStackRef.current._updateContainerHeight?.();
-      }
+  const handleExpandClickStart = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isExpandMode) return;
+      event.preventDefault();
+      setExpandClickStart({ x: event.clientX, y: event.clientY });
     },
-    [],
+    [isExpandMode],
   );
 
-  const applyTemplateToNodes = useCallback(
-    (nodes: GridStackNode[]) => {
-      if (!nodes.length) return;
+  const handleExpandClickEnd = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isExpandMode || !expandClickStart) return;
+      event.preventDefault();
 
-      let nextCounter = widgetCounterRef.current;
+      const dx = Math.abs(event.clientX - expandClickStart.x);
+      const dy = Math.abs(event.clientY - expandClickStart.y);
+      const threshold = 5;
 
-      nodes.forEach((node) => {
-        const el = node.el as HTMLElement | undefined;
-        const cols =
-          node.w ??
-          (Number(el?.getAttribute('gs-w')) ||
-            Number(el?.dataset.tileCols) ||
-            Number(el?.dataset.gsWidth) ||
-            2);
-        const rows =
-          node.h ??
-          (Number(el?.getAttribute('gs-h')) ||
-            Number(el?.dataset.tileRows) ||
-            Number(el?.dataset.gsHeight) ||
-            2);
-        const isFixed =
-          el?.dataset.isFixed === 'true' ||
-          el?.getAttribute('gs-no-resize') === 'true' ||
-          el?.classList.contains('is-fixed-widget') ||
-          false;
-        const tileImage = el?.dataset.tileImage || FIXED_WIDGET_APPEARANCE.backgroundImageUrl;
+      if (dx < threshold && dy < threshold) {
+        addCellAtPoint(event.clientX, event.clientY);
+      }
 
-        const widgetId = generateClientId();
-        const widget: BattleMapWidget = {
-          id: widgetId,
-          x: node.x ?? 0,
-          y: node.y ?? 0,
-          w: cols,
-          h: rows,
-          content: mergeAppearanceIntoContent('<div class="battlemap-widget-content"></div>', resolveAppearance({ isFixed: true })),
-          appearance: {
-            ...resolveAppearance({ isFixed }),
-            ...(tileImage ? { backgroundImageUrl: tileImage } : {}),
-          },
-          isFixed,
-        };
-        nextCounter += 1;
-
-        node.id = widgetId;
-        node.w = cols;
-        node.h = rows;
-        if (isFixed) {
-          node.minW = cols;
-          node.maxW = cols;
-          node.minH = rows;
-          node.maxH = rows;
-          // keep draggable but disallow resize
-          // @ts-ignore GridStack node option
-          node.noResize = true;
-        } else {
-          // allow resizing for non-fixed widgets
-          node.minW = undefined;
-          node.maxW = undefined;
-          node.minH = undefined;
-          node.maxH = undefined;
-          // @ts-ignore GridStack node option
-          node.noResize = false;
-        }
-
-        if (el) {
-          el.classList.remove('battlemap-workspace__widget-template');
-          hydrateWidgetElement(widget, el);
-          el.setAttribute('gs-id', widgetId);
-          node.x = Number(el.getAttribute('gs-x')) || node.x;
-          node.y = Number(el.getAttribute('gs-y')) || node.y;
-        }
-
-        (node as unknown as { noResize?: boolean }).noResize = isFixed;
-      });
-
-      widgetCounterRef.current = nextCounter;
-      setWidgetCounter(nextCounter);
+      setExpandClickStart(null);
     },
-    [setWidgetCounter],
-  );
-
-  const readWidgetsFromGrid = useCallback((): BattleMapWidget[] => {
-    if (!gridStackRef.current) return [];
-
-    const nodes: GridStackNode[] = gridStackRef.current.engine?.nodes ?? [];
-    return nodes.map((node) => {
-      const nodeId =
-        (node.id as string | undefined) ||
-        node.el?.getAttribute('gs-id') ||
-        node.el?.dataset.widgetId ||
-        generateClientId();
-
-      if (node.el) {
-        node.el.dataset.widgetId = nodeId;
-      }
-
-      const isFixed =
-        (node.minW !== undefined &&
-          node.maxW !== undefined &&
-          node.minH !== undefined &&
-          node.maxH !== undefined &&
-          node.minW === node.maxW &&
-          node.minH === node.maxH) ||
-        // @ts-ignore
-        node.noResize === true ||
-        node.el?.classList.contains('is-fixed-widget') ||
-        node.el?.dataset.isFixed === 'true';
-
-      const rawBgImage = node.el?.style.getPropertyValue('--widget-bg-image').trim();
-      const appearance = {
-        backgroundColor: node.el?.style.getPropertyValue('--widget-bg').trim() || undefined,
-        borderColor: node.el?.style.getPropertyValue('--widget-border').trim() || undefined,
-        textColor: node.el?.style.getPropertyValue('--widget-text').trim() || undefined,
-        backgroundImageUrl:
-          rawBgImage && rawBgImage !== 'none'
-            ? rawBgImage.replace(/^url\(["']?/, '').replace(/["']?\)$/, '')
-            : undefined,
-      };
-      const hasAppearance = Object.values(appearance).some(Boolean);
-      const content =
-        node.el?.dataset.content ||
-        node.el?.querySelector('.battlemap-widget-content')?.outerHTML ||
-        '<div class="battlemap-widget-content">Widget</div>';
-
-      return {
-        id: nodeId,
-        x: node.x ?? 0,
-        y: node.y ?? 0,
-        w: node.w ?? 1,
-        h: node.h ?? 1,
-        isFixed,
-        content,
-        appearance: hasAppearance ? appearance : undefined,
-      };
-    });
-  }, []);
-
-  const queueSave = useCallback(
-    (nextConfig: BattleMapConfig) => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      saveTimeoutRef.current = setTimeout(() => {
-        saveConfig(nextConfig);
-      }, 300);
-    },
-    [saveConfig],
-  );
-
-  useEffect(
-    () => () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    },
-    [],
-  );
-
-  const persistAfterDelete = useCallback(() => {
-    if (applyingConfigRef.current) return;
-    const widgets = readWidgetsFromGrid();
-    const nextConfig: BattleMapConfig = {
-      ...configRef.current,
-      gridColumns: gridColumnsRef.current,
-      gridRows: gridRowsRef.current,
-      cellSize: cellSizeRef.current,
-      widgets,
-    };
-    setConfig(nextConfig);
-    queueSave(nextConfig);
-  }, [queueSave, readWidgetsFromGrid, setConfig]);
-
-  const applyConfigToGrid = useCallback(
-    (nextConfig: BattleMapConfig) => {
-      if (!gridStackRef.current) return;
-
-      applyingConfigRef.current = true;
-
-      try {
-        gridStackRef.current.removeAll(true);
-
-        const columns = nextConfig.gridColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
-        const rows = nextConfig.gridRows || DEFAULT_BATTLE_MAP_CONFIG.gridRows;
-        const size = nextConfig.cellSize || DEFAULT_BATTLE_MAP_CONFIG.cellSize;
-        setGridColumns(columns);
-        setGridRows(rows);
-        setCellSize(size);
-        gridColumnsRef.current = columns;
-        gridRowsRef.current = rows;
-        cellSizeRef.current = size;
-        gridStackRef.current.column(columns);
-        ensureRowLimits(rows);
-      log('Apply config to grid', { columns, rows, widgets: nextConfig.widgets.length });
-
-      nextConfig.widgets.forEach((widget) => {
-        const isFixed = widget.isFixed === true;
-        const appearance = resolveAppearance(widget);
-        const fallbackLabel = widget.id ? `Widget ${widget.id}` : 'Widget';
-        const content = mergeAppearanceIntoContent(
-          isFixed
-            ? '<div class="battlemap-widget-content"></div>'
-            : widget.content && widget.content.trim().length
-              ? widget.content
-              : createWidgetContent(fallbackLabel, appearance),
-          appearance,
-        );
-
-        const w = widget.w ?? 1;
-        const h = widget.h ?? 1;
-
-        const widgetOptions = {
-          id: widget.id,
-          x: widget.x,
-          y: widget.y,
-          w: isFixed ? w : w,
-          h: isFixed ? h : h,
-          content,
-          minW: isFixed ? w : 1,
-          maxW: isFixed ? w : undefined,
-          minH: isFixed ? h : 1,
-          maxH: isFixed ? h : undefined,
-          // @ts-ignore
-          noResize: isFixed ? true : undefined,
-        };
-
-        const el = gridStackRef.current?.addWidget(widgetOptions);
-
-        if (el) {
-          hydrateWidgetElement({ ...widget, appearance, content, isFixed, w, h }, el);
-        }
-      });
-
-        setWidgetCounter((nextConfig.widgets?.length ?? 0) + 1);
-        syncGridGuides();
-      } finally {
-        applyingConfigRef.current = false;
-      }
-    },
-    [log, syncGridGuides],
-  );
-
-  const initGridStack = useCallback(() => {
-    if (hasInitializedGridRef.current) {
-      return undefined;
-    }
-
-    if (!project) {
-      log('GridStack init skipped: project missing');
-      return undefined;
-    }
-
-    if (!gridRef.current) {
-      log('GridStack init skipped: gridRef missing, retrying soon');
-      requestAnimationFrame(() => initGridStack());
-      return undefined;
-    }
-
-    gridStackRef.current = GridStack.init(
-      {
-        column: gridColumnsRef.current,
-        cellHeight: 'auto',
-        margin: 0,
-        animate: true,
-        float: true,
-        minRow: gridRowsRef.current,
-        maxRow: gridRowsRef.current,
-        acceptWidgets: true,
-        removable: '.battlemap-delete-panel',
-        dragIn: widgetTemplateSelector,
-        dragInOptions: {
-          helper: 'clone',
-          appendTo: 'body',
-          revert: 'invalid',
-          scroll: false,
-        },
-        dragInDefault: { w: 1, h: 1 },
-        resizable: {
-          handles: 'e,se,s,sw,w',
-        },
-      },
-      gridRef.current,
-    );
-
-    hasInitializedGridRef.current = true;
-    initialStaticRef.current = gridStackRef.current.opts.staticGrid ?? false;
-    log('GridStack initialized', { columns: gridColumnsRef.current });
-
-    GridStack.setupDragIn(widgetTemplateSelector, {
-      helper: 'clone',
-      appendTo: 'body',
-      revert: 'invalid',
-      scroll: false,
-    });
-    log('GridStack drag-in configured', { selector: widgetTemplateSelector });
-
-    setTimeout(() => {
-      syncGridGuides();
-    }, 0);
-    ensureRowLimits(gridRowsRef.current);
-
-    const handleGridChange = () => {
-      if (applyingConfigRef.current) return;
-
-      const widgets = readWidgetsFromGrid();
-      const nextConfig: BattleMapConfig = {
-        ...configRef.current,
-        gridColumns: gridColumnsRef.current,
-        gridRows: gridRowsRef.current,
-        cellSize: cellSizeRef.current,
-        widgets,
-      };
-
-      setConfig(nextConfig);
-      queueSave(nextConfig);
-      log('Grid change persisted', { widgets: widgets.length });
-    };
-
-    const handleDropped = (
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      _event: any,
-      _previousWidget: GridStackNode | undefined,
-      newWidget?: GridStackNode | GridStackNode[],
-    ) => {
-      if (!newWidget) return;
-      const nodes = Array.isArray(newWidget) ? newWidget : [newWidget];
-      applyTemplateToNodes(nodes);
-      handleGridChange();
-    };
-
-    gridStackRef.current.on('change', handleGridChange);
-    const handleRemoved = (_event: unknown, items?: GridStackNode[]) => {
-      if (items) {
-        items.forEach((item) => {
-          const el = (item as GridStackNode)?.el as HTMLElement | undefined;
-          if (el) {
-            el.classList.add('is-being-deleted');
-            setTimeout(() => {
-              el.remove();
-            }, 200);
-          }
-        });
-      }
-      handleGridChange();
-    };
-    gridStackRef.current.on('removed', handleRemoved);
-    gridStackRef.current.on('dropped', handleDropped);
-    const handleDragStart = (event: unknown, el?: HTMLElement) => {
-      updatePlaceholderAppearance(gridRef.current, el ?? null);
-      const active = updateDeleteZoneHighlight(event) || isElementOverDeleteZone(el ?? null);
-      setDeleteHoverClass(el, active);
-    };
-    const handleDrag = (event: unknown, el?: HTMLElement) => {
-      updatePlaceholderAppearance(gridRef.current, el ?? null);
-      const active = updateDeleteZoneHighlight(event) || isElementOverDeleteZone(el ?? null);
-      setDeleteHoverClass(el, active);
-    };
-    const handleResizeStart = (_event: unknown, el?: HTMLElement) => {
-      updatePlaceholderAppearance(gridRef.current, el ?? null);
-    };
-    const handleDragStop = (event: unknown, el?: HTMLElement) => {
-      const shouldDelete =
-        deleteZoneActiveRef.current || isEventInsideDeleteZone(event) || isElementOverDeleteZone(el ?? null);
-      deleteZoneActiveRef.current = false;
-      setIsDeleteZoneActive(false);
-      setDeleteHoverClass(el, false);
-      resetPlaceholderAppearance(gridRef.current);
-      if (shouldDelete && el && gridStackRef.current) {
-        animateDeleteAndRemoveWidget(el, handleGridChange);
-      }
-    };
-    const handleResizeStop = () => resetPlaceholderAppearance(gridRef.current);
-
-    gridStackRef.current.on('dragstart', handleDragStart);
-    gridStackRef.current.on('drag', handleDrag);
-    gridStackRef.current.on('resizestart', handleResizeStart);
-    gridStackRef.current.on('dragstop', handleDragStop);
-    gridStackRef.current.on('resizestop', handleResizeStop);
-
-    return () => {
-      gridStackRef.current?.off('change', handleGridChange);
-      gridStackRef.current?.off('removed', handleRemoved);
-      gridStackRef.current?.off('dropped', handleDropped);
-      gridStackRef.current?.off('dragstart', handleDragStart);
-      gridStackRef.current?.off('drag', handleDrag);
-      gridStackRef.current?.off('dragstop', handleDragStop);
-      gridStackRef.current?.off('resizestart', handleResizeStart);
-      gridStackRef.current?.off('resizestop', handleResizeStop);
-      gridStackRef.current?.destroy(false);
-      gridStackRef.current = null;
-      hasInitializedGridRef.current = false;
-      log('GridStack destroyed');
-    };
-  }, [
-    applyTemplateToNodes,
-    gridColumnsRef,
-    gridRef,
-    isElementOverDeleteZone,
-    log,
-    project,
-    queueSave,
-    readWidgetsFromGrid,
-    setConfig,
-    syncGridGuides,
-  ]);
-
-  useLayoutEffect(() => {
-    const cleanup = initGridStack();
-    return cleanup;
-  }, [initGridStack, project]);
-
-  useEffect(() => {
-    const handleResize = () => syncGridGuides();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [syncGridGuides]);
-
-  useEffect(() => {
-    if (!gridStackRef.current) return;
-    ensureRowLimits(gridRows);
-    syncGridGuides();
-  }, [gridRows, syncGridGuides, ensureRowLimits]);
-
-  const handleAddWidget = () => {
-    if (!gridStackRef.current) {
-      log('Add widget blocked: grid not ready, retrying init');
-      initGridStack();
-      if (!gridStackRef.current) {
-        return;
-      }
-    }
-
-    const widgetId = generateClientId();
-    const appearance = resolveAppearance({ isFixed: false });
-    const label = `Widget ${widgetCounter}`;
-    const widget = {
-      id: widgetId,
-      x: 0,
-      y: 0,
-      w: 2,
-      h: 2,
-      isFixed: false,
-    };
-    const content = getWidgetContent(label, widget);
-    const widgetWithContent: BattleMapWidget = {
-      ...widget,
-      appearance,
-      content,
-    };
-
-    log('Adding widget', widgetWithContent);
-
-    const el = gridStackRef.current.addWidget({ ...widgetWithContent, content, autoPosition: true });
-    if (!el) {
-      const nextConfig: BattleMapConfig = {
-        ...configRef.current,
-        gridColumns: gridColumnsRef.current,
-        gridRows: gridRowsRef.current,
-        cellSize: cellSizeRef.current,
-        widgets: [...configRef.current.widgets, widgetWithContent],
-      };
-
-      setConfig(nextConfig);
-      queueSave(nextConfig);
-      return;
-    }
-
-    hydrateWidgetElement(widgetWithContent, el);
-
-    const widgets = readWidgetsFromGrid();
-    const nextConfig: BattleMapConfig = {
-      ...configRef.current,
-      gridColumns: gridColumnsRef.current,
-      gridRows: gridRowsRef.current,
-      cellSize: cellSizeRef.current,
-      widgets: widgets.length ? widgets : [...configRef.current.widgets, widgetWithContent],
-    };
-
-    setWidgetCounter((prev) => prev + 1);
-    setConfig(nextConfig);
-    queueSave(nextConfig);
-  };
-
-  const getSquareStyleValues = useCallback(() => {
-    const workspaceEl = viewportRef.current?.closest('.battlemap-workspace') as HTMLElement | null;
-    const workspaceStyles = workspaceEl
-      ? getComputedStyle(workspaceEl)
-      : getComputedStyle(document.documentElement);
-    const gridStyles = gridRef.current ? getComputedStyle(gridRef.current) : workspaceStyles;
-
-    return {
-      background: workspaceStyles.getPropertyValue('--bg').trim() || '#0f172a',
-      gridLine: gridStyles.getPropertyValue('--grid-line-color').trim() || 'rgba(255,255,255,0.12)',
-      border: workspaceStyles.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.35)',
-    };
-  }, []);
-
-  const handleExportBattleMap = useCallback(
-    async (format: 'png' | 'jpeg') => {
-      const columns = gridColumnsRef.current;
-      const rows = gridRowsRef.current;
-      const cellSize = cellSizeRef.current;
-
-      if (!columns || !rows || !cellSize) {
-        log('Export aborted: grid not ready');
-        return;
-      }
-
-      const padding = Math.max(12, cellSize * 0.1);
-      const contentWidth = columns * cellSize;
-      const contentHeight = rows * cellSize;
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(contentWidth + padding * 2);
-      canvas.height = Math.ceil(contentHeight + padding * 2);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        log('Export aborted: canvas unavailable');
-        return;
-      }
-
-      const { background, gridLine, border } = getSquareStyleValues();
-
-      ctx.fillStyle = background || 'transparent';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.strokeStyle = gridLine;
-      ctx.lineWidth = 1;
-      for (let c = 0; c <= columns; c += 1) {
-        const x = padding + c * cellSize + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(x, padding);
-        ctx.lineTo(x, padding + contentHeight);
-        ctx.stroke();
-      }
-      for (let r = 0; r <= rows; r += 1) {
-        const y = padding + r * cellSize + 0.5;
-        ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(padding + contentWidth, y);
-        ctx.stroke();
-      }
-
-      ctx.strokeStyle = border;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(padding + 0.5, padding + 0.5, contentWidth, contentHeight);
-
-      const widgets = readWidgetsFromGrid();
-      const imageSources = Array.from(
-        new Set(
-          widgets
-            .map((widget) => widget.appearance?.backgroundImageUrl)
-            .filter((src): src is string => Boolean(src)),
-        ),
-      );
-
-      const inlinedImages = new Map<string, HTMLImageElement>();
-      await Promise.all(
-        imageSources.map(async (src) => {
-          try {
-            const dataUrl = await fetchImageAsDataUrl(src, exportImageCacheRef.current);
-            const img = await loadImageFromUrl(dataUrl);
-            inlinedImages.set(src, img);
-          } catch (error) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to inline widget image', error);
-          }
-        }),
-      );
-
-      widgets.forEach((widget) => {
-        const x = padding + (widget.x ?? 0) * cellSize;
-        const y = padding + (widget.y ?? 0) * cellSize;
-        const w = (widget.w ?? 1) * cellSize;
-        const h = (widget.h ?? 1) * cellSize;
-        const appearance = resolveAppearance(widget);
-        const img = widget.appearance?.backgroundImageUrl
-          ? inlinedImages.get(widget.appearance.backgroundImageUrl)
-          : undefined;
-
-        if (img) {
-          ctx.drawImage(img, x, y, w, h);
-        } else {
-          ctx.fillStyle = appearance.backgroundColor ?? '#6b6f7b';
-          ctx.fillRect(x, y, w, h);
-        }
-
-        const strokeColor =
-          widget.appearance?.borderColor ??
-          widget.appearance?.backgroundColor ??
-          appearance.borderColor ??
-          '#6b7280';
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x + 0.5, y + 0.5, Math.max(w - 1, 0), Math.max(h - 1, 0));
-      });
-
-      const mime = format === 'png' ? 'image/png' : 'image/jpeg';
-      const quality = format === 'jpeg' ? 0.92 : undefined;
-      const dataUrl = canvas.toDataURL(mime, quality);
-      downloadDataUrl(dataUrl, `battle-map.${format === 'png' ? 'png' : 'jpg'}`);
-      log('Exported battle map', { format, width: canvas.width, height: canvas.height });
-    },
-    [getSquareStyleValues, log, readWidgetsFromGrid],
-  );
-
-  const clampZoom = useCallback((value: number) => Math.min(3, Math.max(0.5, value)), []);
-
-  const centerView = useCallback(
-    (resetScale = false) => {
-      const viewport = viewportRef.current;
-      if (!viewport) return;
-
-      const targetScale = resetScale ? 1 : scaleRef.current;
-      const gridW = gridColumnsRef.current * cellSizeRef.current * targetScale;
-      const gridH = gridRowsRef.current * cellSizeRef.current * targetScale;
-      const nextPan = {
-        x: (viewport.clientWidth - gridW) / 2,
-        y: (viewport.clientHeight - gridH) / 2,
-      };
-
-      if (resetScale) {
-        scaleRef.current = 1;
-        setScale(1);
-      }
-
-      panRef.current = nextPan;
-      setPan(nextPan);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!gridStackRef.current || hasRenderedConfig) return;
-
-    applyConfigToGrid(config);
-    setHasRenderedConfig(true);
-  }, [applyConfigToGrid, config, hasRenderedConfig]);
-
-  useEffect(() => {
-    if (!hasRenderedConfig || hasCenteredRef.current) return;
-    centerView(true);
-    hasCenteredRef.current = true;
-  }, [centerView, hasRenderedConfig]);
-
-  const applyZoom = useCallback(
-    (nextScale: number, pivotClientX?: number, pivotClientY?: number) => {
-      const viewport = viewportRef.current;
-      if (!viewport) {
-        setScale(nextScale);
-        scaleRef.current = nextScale;
-        return;
-      }
-
-      const rect = viewport.getBoundingClientRect();
-      const originX = pivotClientX !== undefined ? pivotClientX - rect.left : rect.width / 2;
-      const originY = pivotClientY !== undefined ? pivotClientY - rect.top : rect.height / 2;
-      const scaleRatio = nextScale / scaleRef.current;
-      const nextPan = {
-        x: panRef.current.x * scaleRatio + originX * (1 - scaleRatio),
-        y: panRef.current.y * scaleRatio + originY * (1 - scaleRatio),
-      };
-
-      panRef.current = nextPan;
-      setPan(nextPan);
-      scaleRef.current = nextScale;
-      setScale(nextScale);
-    },
-    [],
+    [addCellAtPoint, expandClickStart, isExpandMode],
   );
 
   const handleWheelZoom = useCallback(
-    (event: WheelEvent | ReactWheelEvent<HTMLDivElement>) => {
-      if ('cancelable' in event && event.cancelable) {
-        event.preventDefault();
+    (event: ReactWheelEvent<HTMLDivElement>) => {
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      const nextScale = Math.min(2.5, Math.max(0.4, scale * zoomFactor));
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (!rect) {
+        setScale(nextScale);
+        return;
       }
-      const deltaY = 'deltaY' in event ? event.deltaY : 0;
-      const clientX = 'clientX' in event ? event.clientX : undefined;
-      const clientY = 'clientY' in event ? event.clientY : undefined;
-      const direction = deltaY > 0 ? -0.1 : 0.1;
-      const proposedScale = clampZoom(scaleRef.current + direction);
-      if (proposedScale === scaleRef.current) return;
 
-      applyZoom(proposedScale, clientX, clientY);
+      const worldBefore = toWorldPoint(event.clientX, event.clientY);
+      setScale(nextScale);
+
+      if (worldBefore) {
+        const screenX = event.clientX - rect.left;
+        const screenY = event.clientY - rect.top;
+        setPan({
+          x: screenX - worldBefore.x * nextScale,
+          y: screenY - worldBefore.y * nextScale,
+        });
+      }
     },
-    [applyZoom, clampZoom],
+    [scale, toWorldPoint],
   );
 
-  const stopPan = useCallback(() => {
-    panStartRef.current = null;
-    if (isPanning) {
-      setIsPanning(false);
-    }
-  }, [isPanning]);
-
-  const handlePanStart = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!isSpaceHeld || event.button !== 0) return;
-      event.preventDefault();
-      panStartRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-        panX: panRef.current.x,
-        panY: panRef.current.y,
-      };
-      setIsPanning(true);
-    },
-    [isSpaceHeld],
-  );
-
-  const handlePanMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!panStartRef.current) return;
+  const handleTilePointerDown = useCallback((tile: TileDefinition, event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
-
-    const deltaX = event.clientX - panStartRef.current.x;
-    const deltaY = event.clientY - panStartRef.current.y;
-    const nextPan = {
-      x: panStartRef.current.panX + deltaX,
-      y: panStartRef.current.panY + deltaY,
-    };
-
-    panRef.current = nextPan;
-    setPan(nextPan);
+    setDragPayload({ type: 'palette', tile });
+    setStatusMessage(null);
   }, []);
 
-  const handleKeyState = useCallback(
-    (event: KeyboardEvent, pressed: boolean) => {
-      if (event.code !== 'Space') return;
-      const target = event.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+  const handleWidgetPointerDown = useCallback(
+    (widget: BattleMapWidget, event: ReactMouseEvent<SVGGElement>) => {
       event.preventDefault();
-      setIsSpaceHeld(pressed);
-      if (!pressed) {
-        stopPan();
+      if (isDeleteMode) {
+        handleDelete(widget.id);
+        return;
       }
+      setSelectedWidgetId(widget.id);
+      setDragPayload({ type: 'widget', widget });
+      setDraggingOrigin({ x: widget.x, y: widget.y });
+      setDragPosition({ x: event.clientX, y: event.clientY });
+      setStatusMessage(null);
     },
-    [stopPan],
+    [handleDelete, isDeleteMode],
   );
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => handleKeyState(event, true);
-    const onKeyUp = (event: KeyboardEvent) => handleKeyState(event, false);
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-    };
-  }, [handleKeyState]);
+  const dragPreviewImage = useMemo(() => {
+    if (!dragPayload) return null;
+    if (dragPayload.type === 'palette') return dragPayload.tile.image;
+    return tileMap.get(dragPayload.widget.tileId ?? '')?.image ?? dragPayload.widget.appearance?.backgroundImageUrl ?? null;
+  }, [dragPayload, tileMap]);
 
-  useEffect(() => {
-    if (!gridStackRef.current) return;
-    const shouldBeStatic = initialStaticRef.current || isSpaceHeld || isPanning || isDeleteMode;
-    gridStackRef.current.setStatic(shouldBeStatic);
-  }, [isDeleteMode, isPanning, isSpaceHeld]);
-
-  useEffect(() => {
-    if (!isPanning) return undefined;
-    const handleMouseUp = () => stopPan();
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => window.removeEventListener('mouseup', handleMouseUp);
-  }, [isPanning, stopPan]);
-
-  const handleExpand = useCallback(
-    (direction: 'top' | 'bottom' | 'left' | 'right') => {
-      if (!gridStackRef.current) {
-        initGridStack();
+  const handleExportBattleMap = useCallback(
+    async (format: 'png' | 'jpeg') => {
+      if (!gridBounds) {
+        setStatusMessage('Grid not ready to export.');
+        return;
       }
 
-      const isVertical = direction === 'top' || direction === 'bottom';
-      const isHorizontal = direction === 'left' || direction === 'right';
+      try {
+        const padding = Math.max(12, cellSize * 0.25);
+        const viewMinX = gridBounds.minX - padding;
+        const viewMinY = gridBounds.minY - padding;
+        const viewWidth = gridBounds.width + padding * 2;
+        const viewHeight = gridBounds.height + padding * 2;
 
-      const nextColumns = gridColumnsRef.current + (isHorizontal ? 1 : 0);
-      const nextRows = gridRowsRef.current + (isVertical ? 1 : 0);
-      const shiftX = direction === 'left' ? 1 : 0;
-      const shiftY = direction === 'top' ? 1 : 0;
+        const inlineImages = new Map<string, string>();
+        await Promise.all(
+          widgets.map(async (widget) => {
+            const src =
+              tileMap.get(widget.tileId ?? '')?.image ??
+              widget.appearance?.backgroundImageUrl ??
+              undefined;
+            if (!src || inlineImages.has(src)) return;
+            const dataUrl = await fetchImageAsDataUrl(src, exportImageCacheRef.current);
+            inlineImages.set(src, dataUrl);
+          }),
+        );
 
-      const shiftedWidgets =
-        shiftX || shiftY
-          ? configRef.current.widgets.map((widget) => ({
-              ...widget,
-              x: widget.x + shiftX,
-              y: widget.y + shiftY,
-            }))
-          : configRef.current.widgets;
+        const svgParts: string[] = [];
+        svgParts.push(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${viewWidth}" height="${viewHeight}" viewBox="${viewMinX} ${viewMinY} ${viewWidth} ${viewHeight}" fill="none">`,
+        );
 
-      const nextConfig: BattleMapConfig = {
-        ...configRef.current,
-        gridColumns: nextColumns,
-        gridRows: nextRows,
-        cellSize: cellSizeRef.current,
-        widgets: shiftedWidgets,
-      };
+        // Grid lines
+        allowedCells.forEach((cell) => {
+          const x = cell.x * cellSize;
+          const y = cell.y * cellSize;
+          svgParts.push(
+            `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1" />`,
+          );
+        });
 
-      configRef.current = nextConfig;
-      setGridColumns(nextColumns);
-      setGridRows(nextRows);
-      setConfig(nextConfig);
-      gridColumnsRef.current = nextColumns;
-      gridRowsRef.current = nextRows;
+        // Widgets
+        widgets.forEach((widget) => {
+          const x = widget.x * cellSize;
+          const y = widget.y * cellSize;
+          const tileSrc =
+            tileMap.get(widget.tileId ?? '')?.image ?? widget.appearance?.backgroundImageUrl ?? '';
+          const href = tileSrc ? inlineImages.get(tileSrc) ?? tileSrc : '';
 
-      if (shiftX || shiftY) {
-        const nextPan = {
-          x: panRef.current.x - shiftX * cellSizeRef.current * scaleRef.current,
-          y: panRef.current.y - shiftY * cellSizeRef.current * scaleRef.current,
-        };
-        panRef.current = nextPan;
-        setPan(nextPan);
+          if (href) {
+            svgParts.push(
+              `<image href="${href}" x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" preserveAspectRatio="xMidYMid slice" />`,
+            );
+          } else {
+            svgParts.push(`<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="#d0d0d0" />`);
+          }
+        });
+
+        svgParts.push('</svg>');
+
+        const svgString = svgParts.join('');
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        const img = await loadImageFromUrl(svgUrl);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewWidth);
+        canvas.height = Math.ceil(viewHeight);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(svgUrl);
+          setStatusMessage('Unable to export: canvas not available.');
+          return;
+        }
+
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        URL.revokeObjectURL(svgUrl);
+
+        const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+        const quality = format === 'jpeg' ? 0.92 : undefined;
+        const dataUrl = canvas.toDataURL(mime, quality);
+        downloadDataUrl(dataUrl, `battle-map.${format === 'png' ? 'png' : 'jpg'}`);
+        setStatusMessage(`Saved battle map as ${format.toUpperCase()}.`);
+      } catch (err) {
+        console.error('Export failed', err);
+        setStatusMessage('Failed to export battle map.');
       }
-
-      if (gridStackRef.current) {
-        ensureRowLimits(nextRows);
-        applyConfigToGrid(nextConfig);
-      }
-
-      requestAnimationFrame(() => {
-        syncGridGuides();
-      });
-
-      queueSave(nextConfig);
-      log('Grid expanded', { direction, columns: nextColumns, rows: nextRows });
     },
-    [applyConfigToGrid, initGridStack, log, queueSave, syncGridGuides],
+    [allowedCells, cellSize, gridBounds, tileMap, widgets],
   );
 
   if (isLoading) {
@@ -1403,8 +703,8 @@ function BattleMapWorkspace() {
   }
 
   return (
-    <div className={`battlemap-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
-      <div className="battlemap-workspace__sidebar">
+    <div className={`battlemap-workspace square-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
+      <div className="battlemap-workspace__sidebar square-workspace__sidebar">
         <div className="battlemap-workspace__sidebar-header">
           <button
             className="button button--ghost battlemap-workspace__back-button"
@@ -1428,15 +728,13 @@ function BattleMapWorkspace() {
                 <button
                   type="button"
                   className="battlemap-workspace__tile-group-toggle"
-                  onClick={() => toggleAccordion(set.title)}
+                  onClick={() => setAccordionOpen((prev) => ({ ...prev, [set.title]: !prev[set.title] }))}
                   aria-expanded={accordionOpen[set.title] ?? false}
                   aria-controls={`tile-group-${set.title}`}
                 >
                   <span className="battlemap-workspace__tile-group-title">{set.title}</span>
                   <span
-                    className={`battlemap-workspace__tile-group-chevron${
-                      accordionOpen[set.title] ? ' is-open' : ''
-                    }`}
+                    className={`battlemap-workspace__tile-group-chevron${accordionOpen[set.title] ? ' is-open' : ''}`}
                     aria-hidden
                   />
                 </button>
@@ -1447,157 +745,228 @@ function BattleMapWorkspace() {
                   aria-label={`${set.title} tiles`}
                   style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS } as CSSProperties}
                 >
-                  {packTilesForPreview(set.tiles, TILE_PREVIEW_COLUMNS).map(
-                    ({ tile, col, row, spanCols, spanRows }) => (
+                  {packTilesForPreview(set.tiles, TILE_PREVIEW_COLUMNS).map(({ tile, col, row }) => (
+                    <div
+                      key={`${tile.id}-${row}-${col}`}
+                      className="battlemap-workspace__widget-template-wrapper"
+                      style={{
+                        gridColumnStart: col + 1,
+                        gridColumnEnd: `span 1`,
+                        gridRowStart: row + 1,
+                        gridRowEnd: `span 1`,
+                      }}
+                    >
                       <div
-                        key={`${tile.id}-${row}-${col}`}
-                        className="battlemap-workspace__widget-template-wrapper"
-                        style={{
-                          gridColumnStart: col + 1,
-                          gridColumnEnd: `span ${spanCols}`,
-                          gridRowStart: row + 1,
-                          gridRowEnd: `span ${spanRows}`,
-                        }}
-                      >
-                        <div
-                          className="battlemap-workspace__widget-template grid-stack-item"
-                          gs-w={spanCols}
-                          gs-h={spanRows}
-                          data-tile-cols={spanCols}
-                          data-tile-rows={spanRows}
-                          data-tile-image={tile.image}
-                          data-is-fixed={tile.isFixed}
-                          gs-auto-position="true"
-                          onMouseDown={handleTemplatePointerDown}
-                          aria-label={`${tile.label} tile`}
-                          style={
-                            {
-                              '--tile-preview-scale': TILE_PREVIEW_SCALE,
-                              '--tile-cols': spanCols,
-                              '--tile-rows': spanRows,
-                              '--tile-image': `url("${tile.image}")`,
-                              '--widget-bg-image': `url("${tile.image}")`,
-                            } as CSSProperties
-                          }
-                        >
-                          <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
-                        </div>
-                      </div>
-                    ),
-                  )}
+                        className="battlemap-workspace__widget-template"
+                        onMouseDown={(event) => handleTilePointerDown(tile, event)}
+                        aria-label={`${tile.label} tile`}
+                        style={
+                          {
+                            '--widget-bg-image': `url("${tile.image}")`,
+                          } as CSSProperties
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
           <p className="battlemap-workspace__hint battlemap-workspace__autosave">
-            Auto-save: {isSaving ? 'Saving...' : 'Synced'} ({storageMode} storage)
+            Auto-save: {isSaving ? 'Saving...' : 'Synced'}
           </p>
+          {statusMessage ? <p className="square-workspace__status">{statusMessage}</p> : null}
         </div>
       </div>
 
-      <div className="battlemap-workspace__main">
+      <div className="battlemap-workspace__main square-workspace__main">
         <div
           ref={viewportRef}
-          className={`battlemap-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${
-            isPanning ? ' is-panning' : ''
-          }`}
-          onMouseDown={handlePanStart}
-          onMouseMove={handlePanMove}
-          onMouseUp={stopPan}
-          onMouseLeave={stopPan}
+          className={`battlemap-workspace__viewport square-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
+          onMouseDown={(event) => {
+            if (isExpandMode) {
+              handleExpandClickStart(event);
+            } else if (isDeleteMode) {
+              handleDeleteDragStart(event);
+            } else {
+              handlePanStart(event);
+            }
+          }}
+          onMouseMove={(event) => {
+            if (isExpandMode) {
+              // No drag behavior in expand mode
+            } else if (isDeleteMode) {
+              handleDeleteDragMove(event);
+            } else {
+              handlePanMove(event);
+            }
+          }}
+          onMouseUp={(event) => {
+            if (isExpandMode) {
+              handleExpandClickEnd(event);
+            } else if (isDeleteMode) {
+              handleDeleteDragEnd();
+            } else {
+              stopPan();
+            }
+          }}
+          onMouseLeave={() => {
+            if (isExpandMode) {
+              setExpandClickStart(null);
+            } else if (isDeleteMode) {
+              handleDeleteDragEnd();
+            } else {
+              stopPan();
+            }
+          }}
           onWheel={handleWheelZoom}
         >
-          <div
-            ref={surfaceRef}
-            className="battlemap-workspace__surface"
-            style={{
-              width: `${gridColumns * cellSize}px`,
-              height: `${gridRows * cellSize}px`,
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-              transformOrigin: '0 0',
-            }}
-          >
-            <div
-              className="battlemap-workspace__grid-wrapper"
-              style={{ width: '100%', height: '100%' }}
-              onMouseDown={handleDeleteGridMouseDown}
-              onMouseMove={handleDeleteGridMouseMove}
-              onMouseUp={handleDeleteGridMouseUp}
-              onMouseLeave={handleDeleteGridMouseUp}
-            >
-              <button
-                type="button"
-                className="battlemap-workspace__expander battlemap-workspace__expander--top"
-                aria-label="Expand rows upward"
-                onClick={() => handleExpand('top')}
-              />
-              <button
-                type="button"
-                className="battlemap-workspace__expander battlemap-workspace__expander--bottom"
-                aria-label="Expand rows downward"
-                onClick={() => handleExpand('bottom')}
-              />
-              <button
-                type="button"
-                className="battlemap-workspace__expander battlemap-workspace__expander--left"
-                aria-label="Expand columns left"
-                onClick={() => handleExpand('left')}
-              />
-              <button
-                type="button"
-                className="battlemap-workspace__expander battlemap-workspace__expander--right"
-                aria-label="Expand columns right"
-                onClick={() => handleExpand('right')}
-              />
-              <div
-                ref={gridRef}
-                className="grid-stack battlemap-workspace__grid"
-                style={{
-                  width: '100%',
-                  minHeight: `${gridRows * cellSize}px`,
-                }}
-              />
-            </div>
-          </div>
+          <svg className="square-workspace__surface">
+            <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
+              {hoverCell && hoverVisible && dragPayload ? (
+                <rect
+                  className="square-workspace__hover"
+                  x={hoverCell.x * cellSize}
+                  y={hoverCell.y * cellSize}
+                  width={cellSize}
+                  height={cellSize}
+                />
+              ) : null}
+
+              {allowedCells.map((cell) => {
+                const x = cell.x * cellSize;
+                const y = cell.y * cellSize;
+                return (
+                  <rect
+                    key={`${cell.x}-${cell.y}`}
+                    className="square-workspace__cell"
+                    x={x}
+                    y={y}
+                    width={cellSize}
+                    height={cellSize}
+                  />
+                );
+              })}
+
+              {widgets.map((widget) => {
+                const x = widget.x * cellSize;
+                const y = widget.y * cellSize;
+                const tile = tileMap.get(widget.tileId ?? '');
+
+                return (
+                  <g
+                    key={widget.id}
+                    className="square-workspace__tile"
+                    onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
+                  >
+                    {tile || widget.appearance?.backgroundImageUrl ? (
+                      <image
+                        href={tile?.image ?? widget.appearance?.backgroundImageUrl}
+                        x={x}
+                        y={y}
+                        width={cellSize}
+                        height={cellSize}
+                        preserveAspectRatio="xMidYMid slice"
+                      />
+                    ) : (
+                      <rect x={x} y={y} width={cellSize} height={cellSize} fill="#d0d0d0" />
+                    )}
+                    <rect className="square-workspace__tile-border" x={x} y={y} width={cellSize} height={cellSize} />
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+
           <div
             id="trash-dropzone"
             ref={deleteZoneRef}
-            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}${
-              isDeleteMode ? ' is-toggle-active' : ''
-            }`}
-            aria-label="Drop widgets here to delete them"
+            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}${isDeleteMode ? ' is-toggle-active' : ''}`}
+            aria-label="Drop tiles here to delete them"
             role="presentation"
-            onClick={handleDeleteModeToggle}
+            onClick={() => {
+              setIsDeleteMode((prev) => {
+                const next = !prev;
+                if (next) {
+                  setIsExpandMode(false);
+                  setStatusMessage('Delete mode enabled.');
+                } else {
+                  setStatusMessage('Delete mode disabled.');
+                }
+                setIsDeleteDrag(false);
+                return next;
+              });
+            }}
           >
             <span className="battlemap-delete-panel__icon" aria-hidden />
           </div>
+
+          {dragPayload && dragPosition && dragPreviewImage ? (
+            <div
+              className="square-workspace__drag-preview"
+              style={{
+                left: `${dragPosition.x}px`,
+                top: `${dragPosition.y}px`,
+                transform: 'translate(-50%, -50%)',
+                width: `${cellSize * scale}px`,
+                height: `${cellSize * scale}px`,
+              }}
+            >
+              <img
+                src={dragPreviewImage}
+                alt="Drag preview"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
+
       <div className="battlemap-workspace__right-sidebar">
         <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
-          <h3 className="battlemap-workspace__control-title">Grid Settings</h3>
+          <h3 className="battlemap-workspace__control-title">Grid</h3>
           <div className="battlemap-workspace__grid-meta">
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Columns</span>
-              <span>{gridColumns}</span>
-            </div>
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Rows</span>
-              <span>{gridRows}</span>
-            </div>
             <div className="battlemap-workspace__grid-meta-row">
               <span>Cell Size</span>
               <span>{cellSize}px</span>
+            </div>
+            <div className="battlemap-workspace__grid-meta-row">
+              <span>Tiles Placed</span>
+              <span>{widgets.length}</span>
             </div>
           </div>
           <button
             type="button"
             className="button button--ghost battlemap-workspace__reset-button"
             onClick={() => {
-              centerView(true);
+              setScale(1);
+              recenterGrid(1);
             }}
           >
             Reset View
+          </button>
+          <button
+            type="button"
+            className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+            onClick={() => {
+              setIsExpandMode((prev) => {
+                const next = !prev;
+                if (next) {
+                  setIsDeleteMode(false);
+                  setStatusMessage('Expand Grid Mode enabled. Click to add cells.');
+                } else {
+                  setStatusMessage('Expand Grid Mode disabled.');
+                }
+                return next;
+              });
+            }}
+          >
+            {isExpandMode ? 'Expand Mode: ON' : 'Expand Grid'}
           </button>
           <div className="battlemap-workspace__export-actions">
             <button
@@ -1615,6 +984,9 @@ function BattleMapWorkspace() {
               Save Battle Map (JPEG)
             </button>
           </div>
+          <p className="battlemap-workspace__hint">
+            Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the grid. Occupied cells are swapped.
+          </p>
         </div>
       </div>
     </div>

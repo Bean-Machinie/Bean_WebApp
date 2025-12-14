@@ -805,3 +805,113 @@
   text-align: center;
   user-select: none;
 }
+
+/* ===== SQUARE WORKSPACE STYLES ===== */
+.square-workspace {
+  --grid-line-color: color-mix(in srgb, var(--text) 12%, transparent);
+  --grid-border-color: color-mix(in srgb, var(--text) 35%, transparent);
+  --tile-shadow: 0 4px 12px color-mix(in srgb, var(--text) 12%, transparent);
+  width: 100%;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.square-workspace__status {
+  margin: 6px 0 0;
+  color: #9ae6b4;
+  font-size: 0.85rem;
+}
+
+.square-workspace__main {
+  flex: 1;
+  position: relative;
+}
+
+.square-workspace__viewport {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.square-workspace__viewport.is-space-held {
+  cursor: grab;
+}
+
+.square-workspace__viewport.is-panning {
+  cursor: grabbing;
+}
+
+.square-workspace__viewport.is-expand-mode {
+  cursor: crosshair;
+}
+
+.square-workspace__surface {
+  width: 100%;
+  height: 100%;
+}
+
+.square-workspace__cell {
+  fill: none;
+  stroke: var(--grid-line-color);
+  stroke-width: 1;
+}
+
+.square-workspace__hover {
+  fill: color-mix(in srgb, var(--primary) 20%, transparent);
+  stroke: color-mix(in srgb, var(--primary) 70%, transparent);
+  stroke-width: 2;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.1s ease;
+}
+
+.square-workspace__tile {
+  cursor: grab;
+}
+
+.square-workspace__tile:active {
+  cursor: grabbing;
+}
+
+.square-workspace__tile-border {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 30%, transparent);
+  stroke-width: 1.5px;
+  pointer-events: none;
+}
+
+.square-workspace__tile image,
+.square-workspace__tile rect {
+  filter: drop-shadow(var(--tile-shadow));
+}
+
+.square-workspace__drag-preview {
+  position: fixed;
+  display: inline-block;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  background: none;
+  border: none;
+  box-shadow: var(--tile-shadow);
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.square-workspace__drag-preview img {
+  display: block;
+  border-radius: 4px;
+}
+
+.square-workspace.is-delete-mode .square-workspace__tile-border {
+  stroke: var(--danger);
+  stroke-width: 2px;
+  filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--danger) 20%, transparent));
+}
+
+.square-workspace.is-delete-mode .square-workspace__tile image,
+.square-workspace.is-delete-mode .square-workspace__tile rect {
+  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--danger) 26%, transparent));
+}

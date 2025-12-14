@@ -45,6 +45,7 @@ export type BattleMapWidget = {
   w: number;
   h: number;
   content: string;
+  tileId?: string;
   appearance?: WidgetAppearance;
   isFixed?: boolean;
   updated_at?: string;
@@ -72,6 +73,11 @@ export type HexCell = {
   s: number;
 };
 
+export type SquareCell = {
+  x: number;
+  y: number;
+};
+
 export type BattleMapConfig = {
   gridType: GridType;
   gridColumns: number;
@@ -81,6 +87,7 @@ export type BattleMapConfig = {
   hexSettings?: HexGridSettings;
   hexWidgets?: HexWidget[];
   allowedHexCells?: HexCell[];
+  allowedSquareCells?: SquareCell[];
   version?: number;
   updated_at?: string;
 };

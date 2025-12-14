@@ -117,11 +117,13 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
         w: widget.w ?? 1,
         h: widget.h ?? 1,
         content,
+        tileId: widget.tileId,
         appearance: resolvedAppearance,
         isFixed: widget.isFixed ?? false,
         updated_at: widget.updated_at,
       };
     }),
+    allowedSquareCells: (config as BattleMapConfig)?.allowedSquareCells,
     version: config?.version ?? DEFAULT_BATTLE_MAP_CONFIG.version,
     updated_at: config?.updated_at,
   };
@@ -383,6 +385,7 @@ async function persistLegacySnapshot(
           gridRows: config.gridRows,
           cellSize: config.cellSize,
           widgets: config.widgets,
+          allowedSquareCells: config.allowedSquareCells,
           version: config.version,
           updated_at: config.updated_at,
         };
