@@ -12,7 +12,7 @@ import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG, DEFAULT_HEX_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, HexWidget } from '../types/battlemap';
 import type { HexTileDefinition } from '../data/tiles/types';
-import { HEX_TILE_SETS } from '../data/tiles/tileSets';
+import { HEX_TILE_PREVIEW_GAP, HEX_TILE_PREVIEW_SCALE, HEX_TILE_SETS } from '../data/tiles/tileSets';
 import { createHexGeometry } from '../hex/hexGeometry';
 import type { Cube } from '../hex/hexTypes';
 import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
@@ -809,6 +809,8 @@ function HexBattleMapWorkspace() {
     );
   }
 
+  const hexPreviewSize = hexSettings.hexSize * HEX_TILE_PREVIEW_SCALE;
+
   return (
     <div className={`battlemap-workspace hex-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
       <div className="battlemap-workspace__sidebar hex-workspace__sidebar">
@@ -850,7 +852,20 @@ function HexBattleMapWorkspace() {
                   className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
                   role="region"
                   aria-label={`${set.title} tiles`}
-                  style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS } as CSSProperties}
+                  style={
+                    {
+                      '--tile-preview-columns': TILE_PREVIEW_COLUMNS,
+                      '--tile-preview-scale': HEX_TILE_PREVIEW_SCALE,
+                      '--widget-preview-scale': HEX_TILE_PREVIEW_SCALE,
+                      '--tile-preview-gap': HEX_TILE_PREVIEW_GAP,
+                      columnGap: HEX_TILE_PREVIEW_GAP,
+                      rowGap: HEX_TILE_PREVIEW_GAP,
+                      '--grid-cell-width': `${hexSettings.hexSize}px`,
+                      '--grid-cell-height': `${hexSettings.hexSize}px`,
+                      gridTemplateColumns: `repeat(${TILE_PREVIEW_COLUMNS}, ${hexPreviewSize}px)`,
+                      gridAutoRows: `${hexPreviewSize}px`,
+                    } as CSSProperties
+                  }
                 >
                   {packTilesForPreview(set.tiles, TILE_PREVIEW_COLUMNS).map(({ tile, col, row }) => (
                     <div
@@ -869,7 +884,8 @@ function HexBattleMapWorkspace() {
                         aria-label={`${tile.label} tile`}
                         style={
                           {
-                            '--tile-preview-scale': 0.45,
+                            '--tile-preview-scale': HEX_TILE_PREVIEW_SCALE,
+                            '--widget-preview-scale': HEX_TILE_PREVIEW_SCALE,
                             '--widget-bg-image': `url("${tile.image}")`,
                           } as CSSProperties
                         }
