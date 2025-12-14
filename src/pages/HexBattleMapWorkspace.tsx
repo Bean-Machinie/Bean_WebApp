@@ -92,6 +92,9 @@ function HexBattleMapWorkspace() {
     () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
   );
   const [hoverVisible, setHoverVisible] = useState(false);
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [isDeleteDrag, setIsDeleteDrag] = useState(false);
+  const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, TileDefinition>();
@@ -176,6 +179,8 @@ function HexBattleMapWorkspace() {
   }, [allowedCells, geometry]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
+  const deleteZoneRef = useRef<HTMLDivElement>(null);
+  const deleteZoneActiveRef = useRef(false);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const hasCenteredRef = useRef(false);
   const lastBoundsRef = useRef(gridBounds);
@@ -236,8 +241,45 @@ function HexBattleMapWorkspace() {
       setHexWidgets(nextWidgets);
       persistHexWidgets(nextWidgets);
       setSelectedWidgetId(null);
+      setStatusMessage('Tile deleted.');
     },
     [hexWidgets, persistHexWidgets],
+  );
+
+  const deleteHexAtPoint = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const targetHex = geometry.pixelToHex(point);
+      const occupant = hexWidgets.find(
+        (widget) => widget.q === targetHex.q && widget.r === targetHex.r,
+      );
+      if (occupant) {
+        handleDelete(occupant.id);
+      }
+    },
+    [geometry, handleDelete, hexWidgets, toWorldPoint],
+  );
+
+  const isPointInsideDeleteZone = useCallback(
+    (clientX?: number, clientY?: number) => {
+      const zone = deleteZoneRef.current;
+      if (!zone || clientX === undefined || clientY === undefined) return false;
+      const rect = zone.getBoundingClientRect();
+      return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+    },
+    [],
+  );
+
+  const updateDeleteZoneHighlight = useCallback(
+    (clientX?: number, clientY?: number) => {
+      const active = isPointInsideDeleteZone(clientX, clientY);
+      deleteZoneActiveRef.current = active;
+      setIsDeleteZoneActive(active);
+      return active;
+    },
+    [isPointInsideDeleteZone],
   );
 
   useEffect(() => {
@@ -292,21 +334,26 @@ function HexBattleMapWorkspace() {
       if (!point) {
         setHoverHex(null);
         setHoverVisible(false);
+        updateDeleteZoneHighlight(event.clientX, event.clientY);
         return;
       }
       setHoverHex(geometry.pixelToHex(point));
       setHoverVisible(true);
+      updateDeleteZoneHighlight(event.clientX, event.clientY);
     };
 
     const handleUp = (event: MouseEvent) => {
       setDragPosition({ x: event.clientX, y: event.clientY });
+       const activeDelete = updateDeleteZoneHighlight(event.clientX, event.clientY);
       const point = toWorldPoint(event.clientX, event.clientY);
       const targetHex = point ? geometry.pixelToHex(point) : hoverHex;
       const isWithinBounds = targetHex
         ? Math.max(Math.abs(targetHex.q), Math.abs(targetHex.r), Math.abs(targetHex.s)) < gridRadius
         : false;
 
-      if (targetHex && isWithinBounds) {
+      if (activeDelete && dragPayload?.type === 'widget') {
+        handleDelete(dragPayload.widget.id);
+      } else if (targetHex && isWithinBounds) {
         const occupant = hexWidgets.find(
           (widget) => widget.q === targetHex.q && widget.r === targetHex.r,
         );
@@ -369,6 +416,8 @@ function HexBattleMapWorkspace() {
       setHoverHex(null);
       setHoverVisible(false);
       setDragPosition(null);
+      setIsDeleteZoneActive(false);
+      deleteZoneActiveRef.current = false;
     };
 
     window.addEventListener('mousemove', handleMove);
@@ -376,8 +425,21 @@ function HexBattleMapWorkspace() {
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
+      setIsDeleteDrag(false);
     };
-  }, [dragPayload, draggingOrigin, geometry, gridRadius, hexWidgets, hoverHex, persistHexWidgets, toWorldPoint]);
+  }, [
+    dragPayload,
+    draggingOrigin,
+    geometry,
+    gridRadius,
+    handleDelete,
+    hexWidgets,
+    hoverHex,
+    persistHexWidgets,
+    setIsDeleteDrag,
+    toWorldPoint,
+    updateDeleteZoneHighlight,
+  ]);
 
   const handlePanStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -404,9 +466,32 @@ function HexBattleMapWorkspace() {
     panStartRef.current = null;
   }, []);
 
+  const handleDeleteDragStart = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isDeleteMode) return;
+      event.preventDefault();
+      setIsDeleteDrag(true);
+      deleteHexAtPoint(event.clientX, event.clientY);
+    },
+    [deleteHexAtPoint, isDeleteMode],
+  );
+
+  const handleDeleteDragMove = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isDeleteMode || !isDeleteDrag) return;
+      event.preventDefault();
+      deleteHexAtPoint(event.clientX, event.clientY);
+    },
+    [deleteHexAtPoint, isDeleteDrag, isDeleteMode],
+  );
+
+  const handleDeleteDragEnd = useCallback(() => {
+    if (!isDeleteMode) return;
+    setIsDeleteDrag(false);
+  }, [isDeleteMode]);
+
   const handleWheelZoom = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
-      event.preventDefault();
       const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
       const nextScale = Math.min(2.5, Math.max(0.4, scale * zoomFactor));
       const rect = viewportRef.current?.getBoundingClientRect();
@@ -439,13 +524,17 @@ function HexBattleMapWorkspace() {
   const handleWidgetPointerDown = useCallback(
     (widget: HexWidget, event: ReactMouseEvent<SVGGElement>) => {
       event.preventDefault();
+      if (isDeleteMode) {
+        handleDelete(widget.id);
+        return;
+      }
       setSelectedWidgetId(widget.id);
       setDragPayload({ type: 'widget', widget });
       setDraggingOrigin({ q: widget.q, r: widget.r, s: widget.s });
       setDragPosition({ x: event.clientX, y: event.clientY });
       setStatusMessage(null);
     },
-    [],
+    [handleDelete, isDeleteMode],
   );
 
   const dragPreviewImage = useMemo(() => {
@@ -638,7 +727,7 @@ function HexBattleMapWorkspace() {
   }
 
   return (
-    <div className="battlemap-workspace hex-workspace">
+    <div className={`battlemap-workspace hex-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
       <div className="battlemap-workspace__sidebar hex-workspace__sidebar">
         <div className="battlemap-workspace__sidebar-header">
           <button
@@ -721,10 +810,34 @@ function HexBattleMapWorkspace() {
         <div
           ref={viewportRef}
           className={`battlemap-workspace__viewport hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}`}
-          onMouseDown={handlePanStart}
-          onMouseMove={handlePanMove}
-          onMouseUp={stopPan}
-          onMouseLeave={stopPan}
+          onMouseDown={(event) => {
+            if (isDeleteMode) {
+              handleDeleteDragStart(event);
+            } else {
+              handlePanStart(event);
+            }
+          }}
+          onMouseMove={(event) => {
+            if (isDeleteMode) {
+              handleDeleteDragMove(event);
+            } else {
+              handlePanMove(event);
+            }
+          }}
+          onMouseUp={(event) => {
+            if (isDeleteMode) {
+              handleDeleteDragEnd();
+            } else {
+              stopPan();
+            }
+          }}
+          onMouseLeave={(event) => {
+            if (isDeleteMode) {
+              handleDeleteDragEnd();
+            } else {
+              stopPan();
+            }
+          }}
           onWheel={handleWheelZoom}
         >
           <svg className="hex-workspace__surface">
@@ -807,6 +920,24 @@ function HexBattleMapWorkspace() {
               })}
             </g>
           </svg>
+
+          <div
+            id="trash-dropzone"
+            ref={deleteZoneRef}
+            className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}${isDeleteMode ? ' is-toggle-active' : ''}`}
+            aria-label="Drop tiles here to delete them"
+            role="presentation"
+            onClick={() => {
+              setIsDeleteMode((prev) => {
+                const next = !prev;
+                setStatusMessage(next ? 'Delete mode enabled.' : 'Delete mode disabled.');
+                setIsDeleteDrag(false);
+                return next;
+              });
+            }}
+          >
+            <span className="battlemap-delete-panel__icon" aria-hidden />
+          </div>
 
           {dragPayload && dragPosition && dragPreviewImage ? (
             <div
