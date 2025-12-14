@@ -607,6 +607,17 @@
   width: 100%;
 }
 
+.battlemap-workspace__export-actions {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.battlemap-workspace__export-button {
+  flex: 1;
+  box-shadow: none;
+}
+
 .battlemap-workspace__autosave {
   margin-top: 0.5rem;
   color: var(--sidebar-text);

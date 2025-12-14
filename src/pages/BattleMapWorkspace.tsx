@@ -15,6 +15,7 @@ import { GridStack, GridStackNode } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
 import { useAuth } from '../context/AuthContext';
 import { generateClientId } from '../lib/utils';
+import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
 import {
   FIXED_WIDGET_APPEARANCE,
   DYNAMIC_WIDGET_APPEARANCE,
@@ -297,6 +298,7 @@ function BattleMapWorkspace() {
   const cellSizeRef = useRef<number>(DEFAULT_BATTLE_MAP_CONFIG.cellSize);
   const scaleRef = useRef(1);
   const panRef = useRef({ x: 0, y: 0 });
+  const exportImageCacheRef = useRef<Map<string, string>>(new Map());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
@@ -1035,6 +1037,128 @@ function BattleMapWorkspace() {
     queueSave(nextConfig);
   };
 
+  const getSquareStyleValues = useCallback(() => {
+    const workspaceEl = viewportRef.current?.closest('.battlemap-workspace') as HTMLElement | null;
+    const workspaceStyles = workspaceEl
+      ? getComputedStyle(workspaceEl)
+      : getComputedStyle(document.documentElement);
+    const gridStyles = gridRef.current ? getComputedStyle(gridRef.current) : workspaceStyles;
+
+    return {
+      background: workspaceStyles.getPropertyValue('--bg').trim() || '#0f172a',
+      gridLine: gridStyles.getPropertyValue('--grid-line-color').trim() || 'rgba(255,255,255,0.12)',
+      border: workspaceStyles.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.35)',
+    };
+  }, []);
+
+  const handleExportBattleMap = useCallback(
+    async (format: 'png' | 'jpeg') => {
+      const columns = gridColumnsRef.current;
+      const rows = gridRowsRef.current;
+      const cellSize = cellSizeRef.current;
+
+      if (!columns || !rows || !cellSize) {
+        log('Export aborted: grid not ready');
+        return;
+      }
+
+      const padding = Math.max(12, cellSize * 0.1);
+      const contentWidth = columns * cellSize;
+      const contentHeight = rows * cellSize;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(contentWidth + padding * 2);
+      canvas.height = Math.ceil(contentHeight + padding * 2);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        log('Export aborted: canvas unavailable');
+        return;
+      }
+
+      const { background, gridLine, border } = getSquareStyleValues();
+
+      ctx.fillStyle = background || 'transparent';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = gridLine;
+      ctx.lineWidth = 1;
+      for (let c = 0; c <= columns; c += 1) {
+        const x = padding + c * cellSize + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, padding + contentHeight);
+        ctx.stroke();
+      }
+      for (let r = 0; r <= rows; r += 1) {
+        const y = padding + r * cellSize + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(padding + contentWidth, y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(padding + 0.5, padding + 0.5, contentWidth, contentHeight);
+
+      const widgets = readWidgetsFromGrid();
+      const imageSources = Array.from(
+        new Set(
+          widgets
+            .map((widget) => widget.appearance?.backgroundImageUrl)
+            .filter((src): src is string => Boolean(src)),
+        ),
+      );
+
+      const inlinedImages = new Map<string, HTMLImageElement>();
+      await Promise.all(
+        imageSources.map(async (src) => {
+          try {
+            const dataUrl = await fetchImageAsDataUrl(src, exportImageCacheRef.current);
+            const img = await loadImageFromUrl(dataUrl);
+            inlinedImages.set(src, img);
+          } catch (error) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to inline widget image', error);
+          }
+        }),
+      );
+
+      widgets.forEach((widget) => {
+        const x = padding + (widget.x ?? 0) * cellSize;
+        const y = padding + (widget.y ?? 0) * cellSize;
+        const w = (widget.w ?? 1) * cellSize;
+        const h = (widget.h ?? 1) * cellSize;
+        const appearance = resolveAppearance(widget);
+        const img = widget.appearance?.backgroundImageUrl
+          ? inlinedImages.get(widget.appearance.backgroundImageUrl)
+          : undefined;
+
+        if (img) {
+          ctx.drawImage(img, x, y, w, h);
+        } else {
+          ctx.fillStyle = appearance.backgroundColor ?? '#6b6f7b';
+          ctx.fillRect(x, y, w, h);
+        }
+
+        const strokeColor =
+          widget.appearance?.borderColor ??
+          widget.appearance?.backgroundColor ??
+          appearance.borderColor ??
+          '#6b7280';
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 0.5, y + 0.5, Math.max(w - 1, 0), Math.max(h - 1, 0));
+      });
+
+      const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+      const quality = format === 'jpeg' ? 0.92 : undefined;
+      const dataUrl = canvas.toDataURL(mime, quality);
+      downloadDataUrl(dataUrl, `battle-map.${format === 'png' ? 'png' : 'jpg'}`);
+      log('Exported battle map', { format, width: canvas.width, height: canvas.height });
+    },
+    [getSquareStyleValues, log, readWidgetsFromGrid],
+  );
+
   const clampZoom = useCallback((value: number) => Math.min(3, Math.max(0.5, value)), []);
 
   const centerView = useCallback(
@@ -1475,6 +1599,22 @@ function BattleMapWorkspace() {
           >
             Reset View
           </button>
+          <div className="battlemap-workspace__export-actions">
+            <button
+              type="button"
+              className="button battlemap-workspace__export-button"
+              onClick={() => handleExportBattleMap('png')}
+            >
+              Save Battle Map (PNG)
+            </button>
+            <button
+              type="button"
+              className="button button--ghost battlemap-workspace__export-button"
+              onClick={() => handleExportBattleMap('jpeg')}
+            >
+              Save Battle Map (JPEG)
+            </button>
+          </div>
         </div>
       </div>
     </div>

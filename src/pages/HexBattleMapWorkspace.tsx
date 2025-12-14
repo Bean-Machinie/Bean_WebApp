@@ -15,6 +15,7 @@ import type { TileDefinition } from '../data/tiles/types';
 import { TILE_SETS } from '../data/tiles/tileSets';
 import { createHexGeometry } from '../hex/hexGeometry';
 import type { Cube } from '../hex/hexTypes';
+import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
 import { generateClientId } from '../lib/utils';
 import './HexBattleMapWorkspace.css';
 
@@ -178,6 +179,7 @@ function HexBattleMapWorkspace() {
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const hasCenteredRef = useRef(false);
   const lastBoundsRef = useRef(gridBounds);
+  const exportImageCacheRef = useRef<Map<string, string>>(new Map());
 
   const persistHexWidgets = useCallback(
     async (widgets: HexWidget[]) => {
@@ -464,6 +466,153 @@ function HexBattleMapWorkspace() {
     return { width, height, points };
   }, [geometry]);
 
+  const getHexStyleValues = useCallback(() => {
+    const workspaceEl = viewportRef.current?.closest('.hex-workspace') as HTMLElement | null;
+    const styles = workspaceEl ? getComputedStyle(workspaceEl) : getComputedStyle(document.documentElement);
+    return {
+      background: styles.getPropertyValue('--bg').trim() || '#0f172a',
+      gridLine: styles.getPropertyValue('--grid-line-color').trim() || 'rgba(255,255,255,0.12)',
+      gridBorder: styles.getPropertyValue('--grid-border-color').trim() || 'rgba(255,255,255,0.35)',
+      tileBorder:
+        styles.getPropertyValue('--grid-border-color').trim() ||
+        styles.getPropertyValue('--text').trim() ||
+        '#6b7280',
+    };
+  }, []);
+
+  const handleExportHexBattleMap = useCallback(
+    async (format: 'png' | 'jpeg') => {
+      if (!gridBounds) {
+        setStatusMessage('Grid not ready to export.');
+        return;
+      }
+
+      try {
+        const padding = Math.max(12, hexSettings.hexSize * 0.25);
+        const viewMinX = gridBounds.minX - padding;
+        const viewMinY = gridBounds.minY - padding;
+        const viewWidth = gridBounds.width + padding * 2;
+        const viewHeight = gridBounds.height + padding * 2;
+        const { background, gridBorder, gridLine, tileBorder } = getHexStyleValues();
+
+        const inlineImages = new Map<string, string>();
+        await Promise.all(
+          hexWidgets.map(async (widget) => {
+            const src =
+              tileMap.get(widget.tileId)?.image ??
+              widget.appearance?.backgroundImageUrl ??
+              undefined;
+            if (!src || inlineImages.has(src)) return;
+            const dataUrl = await fetchImageAsDataUrl(src, exportImageCacheRef.current);
+            inlineImages.set(src, dataUrl);
+          }),
+        );
+
+        const svgParts: string[] = [];
+        svgParts.push(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${viewWidth}" height="${viewHeight}" viewBox="${viewMinX} ${viewMinY} ${viewWidth} ${viewHeight}" fill="none">`,
+        );
+
+        if (hexWidgets.length) {
+          svgParts.push('<defs>');
+          hexWidgets.forEach((widget) => {
+            const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
+            const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+            const clipId = `hex-export-${widget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+            svgParts.push(`<clipPath id="${clipId}"><polygon points="${points}" /></clipPath>`);
+          });
+          svgParts.push('</defs>');
+        }
+
+        boundaryEdges.forEach((edge) => {
+          svgParts.push(
+            `<line x1="${edge.start.x}" y1="${edge.start.y}" x2="${edge.end.x}" y2="${edge.end.y}" stroke="${gridBorder}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`,
+          );
+        });
+
+        allowedCells.forEach((hex) => {
+          const points = geometry
+            .hexToCorners({ q: hex.q, r: hex.r })
+            .map((corner) => `${corner.x},${corner.y}`)
+            .join(' ');
+          svgParts.push(
+            `<polygon points="${points}" fill="none" stroke="${gridLine}" stroke-width="1" />`,
+          );
+        });
+
+        hexWidgets.forEach((widget) => {
+          const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
+          const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+          const minX = Math.min(...corners.map((corner) => corner.x));
+          const maxX = Math.max(...corners.map((corner) => corner.x));
+          const minY = Math.min(...corners.map((corner) => corner.y));
+          const maxY = Math.max(...corners.map((corner) => corner.y));
+          const clipId = `hex-export-${widget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+          const tileSrc =
+            tileMap.get(widget.tileId)?.image ?? widget.appearance?.backgroundImageUrl ?? '';
+          const href = tileSrc ? inlineImages.get(tileSrc) ?? tileSrc : '';
+
+          if (href) {
+            svgParts.push(
+              `<image href="${href}" x="${minX}" y="${minY}" width="${maxX - minX}" height="${
+                maxY - minY
+              }" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})" />`,
+            );
+          } else {
+            svgParts.push(`<polygon points="${points}" fill="#d0d0d0" />`);
+          }
+
+          svgParts.push(
+            `<polygon points="${points}" fill="none" stroke="${tileBorder}" stroke-width="1.5" />`,
+          );
+        });
+
+        svgParts.push('</svg>');
+
+        const svgString = svgParts.join('');
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        const img = await loadImageFromUrl(svgUrl);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewWidth);
+        canvas.height = Math.ceil(viewHeight);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          URL.revokeObjectURL(svgUrl);
+          setStatusMessage('Unable to export: canvas not available.');
+          return;
+        }
+
+        ctx.fillStyle = background || 'transparent';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        URL.revokeObjectURL(svgUrl);
+
+        const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+        const quality = format === 'jpeg' ? 0.92 : undefined;
+        const dataUrl = canvas.toDataURL(mime, quality);
+        downloadDataUrl(dataUrl, `hex-battle-map.${format === 'png' ? 'png' : 'jpg'}`);
+        setStatusMessage(`Saved hex battle map as ${format.toUpperCase()}.`);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Hex export failed', err);
+        setStatusMessage('Failed to export hex battle map.');
+      }
+    },
+    [
+      allowedCells,
+      boundaryEdges,
+      geometry,
+      getHexStyleValues,
+      gridBounds,
+      hexSettings.hexSize,
+      hexWidgets,
+      tileMap,
+    ],
+  );
+
   if (isLoading) {
     return (
       <div className="battlemap-workspace__loading">
@@ -665,15 +814,14 @@ function HexBattleMapWorkspace() {
               style={{
                 left: `${dragPosition.x}px`,
                 top: `${dragPosition.y}px`,
-                width: `${dragPreviewHexShape.width}px`,
-                height: `${dragPreviewHexShape.height}px`,
-                transform: `translate(-50%, -50%) scale(${scale})`,
+                transform: 'translate(-50%, -50%)',
               }}
             >
               <svg
                 width={dragPreviewHexShape.width}
                 height={dragPreviewHexShape.height}
                 viewBox={`0 0 ${dragPreviewHexShape.width} ${dragPreviewHexShape.height}`}
+                style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
               >
                 <defs>
                   <clipPath id="drag-preview-clip">
@@ -723,6 +871,22 @@ function HexBattleMapWorkspace() {
           >
             Reset View
           </button>
+          <div className="battlemap-workspace__export-actions">
+            <button
+              type="button"
+              className="button battlemap-workspace__export-button"
+              onClick={() => handleExportHexBattleMap('png')}
+            >
+              Save Battle Map (PNG)
+            </button>
+            <button
+              type="button"
+              className="button button--ghost battlemap-workspace__export-button"
+              onClick={() => handleExportHexBattleMap('jpeg')}
+            >
+              Save Battle Map (JPEG)
+            </button>
+          </div>
           <p className="battlemap-workspace__hint">
             Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the nearest open hex. Occupied hexes are rejected (no swaps).
           </p>
