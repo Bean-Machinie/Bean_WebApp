@@ -9,17 +9,20 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, WheelEvent as ReactW
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBattleMap } from '../hooks/useBattleMap';
-import { DEFAULT_HEX_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
+import { DEFAULT_BATTLE_MAP_CONFIG, DEFAULT_HEX_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, HexWidget } from '../types/battlemap';
 import type { TileDefinition } from '../data/tiles/types';
 import { TILE_SETS } from '../data/tiles/tileSets';
 import { createHexGeometry } from '../hex/hexGeometry';
-import { buildHexGrid, isOccupied } from '../hex/hexEngine';
 import type { Cube } from '../hex/hexTypes';
 import { generateClientId } from '../lib/utils';
 import './HexBattleMapWorkspace.css';
 
 const TILE_PREVIEW_COLUMNS = 3;
+
+type DragPayload =
+  | { type: 'palette'; tile: TileDefinition }
+  | { type: 'widget'; widget: HexWidget };
 
 const packTilesForPreview = (tiles: TileDefinition[], columns: number) => {
   const placements: Array<{ tile: TileDefinition; col: number; row: number }> = [];
@@ -60,22 +63,23 @@ function HexBattleMapWorkspace() {
     config.gridType === 'hex' ? config : DEFAULT_HEX_BATTLE_MAP_CONFIG;
   const hexSettings =
     hexConfig.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings ?? { hexSize: 80, orientation: 'pointy' as const };
+  const gridColumns = hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
+  const gridRows = hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows || DEFAULT_BATTLE_MAP_CONFIG.gridRows;
 
   const [hexWidgets, setHexWidgets] = useState<HexWidget[]>(hexConfig.hexWidgets ?? []);
   const [hoverHex, setHoverHex] = useState<Cube | null>(null);
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
-  const [draggingTile, setDraggingTile] = useState<TileDefinition | null>(null);
+  const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
+  const [draggingOrigin, setDraggingOrigin] = useState<Cube | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
-  const hasCenteredRef = useRef(false);
+  const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
+  );
 
   const tileMap = useMemo(() => {
     const map = new Map<string, TileDefinition>();
@@ -91,15 +95,56 @@ function HexBattleMapWorkspace() {
     () => createHexGeometry(hexSettings),
     [hexSettings.hexSize, hexSettings.orientation],
   );
-  const hexGrid = useMemo(() => buildHexGrid(hexWidgets), [hexWidgets]);
+  const allowedCells = useMemo(() => {
+    const cells: Cube[] = [];
+    for (let q = 0; q < gridColumns; q += 1) {
+      for (let r = 0; r < gridRows; r += 1) {
+        const s = -q - r;
+        cells.push({ q, r, s });
+      }
+    }
+    return cells;
+  }, [gridColumns, gridRows]);
+
+  const gridBounds = useMemo(() => {
+    if (!allowedCells.length) return null;
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    allowedCells.forEach((cell) => {
+      const corners = geometry.hexToCorners({ q: cell.q, r: cell.r });
+      corners.forEach((corner) => {
+        minX = Math.min(minX, corner.x);
+        minY = Math.min(minY, corner.y);
+        maxX = Math.max(maxX, corner.x);
+        maxY = Math.max(maxY, corner.y);
+      });
+    });
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }, [allowedCells, geometry]);
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const hasCenteredRef = useRef(false);
+  const lastBoundsRef = useRef(gridBounds);
 
   const persistHexWidgets = useCallback(
     async (widgets: HexWidget[]) => {
       const nextConfig: BattleMapConfig = {
         gridType: 'hex',
-        gridColumns: hexConfig.gridColumns,
-        gridRows: hexConfig.gridRows,
-        cellSize: hexConfig.cellSize,
+        gridColumns,
+        gridRows,
+        cellSize: hexConfig.cellSize || hexSettings.hexSize,
         widgets: [],
         hexSettings,
         hexWidgets: widgets,
@@ -109,7 +154,7 @@ function HexBattleMapWorkspace() {
 
       await saveConfig(nextConfig);
     },
-    [hexConfig.cellSize, hexConfig.gridColumns, hexConfig.gridRows, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
+    [gridColumns, gridRows, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
   );
 
   useEffect(() => {
@@ -130,6 +175,18 @@ function HexBattleMapWorkspace() {
     [pan.x, pan.y, scale],
   );
 
+  const recenterGrid = useCallback((scaleOverride?: number) => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect || !gridBounds) return;
+    const effectiveScale = scaleOverride ?? scale;
+    const centerX = gridBounds.minX + gridBounds.width / 2;
+    const centerY = gridBounds.minY + gridBounds.height / 2;
+    setPan({
+      x: rect.width / 2 - centerX * effectiveScale,
+      y: rect.height / 2 - centerY * effectiveScale,
+    });
+  }, [gridBounds, scale]);
+
   const handleDelete = useCallback(
     (widgetId: string) => {
       const nextWidgets = hexWidgets.filter((widget) => widget.id !== widgetId);
@@ -144,10 +201,10 @@ function HexBattleMapWorkspace() {
     const handleResize = () => {
       const rect = viewportRef.current?.getBoundingClientRect();
       if (rect) {
-        setViewportSize({ width: rect.width, height: rect.height });
-        if (!hasCenteredRef.current) {
-          setPan({ x: rect.width / 2, y: rect.height / 2 });
+        if (!hasCenteredRef.current || lastBoundsRef.current !== gridBounds) {
+          recenterGrid();
           hasCenteredRef.current = true;
+          lastBoundsRef.current = gridBounds;
         }
       }
     };
@@ -155,7 +212,7 @@ function HexBattleMapWorkspace() {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [gridBounds, recenterGrid]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -184,7 +241,7 @@ function HexBattleMapWorkspace() {
   }, [handleDelete, selectedWidgetId]);
 
   useEffect(() => {
-    if (!draggingTile) return undefined;
+    if (!dragPayload) return undefined;
 
     const handleMove = (event: MouseEvent) => {
       setDragPosition({ x: event.clientX, y: event.clientY });
@@ -200,30 +257,59 @@ function HexBattleMapWorkspace() {
       setDragPosition({ x: event.clientX, y: event.clientY });
       const point = toWorldPoint(event.clientX, event.clientY);
       const targetHex = point ? geometry.pixelToHex(point) : hoverHex;
+      const isWithinBounds = targetHex
+        ? targetHex.q >= 0 && targetHex.q < gridColumns && targetHex.r >= 0 && targetHex.r < gridRows
+        : false;
 
-      if (targetHex) {
-        if (isOccupied(hexGrid, targetHex)) {
-          setStatusMessage('That hex is already occupied.');
+      if (targetHex && isWithinBounds) {
+        const occupant = hexWidgets.find(
+          (widget) => widget.q === targetHex.q && widget.r === targetHex.r,
+        );
+
+        if (dragPayload.type === 'palette') {
+          if (occupant) {
+            setStatusMessage('That hex is already occupied.');
+          } else {
+            const newWidget: HexWidget = {
+              id: generateClientId(),
+              gridType: 'hex',
+              q: targetHex.q,
+              r: targetHex.r,
+              s: targetHex.s,
+              tileId: dragPayload.tile.id,
+              appearance: {
+                backgroundImageUrl: dragPayload.tile.image,
+              },
+            };
+            const nextWidgets = [...hexWidgets, newWidget];
+            setHexWidgets(nextWidgets);
+            persistHexWidgets(nextWidgets);
+            setStatusMessage('Placed tile on hex grid.');
+          }
         } else {
-          const newWidget: HexWidget = {
-            id: generateClientId(),
-            gridType: 'hex',
-            q: targetHex.q,
-            r: targetHex.r,
-            s: targetHex.s,
-            tileId: draggingTile.id,
-            appearance: {
-              backgroundImageUrl: draggingTile.image,
-            },
-          };
-          const nextWidgets = [...hexWidgets, newWidget];
-          setHexWidgets(nextWidgets);
-          persistHexWidgets(nextWidgets);
-          setStatusMessage('Placed tile on hex grid.');
+          const origin = draggingOrigin ?? dragPayload.widget;
+          const isSameSpot = origin.q === targetHex.q && origin.r === targetHex.r;
+          if (occupant && occupant.id !== dragPayload.widget.id) {
+            setStatusMessage('That hex is already occupied.');
+          } else if (!isSameSpot) {
+            const nextWidgets = hexWidgets.map((widget) =>
+              widget.id === dragPayload.widget.id
+                ? { ...widget, q: targetHex.q, r: targetHex.r, s: targetHex.s }
+                : widget,
+            );
+            setHexWidgets(nextWidgets);
+            persistHexWidgets(nextWidgets);
+            setStatusMessage('Moved tile.');
+          }
         }
+      } else if (dragPayload.type === 'widget') {
+        setStatusMessage('Outside the grid. Returning tile to its spot.');
+      } else if (dragPayload.type === 'palette') {
+        setStatusMessage('Drop tiles inside the grid.');
       }
 
-      setDraggingTile(null);
+      setDragPayload(null);
+      setDraggingOrigin(null);
       setHoverHex(null);
       setDragPosition(null);
     };
@@ -234,7 +320,7 @@ function HexBattleMapWorkspace() {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [draggingTile, geometry, hexGrid, hexWidgets, hoverHex, persistHexWidgets, toWorldPoint]);
+  }, [dragPayload, draggingOrigin, geometry, gridColumns, gridRows, hexWidgets, hoverHex, persistHexWidgets, toWorldPoint]);
 
   const handlePanStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -287,29 +373,29 @@ function HexBattleMapWorkspace() {
     [scale, toWorldPoint],
   );
 
-  const handleTilePointerDown = useCallback((tile: TileDefinition, event: ReactMouseEvent<HTMLButtonElement>) => {
+  const handleTilePointerDown = useCallback((tile: TileDefinition, event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
-    setDraggingTile(tile);
+    setDragPayload({ type: 'palette', tile });
     setStatusMessage(null);
   }, []);
 
-  const visibleHexes = useMemo(() => {
-    const effectiveSize = Math.max(hexSettings.hexSize, 1);
-    const radius = Math.max(
-      4,
-      Math.ceil(Math.max(viewportSize.width, viewportSize.height) / (effectiveSize * Math.max(scale, 0.0001))),
-    );
-    const cells: Cube[] = [];
-    for (let q = -radius; q <= radius; q += 1) {
-      for (let r = -radius; r <= radius; r += 1) {
-        const s = -q - r;
-        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= radius) {
-          cells.push({ q, r, s });
-        }
-      }
-    }
-    return cells;
-  }, [hexSettings.hexSize, scale, viewportSize.height, viewportSize.width]);
+  const handleWidgetPointerDown = useCallback(
+    (widget: HexWidget, event: ReactMouseEvent<SVGGElement>) => {
+      event.preventDefault();
+      setSelectedWidgetId(widget.id);
+      setDragPayload({ type: 'widget', widget });
+      setDraggingOrigin({ q: widget.q, r: widget.r, s: widget.s });
+      setDragPosition({ x: event.clientX, y: event.clientY });
+      setStatusMessage(null);
+    },
+    [],
+  );
+
+  const dragPreviewImage = useMemo(() => {
+    if (!dragPayload) return null;
+    if (dragPayload.type === 'palette') return dragPayload.tile.image;
+    return tileMap.get(dragPayload.widget.tileId)?.image ?? dragPayload.widget.appearance?.backgroundImageUrl ?? null;
+  }, [dragPayload, tileMap]);
 
   if (isLoading) {
     return (
@@ -336,9 +422,9 @@ function HexBattleMapWorkspace() {
   }
 
   return (
-    <div className="hex-workspace">
-      <div className="hex-workspace__sidebar">
-        <div className="hex-workspace__sidebar-header">
+    <div className="battlemap-workspace hex-workspace">
+      <div className="battlemap-workspace__sidebar hex-workspace__sidebar">
+        <div className="battlemap-workspace__sidebar-header">
           <button
             className="button button--ghost battlemap-workspace__back-button"
             onClick={() => navigate('/app')}
@@ -348,33 +434,61 @@ function HexBattleMapWorkspace() {
           <h2 className="battlemap-workspace__project-name">{project.name}</h2>
         </div>
 
-        <div className="hex-workspace__tiles-panel">
+        <div className="battlemap-workspace__tiles-panel">
           <div className="battlemap-workspace__tiles-header">
             <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
-          <div className="hex-workspace__tiles-scroll">
+          <div className="battlemap-workspace__tiles-scroll">
             {TILE_SETS.map((set) => (
-              <div key={set.title} className="hex-workspace__tile-group">
-                <p className="hex-workspace__tile-group-title">{set.title}</p>
+              <div
+                key={set.title}
+                className={`battlemap-workspace__tile-group${accordionOpen[set.title] ? ' is-open' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="battlemap-workspace__tile-group-toggle"
+                  onClick={() => setAccordionOpen((prev) => ({ ...prev, [set.title]: !prev[set.title] }))}
+                  aria-expanded={accordionOpen[set.title] ?? false}
+                  aria-controls={`tile-group-${set.title}`}
+                >
+                  <span className="battlemap-workspace__tile-group-title">{set.title}</span>
+                  <span
+                    className={`battlemap-workspace__tile-group-chevron${accordionOpen[set.title] ? ' is-open' : ''}`}
+                    aria-hidden
+                  />
+                </button>
                 <div
-                  className="hex-workspace__tile-grid"
-                  style={{ '--hex-tile-columns': TILE_PREVIEW_COLUMNS } as CSSProperties}
+                  id={`tile-group-${set.title}`}
+                  className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
+                  role="region"
+                  aria-label={`${set.title} tiles`}
+                  style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS } as CSSProperties}
                 >
                   {packTilesForPreview(set.tiles, TILE_PREVIEW_COLUMNS).map(({ tile, col, row }) => (
-                    <button
+                    <div
                       key={`${tile.id}-${row}-${col}`}
-                      type="button"
-                      className="hex-workspace__tile-button"
-                      onMouseDown={(event) => handleTilePointerDown(tile, event)}
-                      onClick={(event) => handleTilePointerDown(tile, event)}
-                      aria-label={`Drag ${tile.label}`}
+                      className="battlemap-workspace__widget-template-wrapper"
+                      style={{
+                        gridColumnStart: col + 1,
+                        gridColumnEnd: `span 1`,
+                        gridRowStart: row + 1,
+                        gridRowEnd: `span 1`,
+                      }}
                     >
                       <div
-                        className="hex-workspace__tile-thumb"
-                        style={{ backgroundImage: `url("${tile.image}")` }}
-                      />
-                      <span className="hex-workspace__tile-label">{tile.label}</span>
-                    </button>
+                        className="battlemap-workspace__widget-template battlemap-workspace__widget-template--hex"
+                        onMouseDown={(event) => handleTilePointerDown(tile, event)}
+                        aria-label={`${tile.label} tile`}
+                        style={
+                          {
+                            '--tile-preview-scale': 0.45,
+                            '--widget-bg-image': `url("${tile.image}")`,
+                          } as CSSProperties
+                        }
+                      >
+                        <div className="battlemap-workspace__widget-template-inner battlemap-workspace__widget-template-inner--hex" />
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -387,10 +501,10 @@ function HexBattleMapWorkspace() {
         </div>
       </div>
 
-      <div className="hex-workspace__main">
+      <div className="battlemap-workspace__main hex-workspace__main">
         <div
           ref={viewportRef}
-          className={`hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}`}
+          className={`battlemap-workspace__viewport hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}`}
           onMouseDown={handlePanStart}
           onMouseMove={handlePanMove}
           onMouseUp={stopPan}
@@ -410,7 +524,17 @@ function HexBattleMapWorkspace() {
               })}
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
-              {visibleHexes.map((hex) => {
+              {gridBounds ? (
+                <rect
+                  className="hex-workspace__grid-boundary"
+                  x={gridBounds.minX}
+                  y={gridBounds.minY}
+                  width={gridBounds.width}
+                  height={gridBounds.height}
+                  fill="none"
+                />
+              ) : null}
+              {allowedCells.map((hex) => {
                 const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
                 const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
                 return (
@@ -421,15 +545,6 @@ function HexBattleMapWorkspace() {
                   />
                 );
               })}
-
-              {hoverHex ? (
-                <polygon
-                  className="hex-workspace__hover"
-                  points={geometry.hexToCorners({ q: hoverHex.q, r: hoverHex.r })
-                    .map((corner) => `${corner.x},${corner.y}`)
-                    .join(' ')}
-                />
-              ) : null}
 
               {hexWidgets.map((widget) => {
                 const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
@@ -443,8 +558,8 @@ function HexBattleMapWorkspace() {
                 return (
                   <g
                     key={widget.id}
-                    className={`hex-workspace__tile${selectedWidgetId === widget.id ? ' is-selected' : ''}`}
-                    onClick={() => setSelectedWidgetId(widget.id)}
+                    className="hex-workspace__tile"
+                    onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
                   >
                     {tile ? (
                       <image
@@ -466,13 +581,13 @@ function HexBattleMapWorkspace() {
             </g>
           </svg>
 
-          {draggingTile && dragPosition ? (
+          {dragPayload && dragPosition && dragPreviewImage ? (
             <div
               className="hex-workspace__drag-preview"
               style={{
                 left: `${dragPosition.x}px`,
                 top: `${dragPosition.y}px`,
-                backgroundImage: `url("${draggingTile.image}")`,
+                backgroundImage: `url("${dragPreviewImage}")`,
               }}
             />
           ) : null}
@@ -500,11 +615,8 @@ function HexBattleMapWorkspace() {
             type="button"
             className="button button--ghost battlemap-workspace__reset-button"
             onClick={() => {
-              const rect = viewportRef.current?.getBoundingClientRect();
-              if (rect) {
-                setPan({ x: rect.width / 2, y: rect.height / 2 });
-                setScale(1);
-              }
+              setScale(1);
+              recenterGrid(1);
             }}
           >
             Reset View

@@ -14,8 +14,8 @@ export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
 
 export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridType: 'hex',
-  gridColumns: 0,
-  gridRows: 0,
+  gridColumns: 12,
+  gridRows: 8,
   cellSize: 80,
   widgets: [],
   hexSettings: {
