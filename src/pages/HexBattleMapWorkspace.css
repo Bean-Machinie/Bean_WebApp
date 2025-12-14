@@ -41,7 +41,9 @@
 
 .hex-workspace__grid-boundary {
   stroke: var(--grid-border-color);
-  stroke-width: 3px;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   fill: none;
 }
 

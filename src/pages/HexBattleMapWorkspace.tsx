@@ -146,50 +146,33 @@ function HexBattleMapWorkspace() {
     };
   }, [allowedCells, geometry]);
 
-  const gridHull = useMemo(() => {
+  const boundaryEdges = useMemo(() => {
     if (!allowedCells.length) return [];
-    const boundaryCorners: { x: number; y: number }[] = [];
+    const edgeMap = new Map<
+      string,
+      { start: { x: number; y: number }; end: { x: number; y: number }; count: number }
+    >();
+    const formatPoint = (point: { x: number; y: number }) => `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
+
     allowedCells.forEach((cell) => {
-      const { q, r, s } = cell;
-      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) === gridRadius - 1) {
-        boundaryCorners.push(...geometry.hexToCorners({ q, r }));
+      const corners = geometry.hexToCorners({ q: cell.q, r: cell.r });
+      for (let i = 0; i < corners.length; i += 1) {
+        const start = corners[i];
+        const end = corners[(i + 1) % corners.length];
+        const a = formatPoint(start);
+        const b = formatPoint(end);
+        const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+        const existing = edgeMap.get(key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          edgeMap.set(key, { start, end, count: 1 });
+        }
       }
     });
-    const uniq: { x: number; y: number }[] = [];
-    const seen = new Set<string>();
-    boundaryCorners.forEach((pt) => {
-      const key = `${pt.x.toFixed(4)}:${pt.y.toFixed(4)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        uniq.push(pt);
-      }
-    });
-    if (uniq.length <= 3) return uniq;
-    const hull = (points: { x: number; y: number }[]) => {
-      const pts = [...points].sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
-      const cross = (o: typeof pts[0], a: typeof pts[0], b: typeof pts[0]) =>
-        (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-      const lower: typeof pts = [];
-      pts.forEach((p) => {
-        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
-          lower.pop();
-        }
-        lower.push(p);
-      });
-      const upper: typeof pts = [];
-      for (let i = pts.length - 1; i >= 0; i -= 1) {
-        const p = pts[i];
-        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
-          upper.pop();
-        }
-        upper.push(p);
-      }
-      upper.pop();
-      lower.pop();
-      return lower.concat(upper);
-    };
-    return hull(uniq);
-  }, [allowedCells, geometry, gridRadius]);
+
+    return Array.from(edgeMap.values()).filter((edge) => edge.count === 1);
+  }, [allowedCells, geometry]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
@@ -596,12 +579,16 @@ function HexBattleMapWorkspace() {
               })}
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
-              {gridHull.length ? (
-                <polygon
+              {boundaryEdges.map((edge, index) => (
+                <line
+                  key={`boundary-${index}`}
                   className="hex-workspace__grid-boundary"
-                  points={gridHull.map((pt) => `${pt.x},${pt.y}`).join(' ')}
+                  x1={edge.start.x}
+                  y1={edge.start.y}
+                  x2={edge.end.x}
+                  y2={edge.end.y}
                 />
-              ) : null}
+              ))}
 
               {hoverHex && hoverVisible && dragPayload ? (
                 <polygon
@@ -667,6 +654,8 @@ function HexBattleMapWorkspace() {
                 left: `${dragPosition.x}px`,
                 top: `${dragPosition.y}px`,
                 backgroundImage: `url("${dragPreviewImage}")`,
+                width: `${geometry.hexWidth * scale}px`,
+                height: `${geometry.hexHeight * scale}px`,
               }}
             />
           ) : null}
