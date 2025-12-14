@@ -239,7 +239,8 @@
   grid-auto-rows: minmax(56px, auto);
   grid-auto-flow: row dense;
   align-items: start;
-  gap: 0.85rem;
+  column-gap: 0.9rem;
+  row-gap: 0.2rem;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
@@ -270,7 +271,6 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
   text-align: center;
   width: auto;
   grid-column: span var(--tile-cols, 1);
@@ -309,7 +309,7 @@
   justify-content: center;
   cursor: grab;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, filter 0.12s ease;
 }
 
 .battlemap-workspace__widget-template-inner {
@@ -328,7 +328,9 @@
 }
 
 .battlemap-workspace__widget-template:hover {
-  transform: scale(1.05);
+  transform: scale(1.015);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
+  filter: brightness(1.04);
 }
 
 
