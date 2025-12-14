@@ -34,6 +34,10 @@
   cursor: grabbing;
 }
 
+.hex-workspace__viewport.is-expand-mode {
+  cursor: crosshair;
+}
+
 .hex-workspace__surface {
   width: 100%;
   height: 100%;

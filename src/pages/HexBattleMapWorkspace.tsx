@@ -64,18 +64,16 @@ function HexBattleMapWorkspace() {
     config.gridType === 'hex' ? config : DEFAULT_HEX_BATTLE_MAP_CONFIG;
   const hexSettings =
     hexConfig.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings ?? { hexSize: 80, orientation: 'pointy' as const };
-  const gridRadius =
-    hexConfig.hexSettings?.hexRadius ||
-    Math.max(
-      1,
-      Math.round(
-        Math.max(
-          hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
-          hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
-          DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
-        ) / 2,
-      ),
-    );
+  const gridRadius = Math.max(
+    1,
+    Math.round(
+      Math.max(
+        hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
+        hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
+        DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
+      ) / 2,
+    ),
+  );
 
   const [hexWidgets, setHexWidgets] = useState<HexWidget[]>(hexConfig.hexWidgets ?? []);
   const [hoverHex, setHoverHex] = useState<Cube | null>(null);
@@ -95,6 +93,8 @@ function HexBattleMapWorkspace() {
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [isDeleteDrag, setIsDeleteDrag] = useState(false);
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+  const [isExpandMode, setIsExpandMode] = useState(false);
+  const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, TileDefinition>();
@@ -110,7 +110,8 @@ function HexBattleMapWorkspace() {
     () => createHexGeometry(hexSettings),
     [hexSettings.hexSize, hexSettings.orientation],
   );
-  const allowedCells = useMemo(() => {
+
+  const [allowedCells, setAllowedCells] = useState<Cube[]>(() => {
     const cells: Cube[] = [];
     for (let q = -gridRadius + 1; q <= gridRadius - 1; q += 1) {
       for (let r = -gridRadius + 1; r <= gridRadius - 1; r += 1) {
@@ -121,7 +122,7 @@ function HexBattleMapWorkspace() {
       }
     }
     return cells;
-  }, [gridRadius]);
+  });
 
   const gridBounds = useMemo(() => {
     if (!allowedCells.length) return null;
@@ -194,7 +195,7 @@ function HexBattleMapWorkspace() {
         gridRows: gridRadius * 2 - 1,
         cellSize: hexConfig.cellSize || hexSettings.hexSize,
         widgets: [],
-        hexSettings: { ...hexSettings, hexRadius: gridRadius },
+        hexSettings: hexSettings,
         hexWidgets: widgets,
         version: hexConfig.version,
         updated_at: hexConfig.updated_at,
@@ -260,6 +261,28 @@ function HexBattleMapWorkspace() {
       }
     },
     [geometry, handleDelete, hexWidgets, toWorldPoint],
+  );
+
+  const addHexAtPoint = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const targetHex = geometry.pixelToHex(point);
+
+      const alreadyExists = allowedCells.some(
+        (cell) => cell.q === targetHex.q && cell.r === targetHex.r,
+      );
+
+      if (alreadyExists) {
+        setStatusMessage('Hex tile already exists at this location.');
+        return;
+      }
+
+      setAllowedCells((prev) => [...prev, targetHex]);
+      setStatusMessage('Added hex tile to grid.');
+    },
+    [allowedCells, geometry, toWorldPoint],
   );
 
   const isPointInsideDeleteZone = useCallback(
@@ -489,6 +512,33 @@ function HexBattleMapWorkspace() {
     if (!isDeleteMode) return;
     setIsDeleteDrag(false);
   }, [isDeleteMode]);
+
+  const handleExpandClickStart = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isExpandMode) return;
+      event.preventDefault();
+      setExpandClickStart({ x: event.clientX, y: event.clientY });
+    },
+    [isExpandMode],
+  );
+
+  const handleExpandClickEnd = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (!isExpandMode || !expandClickStart) return;
+      event.preventDefault();
+
+      const dx = Math.abs(event.clientX - expandClickStart.x);
+      const dy = Math.abs(event.clientY - expandClickStart.y);
+      const threshold = 5;
+
+      if (dx < threshold && dy < threshold) {
+        addHexAtPoint(event.clientX, event.clientY);
+      }
+
+      setExpandClickStart(null);
+    },
+    [addHexAtPoint, expandClickStart, isExpandMode],
+  );
 
   const handleWheelZoom = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -809,30 +859,38 @@ function HexBattleMapWorkspace() {
       <div className="battlemap-workspace__main hex-workspace__main">
         <div
           ref={viewportRef}
-          className={`battlemap-workspace__viewport hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}`}
+          className={`battlemap-workspace__viewport hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
           onMouseDown={(event) => {
-            if (isDeleteMode) {
+            if (isExpandMode) {
+              handleExpandClickStart(event);
+            } else if (isDeleteMode) {
               handleDeleteDragStart(event);
             } else {
               handlePanStart(event);
             }
           }}
           onMouseMove={(event) => {
-            if (isDeleteMode) {
+            if (isExpandMode) {
+              // No drag behavior in expand mode
+            } else if (isDeleteMode) {
               handleDeleteDragMove(event);
             } else {
               handlePanMove(event);
             }
           }}
           onMouseUp={(event) => {
-            if (isDeleteMode) {
+            if (isExpandMode) {
+              handleExpandClickEnd(event);
+            } else if (isDeleteMode) {
               handleDeleteDragEnd();
             } else {
               stopPan();
             }
           }}
-          onMouseLeave={(event) => {
-            if (isDeleteMode) {
+          onMouseLeave={() => {
+            if (isExpandMode) {
+              setExpandClickStart(null);
+            } else if (isDeleteMode) {
               handleDeleteDragEnd();
             } else {
               stopPan();
@@ -930,7 +988,12 @@ function HexBattleMapWorkspace() {
             onClick={() => {
               setIsDeleteMode((prev) => {
                 const next = !prev;
-                setStatusMessage(next ? 'Delete mode enabled.' : 'Delete mode disabled.');
+                if (next) {
+                  setIsExpandMode(false);
+                  setStatusMessage('Delete mode enabled.');
+                } else {
+                  setStatusMessage('Delete mode disabled.');
+                }
                 setIsDeleteDrag(false);
                 return next;
               });
@@ -1001,6 +1064,24 @@ function HexBattleMapWorkspace() {
             }}
           >
             Reset View
+          </button>
+          <button
+            type="button"
+            className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+            onClick={() => {
+              setIsExpandMode((prev) => {
+                const next = !prev;
+                if (next) {
+                  setIsDeleteMode(false);
+                  setStatusMessage('Expand Hex Grid Mode enabled. Click to add tiles.');
+                } else {
+                  setStatusMessage('Expand Hex Grid Mode disabled.');
+                }
+                return next;
+              });
+            }}
+          >
+            {isExpandMode ? 'Expand Mode: ON' : 'Expand Hex Grid'}
           </button>
           <div className="battlemap-workspace__export-actions">
             <button
