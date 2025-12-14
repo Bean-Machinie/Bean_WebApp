@@ -41,4 +41,20 @@ export const stoneTiles: TileDefinition[] = [
     image: '/assets/widgets/gravel_tile.webp',
     isFixed: true,
   },
+{
+    id: 'gravel-1x1',
+    label: 'Small Gravel',
+    cols: 2,
+    rows: 1,
+    image: '/assets/widgets/gravel_tile.webp',
+    isFixed: true,
+  },
+{
+    id: 'gravel-1x1',
+    label: 'Small Gravel',
+    cols: 2,
+    rows: 1,
+    image: '/assets/widgets/gravel_tile.webp',
+    isFixed: true,
+  },
 ];
