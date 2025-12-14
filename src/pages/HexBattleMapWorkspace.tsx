@@ -90,6 +90,7 @@ function HexBattleMapWorkspace() {
   const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>(
     () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
   );
+  const [hoverVisible, setHoverVisible] = useState(false);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, TileDefinition>();
@@ -144,6 +145,51 @@ function HexBattleMapWorkspace() {
       height: maxY - minY,
     };
   }, [allowedCells, geometry]);
+
+  const gridHull = useMemo(() => {
+    if (!allowedCells.length) return [];
+    const boundaryCorners: { x: number; y: number }[] = [];
+    allowedCells.forEach((cell) => {
+      const { q, r, s } = cell;
+      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) === gridRadius - 1) {
+        boundaryCorners.push(...geometry.hexToCorners({ q, r }));
+      }
+    });
+    const uniq: { x: number; y: number }[] = [];
+    const seen = new Set<string>();
+    boundaryCorners.forEach((pt) => {
+      const key = `${pt.x.toFixed(4)}:${pt.y.toFixed(4)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniq.push(pt);
+      }
+    });
+    if (uniq.length <= 3) return uniq;
+    const hull = (points: { x: number; y: number }[]) => {
+      const pts = [...points].sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
+      const cross = (o: typeof pts[0], a: typeof pts[0], b: typeof pts[0]) =>
+        (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+      const lower: typeof pts = [];
+      pts.forEach((p) => {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+          lower.pop();
+        }
+        lower.push(p);
+      });
+      const upper: typeof pts = [];
+      for (let i = pts.length - 1; i >= 0; i -= 1) {
+        const p = pts[i];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+          upper.pop();
+        }
+        upper.push(p);
+      }
+      upper.pop();
+      lower.pop();
+      return lower.concat(upper);
+    };
+    return hull(uniq);
+  }, [allowedCells, geometry, gridRadius]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
@@ -260,9 +306,11 @@ function HexBattleMapWorkspace() {
       const point = toWorldPoint(event.clientX, event.clientY);
       if (!point) {
         setHoverHex(null);
+        setHoverVisible(false);
         return;
       }
       setHoverHex(geometry.pixelToHex(point));
+      setHoverVisible(true);
     };
 
     const handleUp = (event: MouseEvent) => {
@@ -302,7 +350,18 @@ function HexBattleMapWorkspace() {
           const origin = draggingOrigin ?? dragPayload.widget;
           const isSameSpot = origin.q === targetHex.q && origin.r === targetHex.r;
           if (occupant && occupant.id !== dragPayload.widget.id) {
-            setStatusMessage('That hex is already occupied.');
+            const nextWidgets = hexWidgets.map((widget) => {
+              if (widget.id === dragPayload.widget.id) {
+                return { ...widget, q: targetHex.q, r: targetHex.r, s: targetHex.s };
+              }
+              if (widget.id === occupant.id) {
+                return { ...widget, q: origin.q, r: origin.r, s: origin.s };
+              }
+              return widget;
+            });
+            setHexWidgets(nextWidgets);
+            persistHexWidgets(nextWidgets);
+            setStatusMessage('Swapped tiles.');
           } else if (!isSameSpot) {
             const nextWidgets = hexWidgets.map((widget) =>
               widget.id === dragPayload.widget.id
@@ -323,6 +382,7 @@ function HexBattleMapWorkspace() {
       setDragPayload(null);
       setDraggingOrigin(null);
       setHoverHex(null);
+      setHoverVisible(false);
       setDragPosition(null);
     };
 
@@ -536,6 +596,23 @@ function HexBattleMapWorkspace() {
               })}
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
+              {gridHull.length ? (
+                <polygon
+                  className="hex-workspace__grid-boundary"
+                  points={gridHull.map((pt) => `${pt.x},${pt.y}`).join(' ')}
+                />
+              ) : null}
+
+              {hoverHex && hoverVisible && dragPayload ? (
+                <polygon
+                  className="hex-workspace__hover"
+                  points={geometry
+                    .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
+                    .map((corner) => `${corner.x},${corner.y}`)
+                    .join(' ')}
+                />
+              ) : null}
+
               {allowedCells.map((hex) => {
                 const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
                 const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');

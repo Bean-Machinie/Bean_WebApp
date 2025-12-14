@@ -52,9 +52,7 @@ function NewProjectPanel({
   const [battleMapColumns, setBattleMapColumns] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
   const [battleMapRows, setBattleMapRows] = useState(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
   const [gridType, setGridType] = useState<GridType>('square');
-  const [hexSize, setHexSize] = useState(
-    DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize,
-  );
+  const fixedHexSize = DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize;
 
   // Generate auto-placeholder for canvas projects
   // Count the actual canvas projects from the database
@@ -77,7 +75,6 @@ function NewProjectPanel({
     setBattleMapColumns(DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
     setBattleMapRows(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
     setGridType('square');
-    setHexSize(DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize);
   }, [isOpen]);
 
   const isCanvasProject = selectedProjectTypeId === 'canvas';
@@ -124,10 +121,7 @@ function NewProjectPanel({
     const normalizedColumns =
       Math.max(1, battleMapColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns);
     const normalizedRows = Math.max(1, battleMapRows || DEFAULT_BATTLE_MAP_CONFIG.gridRows);
-    const normalizedHexSize = Math.max(
-      20,
-      hexSize || (DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize),
-    );
+    const normalizedHexSize = fixedHexSize;
     const hexRadius = Math.max(1, normalizedColumns);
 
     const config: Partial<BattleMapConfig> | Record<string, unknown> = isCanvasProject
@@ -558,12 +552,11 @@ function NewProjectPanel({
                           <input
                             id="battlemap-hex-size"
                             type="number"
-                            min="20"
-                            max="200"
-                            value={hexSize}
-                            onChange={(event) => setHexSize(Number(event.target.value))}
+                            min={fixedHexSize}
+                            max={fixedHexSize}
+                            value={fixedHexSize}
+                            readOnly
                             className="new-project-form__input"
-                            required
                           />
                         </div>
                       </div>

@@ -41,13 +41,23 @@
 
 .hex-workspace__grid-boundary {
   stroke: var(--grid-border-color);
-  stroke-width: 2px;
+  stroke-width: 3px;
+  fill: none;
 }
 
 .hex-workspace__cell {
   fill: none;
   stroke: var(--grid-line-color);
   stroke-width: 1;
+}
+
+.hex-workspace__hover {
+  fill: color-mix(in srgb, var(--primary) 20%, transparent);
+  stroke: color-mix(in srgb, var(--primary) 70%, transparent);
+  stroke-width: 2;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.1s ease;
 }
 
 .hex-workspace__tile {
