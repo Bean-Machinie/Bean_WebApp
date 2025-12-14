@@ -12,7 +12,7 @@ import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, BattleMapWidget, SquareCell } from '../types/battlemap';
 import type { SquareTileDefinition } from '../data/tiles/types';
-import { SQUARE_TILE_SETS } from '../data/tiles/tileSets';
+import { SQUARE_TILE_SETS, TILE_PREVIEW_SCALE } from '../data/tiles/tileSets';
 import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
 import { generateClientId } from '../lib/utils';
 import './BattleMapWorkspace.css';
@@ -815,7 +815,13 @@ function BattleMapWorkspace() {
                 className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
                 role="region"
                 aria-label={`${set.title} tiles`}
-                  style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS, '--widget-preview-scale': 0.4 } as CSSProperties}
+                  style={
+                    {
+                      '--tile-preview-columns': TILE_PREVIEW_COLUMNS,
+                      '--tile-preview-scale': TILE_PREVIEW_SCALE,
+                      '--widget-preview-scale': TILE_PREVIEW_SCALE,
+                    } as CSSProperties
+                  }
                 >
                   {packTilesForPreview(set.tiles).map(({ tile, index }) => (
                     <div
@@ -826,6 +832,8 @@ function BattleMapWorkspace() {
                         gridRowEnd: `span ${tile.rows}`,
                         '--tile-cols': tile.cols,
                         '--tile-rows': tile.rows,
+                        justifySelf:
+                          tile.cols >= TILE_PREVIEW_COLUMNS ? 'stretch' : 'center',
                       }}
                     >
                       <div

@@ -3,7 +3,7 @@ import { stoneTiles } from './stoneTiles';
 import { dirtTiles } from './dirtTiles';
 import { hexTiles } from './hexTiles';
 
-export const TILE_PREVIEW_SCALE = 1;
+export const TILE_PREVIEW_SCALE = 0.85;
 
 export const SQUARE_TILE_SETS: TileGroup<SquareTileDefinition>[] = [
   {

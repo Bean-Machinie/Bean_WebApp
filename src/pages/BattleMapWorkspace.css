@@ -231,17 +231,20 @@
 }
 
 .battlemap-workspace__tile-group > .battlemap-workspace__widget-tray {
-  --widget-preview-scale: 0.4;
+  --widget-preview-scale: var(--tile-preview-scale, 0.4);
   border-top: 1px solid var(--sidebar-border);
-  padding: 0.85rem 0.85rem;
+  padding: 0.0rem 0.0rem;
   background: color-mix(in srgb, var(--bg) 85%, var(--card) 15%);
   display: grid;
-  grid-template-columns: repeat(var(--tile-preview-columns, 3), minmax(56px, 1fr));
-  grid-auto-rows: calc(var(--grid-cell-height, 80px) * var(--widget-preview-scale, 0.4));
+  grid-template-columns: repeat(
+    var(--tile-preview-columns, 3),
+    minmax(0, calc(var(--grid-cell-width, 150px) * var(--widget-preview-scale, 0.2)))
+  );
+  grid-auto-rows: calc(var(--grid-cell-height, 85px) * var(--widget-preview-scale, 0.2));
   grid-auto-flow: row dense;
   align-items: start;
-  column-gap: 0.9rem;
-  row-gap: 0.2rem;
+  justify-items: center;
+  justify-content: start;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
@@ -290,8 +293,6 @@
   --widget-border: #6b6f7b;
   --widget-text: #f8fafc;
   --widget-bg-image: url('/assets/widgets/stone_tile.webp');
-  --widget-preview-scale: 0.4;
-  --tile-preview-scale: var(--widget-preview-scale);
   --tile-cols: 2;
   --tile-rows: 2;
   --tile-image: var(--widget-bg-image);
