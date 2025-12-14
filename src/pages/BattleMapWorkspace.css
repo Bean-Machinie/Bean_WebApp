@@ -852,6 +852,14 @@
   height: 100%;
 }
 
+.square-workspace__grid-boundary {
+  stroke: var(--grid-border-color);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
 .square-workspace__cell {
   fill: none;
   stroke: var(--grid-line-color);

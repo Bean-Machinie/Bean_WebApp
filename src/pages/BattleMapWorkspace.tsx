@@ -98,6 +98,7 @@ function BattleMapWorkspace() {
     if (squareConfig.allowedSquareCells && squareConfig.allowedSquareCells.length > 0) {
       return squareConfig.allowedSquareCells;
     }
+
     const cells: SquareCell[] = [];
     for (let y = 0; y < gridRows; y += 1) {
       for (let x = 0; x < gridColumns; x += 1) {
@@ -133,6 +134,38 @@ function BattleMapWorkspace() {
     };
   }, [allowedCells, cellSize]);
 
+  const gridBoundarySegments = useMemo(() => {
+    if (!allowedCells.length) return [];
+
+    const cellSet = new Set(allowedCells.map((cell) => `${cell.x},${cell.y}`));
+    const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+
+    allowedCells.forEach((cell) => {
+      const x = cell.x * cellSize;
+      const y = cell.y * cellSize;
+
+      // Check each edge and add segment if no neighbor exists
+      // Top edge
+      if (!cellSet.has(`${cell.x},${cell.y - 1}`)) {
+        segments.push({ x1: x, y1: y, x2: x + cellSize, y2: y });
+      }
+      // Right edge
+      if (!cellSet.has(`${cell.x + 1},${cell.y}`)) {
+        segments.push({ x1: x + cellSize, y1: y, x2: x + cellSize, y2: y + cellSize });
+      }
+      // Bottom edge
+      if (!cellSet.has(`${cell.x},${cell.y + 1}`)) {
+        segments.push({ x1: x + cellSize, y1: y + cellSize, x2: x, y2: y + cellSize });
+      }
+      // Left edge
+      if (!cellSet.has(`${cell.x - 1},${cell.y}`)) {
+        segments.push({ x1: x, y1: y + cellSize, x2: x, y2: y });
+      }
+    });
+
+    return segments;
+  }, [allowedCells, cellSize]);
+
   const viewportRef = useRef<HTMLDivElement>(null);
   const deleteZoneRef = useRef<HTMLDivElement>(null);
   const deleteZoneActiveRef = useRef(false);
@@ -142,21 +175,21 @@ function BattleMapWorkspace() {
   const exportImageCacheRef = useRef<Map<string, string>>(new Map());
 
   const persistWidgets = useCallback(
-    async (updatedWidgets: BattleMapWidget[]) => {
+    async (updatedWidgets: BattleMapWidget[], currentAllowedCells: SquareCell[]) => {
       const nextConfig: BattleMapConfig = {
         gridType: 'square',
         gridColumns,
         gridRows,
         cellSize,
         widgets: updatedWidgets,
-        allowedSquareCells: allowedCells,
-        version: squareConfig.version,
-        updated_at: squareConfig.updated_at,
+        allowedSquareCells: currentAllowedCells,
+        version: config.version,
+        updated_at: config.updated_at,
       };
 
       await saveConfig(nextConfig);
     },
-    [allowedCells, cellSize, gridColumns, gridRows, saveConfig, squareConfig.updated_at, squareConfig.version],
+    [cellSize, config.updated_at, config.version, gridColumns, gridRows, saveConfig],
   );
 
   useEffect(() => {
@@ -206,11 +239,11 @@ function BattleMapWorkspace() {
     (widgetId: string) => {
       const nextWidgets = widgets.filter((widget) => widget.id !== widgetId);
       setWidgets(nextWidgets);
-      persistWidgets(nextWidgets);
+      persistWidgets(nextWidgets, allowedCells);
       setSelectedWidgetId(null);
       setStatusMessage('Tile deleted.');
     },
-    [persistWidgets, widgets],
+    [allowedCells, persistWidgets, widgets],
   );
 
   const deleteCellAtPoint = useCallback(
@@ -230,25 +263,25 @@ function BattleMapWorkspace() {
   );
 
   const persistAllowedCells = useCallback(
-    async (cells: SquareCell[]) => {
+    async (cells: SquareCell[], currentWidgets: BattleMapWidget[]) => {
       const nextConfig: BattleMapConfig = {
         gridType: 'square',
         gridColumns,
         gridRows,
         cellSize,
-        widgets,
+        widgets: currentWidgets,
         allowedSquareCells: cells,
-        version: squareConfig.version,
-        updated_at: squareConfig.updated_at,
+        version: config.version,
+        updated_at: config.updated_at,
       };
 
       await saveConfig(nextConfig);
     },
-    [cellSize, gridColumns, gridRows, saveConfig, squareConfig.updated_at, squareConfig.version, widgets],
+    [cellSize, config.updated_at, config.version, gridColumns, gridRows, saveConfig],
   );
 
   const addCellAtPoint = useCallback(
-    (clientX?: number, clientY?: number) => {
+    async (clientX?: number, clientY?: number) => {
       if (clientX === undefined || clientY === undefined) return;
       const point = toWorldPoint(clientX, clientY);
       if (!point) return;
@@ -265,10 +298,17 @@ function BattleMapWorkspace() {
 
       const newCells = [...allowedCells, targetCell];
       setAllowedCells(newCells);
-      persistAllowedCells(newCells);
-      setStatusMessage('Added grid cell.');
+      setStatusMessage('Saving expanded grid...');
+
+      try {
+        await persistAllowedCells(newCells, widgets);
+        setStatusMessage('Grid cell added and saved.');
+      } catch (error) {
+        console.error('Failed to save expanded grid:', error);
+        setStatusMessage('Failed to save grid expansion!');
+      }
     },
-    [allowedCells, persistAllowedCells, pointToCell, toWorldPoint],
+    [allowedCells, persistAllowedCells, pointToCell, toWorldPoint, widgets],
   );
 
   const isPointInsideDeleteZone = useCallback(
@@ -294,7 +334,7 @@ function BattleMapWorkspace() {
   useEffect(() => {
     const handleResize = () => {
       const rect = viewportRef.current?.getBoundingClientRect();
-      if (rect) {
+      if (rect && gridBounds) {
         if (!hasCenteredRef.current || lastBoundsRef.current !== gridBounds) {
           recenterGrid();
           hasCenteredRef.current = true;
@@ -389,7 +429,7 @@ function BattleMapWorkspace() {
             };
             const nextWidgets = [...widgets, newWidget];
             setWidgets(nextWidgets);
-            persistWidgets(nextWidgets);
+            persistWidgets(nextWidgets, allowedCells);
             setStatusMessage('Placed tile on grid.');
           }
         } else {
@@ -406,7 +446,7 @@ function BattleMapWorkspace() {
               return widget;
             });
             setWidgets(nextWidgets);
-            persistWidgets(nextWidgets);
+            persistWidgets(nextWidgets, allowedCells);
             setStatusMessage('Swapped tiles.');
           } else if (!isSameSpot) {
             const nextWidgets = widgets.map((widget) =>
@@ -415,7 +455,7 @@ function BattleMapWorkspace() {
                 : widget,
             );
             setWidgets(nextWidgets);
-            persistWidgets(nextWidgets);
+            persistWidgets(nextWidgets, allowedCells);
             setStatusMessage('Moved tile.');
           }
         }
@@ -625,6 +665,13 @@ function BattleMapWorkspace() {
           );
         });
 
+        // Grid boundary
+        gridBoundarySegments.forEach((seg) => {
+          svgParts.push(
+            `<line x1="${seg.x1}" y1="${seg.y1}" x2="${seg.x2}" y2="${seg.y2}" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`,
+          );
+        });
+
         // Widgets
         widgets.forEach((widget) => {
           const x = widget.x * cellSize;
@@ -659,7 +706,9 @@ function BattleMapWorkspace() {
           return;
         }
 
-        ctx.fillStyle = '#0f172a';
+        // Use the same background color as the page
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0f172a';
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
@@ -675,7 +724,7 @@ function BattleMapWorkspace() {
         setStatusMessage('Failed to export battle map.');
       }
     },
-    [allowedCells, cellSize, gridBounds, tileMap, widgets],
+    [allowedCells, cellSize, gridBounds, gridBoundarySegments, tileMap, widgets],
   );
 
   if (isLoading) {
@@ -848,6 +897,17 @@ function BattleMapWorkspace() {
                 );
               })}
 
+              {gridBoundarySegments.map((seg, index) => (
+                <line
+                  key={`boundary-${index}`}
+                  className="square-workspace__grid-boundary"
+                  x1={seg.x1}
+                  y1={seg.y1}
+                  x2={seg.x2}
+                  y2={seg.y2}
+                />
+              ))}
+
               {widgets.map((widget) => {
                 const x = widget.x * cellSize;
                 const y = widget.y * cellSize;
@@ -945,7 +1005,9 @@ function BattleMapWorkspace() {
             className="button button--ghost battlemap-workspace__reset-button"
             onClick={() => {
               setScale(1);
+              hasCenteredRef.current = false;
               recenterGrid(1);
+              hasCenteredRef.current = true;
             }}
           >
             Reset View

@@ -31,6 +31,7 @@ type StorageMode = 'advanced' | 'legacy';
 let hasCheckedAdvancedStorage = false;
 let supportsAdvancedStorageCache = true;
 let hasIsFixedColumn = true;
+let hasAllowedCellsColumn = true;
 
 const isMissingTableError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -145,22 +146,43 @@ async function checkAdvancedStorageAvailability() {
 }
 
 async function loadFromAdvancedTables(projectId: string, userId: string): Promise<BattleMapConfig | null> {
-  const { data: configRows, error: configError } = await supabase
+  const configSelect = hasAllowedCellsColumn
+    ? 'grid_columns, grid_rows, cell_size, version, updated_at, allowed_square_cells'
+    : 'grid_columns, grid_rows, cell_size, version, updated_at';
+
+  let configRowResult: any = await (supabase as any)
     .from('battle_map_configs')
-    .select('grid_columns, grid_rows, cell_size, version, updated_at')
+    .select(configSelect)
     .eq('project_id', projectId)
     .eq('user_id', userId)
     .limit(1);
 
-  if (configError) {
-    if (isMissingTableError(configError)) {
+  if (configRowResult.error) {
+    if (isMissingColumnError(configRowResult.error, 'allowed_square_cells')) {
+      hasAllowedCellsColumn = false;
+      configRowResult = await (supabase as any)
+        .from('battle_map_configs')
+        .select('grid_columns, grid_rows, cell_size, version, updated_at')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .limit(1);
+    } else if (isMissingTableError(configRowResult.error)) {
+      supportsAdvancedStorageCache = false;
+      return null;
+    } else {
+      throw configRowResult.error;
+    }
+  }
+
+  if (configRowResult.error) {
+    if (isMissingTableError(configRowResult.error)) {
       supportsAdvancedStorageCache = false;
       return null;
     }
-    throw configError;
+    throw configRowResult.error;
   }
 
-  const configRow = configRows?.[0];
+  const configRow = configRowResult.data?.[0] as any;
 
   if (!configRow) {
     return null;
@@ -235,6 +257,9 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     gridRows: configRow.grid_rows,
     cellSize: configRow.cell_size,
     widgets,
+    allowedSquareCells: hasAllowedCellsColumn
+      ? (configRow as { allowed_square_cells?: BattleMapConfig['allowedSquareCells'] }).allowed_square_cells
+      : undefined,
     version: configRow.version,
     updated_at: configRow.updated_at,
   });
@@ -254,7 +279,7 @@ async function persistToAdvancedTables(
   const nextVersion = (normalizedConfig.version ?? 1) + 1;
   const now = new Date().toISOString();
 
-  const { error: configError } = await supabase.from('battle_map_configs').upsert({
+  const baseConfigUpsert = {
     project_id: projectId,
     user_id: userId,
     grid_columns: normalizedConfig.gridColumns,
@@ -262,14 +287,32 @@ async function persistToAdvancedTables(
     cell_size: normalizedConfig.cellSize,
     version: nextVersion,
     updated_at: now,
-  });
+  };
 
-  if (configError) {
-    if (isMissingTableError(configError)) {
+  const configUpsert = hasAllowedCellsColumn
+    ? { ...baseConfigUpsert, allowed_square_cells: normalizedConfig.allowedSquareCells ?? null }
+    : baseConfigUpsert;
+
+  let configResult: any = await (supabase as any).from('battle_map_configs').upsert(configUpsert);
+
+  if (configResult.error) {
+    if (isMissingColumnError(configResult.error, 'allowed_square_cells')) {
+      hasAllowedCellsColumn = false;
+      configResult = await (supabase as any).from('battle_map_configs').upsert(baseConfigUpsert);
+    } else if (isMissingTableError(configResult.error)) {
+      supportsAdvancedStorageCache = false;
+      return normalizedConfig;
+    } else {
+      throw configResult.error;
+    }
+  }
+
+  if (configResult.error) {
+    if (isMissingTableError(configResult.error)) {
       supportsAdvancedStorageCache = false;
       return normalizedConfig;
     }
-    throw configError;
+    throw configResult.error;
   }
 
   const widgetsForUpsert = normalizedConfig.widgets.map((widget, index) => {
@@ -412,7 +455,13 @@ export async function loadBattleMapState(params: {
     const config = await loadFromAdvancedTables(params.projectId, params.userId);
 
     if (config) {
-      return { config, storage: 'advanced' };
+      const mergedConfig =
+        config.gridType === 'square' &&
+        (!config.allowedSquareCells || config.allowedSquareCells.length === 0) &&
+        params.legacyConfig?.allowedSquareCells?.length
+          ? { ...config, allowedSquareCells: params.legacyConfig.allowedSquareCells }
+          : config;
+      return { config: mergedConfig, storage: 'advanced' };
     }
   }
 
