@@ -5,7 +5,7 @@ export const stoneTiles: TileDefinition[] = [
     id: 'stone-1x1',
     label: 'Small Stone',
     cols: 1,
-    rows: 1,
+    rows: 2,
     image: '/assets/widgets/stone_tile.webp',
     isFixed: true,
   },

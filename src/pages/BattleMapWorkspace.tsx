@@ -5,7 +5,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  WheelEvent as ReactWheelEvent,
+} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { GridStack, GridStackNode } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
@@ -21,8 +25,90 @@ import {
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
+import type { TileDefinition } from '../data/tiles/types';
 import { TILE_PREVIEW_SCALE, TILE_SETS } from '../data/tiles/tileSets';
 import './BattleMapWorkspace.css';
+
+const TILE_PREVIEW_COLUMNS = 3;
+
+type TilePreviewPlacement = {
+  tile: TileDefinition;
+  col: number;
+  row: number;
+  spanCols: number;
+  spanRows: number;
+};
+
+const ensureRows = (grid: boolean[][], rowsNeeded: number, columns: number) => {
+  while (grid.length < rowsNeeded) {
+    grid.push(Array.from({ length: columns }, () => false));
+  }
+};
+
+const canPlace = (
+  grid: boolean[][],
+  startRow: number,
+  startCol: number,
+  spanCols: number,
+  spanRows: number,
+  columns: number,
+) => {
+  if (startCol + spanCols > columns) return false;
+  ensureRows(grid, startRow + spanRows, columns);
+  for (let r = startRow; r < startRow + spanRows; r += 1) {
+    for (let c = startCol; c < startCol + spanCols; c += 1) {
+      if (grid[r][c]) return false;
+    }
+  }
+  return true;
+};
+
+const markPlacement = (
+  grid: boolean[][],
+  startRow: number,
+  startCol: number,
+  spanCols: number,
+  spanRows: number,
+  columns: number,
+) => {
+  ensureRows(grid, startRow + spanRows, columns);
+  for (let r = startRow; r < startRow + spanRows; r += 1) {
+    for (let c = startCol; c < startCol + spanCols; c += 1) {
+      grid[r][c] = true;
+    }
+  }
+};
+
+const packTilesForPreview = (tiles: TileDefinition[], columns: number): TilePreviewPlacement[] => {
+  const occupancy: boolean[][] = [];
+  const placements: TilePreviewPlacement[] = [];
+
+  tiles.forEach((tile) => {
+    const spanCols = Math.min(Math.max(tile.cols, 1), columns);
+    const spanRows = Math.max(tile.rows, 1);
+    let row = 0;
+    let col = 0;
+
+    // Scan left-to-right, top-to-bottom until we find enough free cells.
+    // Because we always expand rows when needed, this loop will terminate.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      if (canPlace(occupancy, row, col, spanCols, spanRows, columns)) {
+        markPlacement(occupancy, row, col, spanCols, spanRows, columns);
+        placements.push({ tile, col, row, spanCols, spanRows });
+        break;
+      }
+
+      col += 1;
+      if (col >= columns) {
+        col = 0;
+        row += 1;
+      }
+    }
+  });
+
+  return placements;
+};
 
 const hydrateWidgetElement = (widget: BattleMapWidget, el: HTMLElement) => {
   const appearance = resolveAppearance(widget);
@@ -1235,35 +1321,46 @@ function BattleMapWorkspace() {
                   className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
                   role="region"
                   aria-label={`${set.title} tiles`}
+                  style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS } as CSSProperties}
                 >
-                  {set.tiles.map((tile) => (
-                    <div key={tile.id} className="battlemap-workspace__widget-template-wrapper">
-                      <p className="battlemap-workspace__label">{tile.label}</p>
+                  {packTilesForPreview(set.tiles, TILE_PREVIEW_COLUMNS).map(
+                    ({ tile, col, row, spanCols, spanRows }) => (
                       <div
-                        className="battlemap-workspace__widget-template grid-stack-item"
-                        gs-w={tile.cols}
-                        gs-h={tile.rows}
-                        data-tile-cols={tile.cols}
-                        data-tile-rows={tile.rows}
-                        data-tile-image={tile.image}
-                        data-is-fixed={tile.isFixed}
-                        gs-auto-position="true"
-                        onMouseDown={handleTemplatePointerDown}
-                        aria-label={`${tile.label} tile`}
-                        style={
-                          {
-                            '--tile-preview-scale': TILE_PREVIEW_SCALE,
-                            '--tile-cols': tile.cols,
-                            '--tile-rows': tile.rows,
-                            '--tile-image': `url("${tile.image}")`,
-                            '--widget-bg-image': `url("${tile.image}")`,
-                          } as React.CSSProperties
-                        }
+                        key={`${tile.id}-${row}-${col}`}
+                        className="battlemap-workspace__widget-template-wrapper"
+                        style={{
+                          gridColumnStart: col + 1,
+                          gridColumnEnd: `span ${spanCols}`,
+                          gridRowStart: row + 1,
+                          gridRowEnd: `span ${spanRows}`,
+                        }}
                       >
-                        <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
+                        <div
+                          className="battlemap-workspace__widget-template grid-stack-item"
+                          gs-w={spanCols}
+                          gs-h={spanRows}
+                          data-tile-cols={spanCols}
+                          data-tile-rows={spanRows}
+                          data-tile-image={tile.image}
+                          data-is-fixed={tile.isFixed}
+                          gs-auto-position="true"
+                          onMouseDown={handleTemplatePointerDown}
+                          aria-label={`${tile.label} tile`}
+                          style={
+                            {
+                              '--tile-preview-scale': TILE_PREVIEW_SCALE,
+                              '--tile-cols': spanCols,
+                              '--tile-rows': spanRows,
+                              '--tile-image': `url("${tile.image}")`,
+                              '--widget-bg-image': `url("${tile.image}")`,
+                            } as CSSProperties
+                          }
+                        >
+                          <div className="battlemap-workspace__widget-template-inner grid-stack-item-content" />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ),
+                  )}
                 </div>
               </div>
             ))}
