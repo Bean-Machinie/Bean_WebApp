@@ -106,9 +106,12 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.85rem;
-  padding: 1.15rem 1rem !important;
   justify-items: center;
   align-items: center;
+}
+
+.hex-workspace .battlemap-workspace__tile-group.is-open > .battlemap-workspace__widget-tray {
+  padding: 1.15rem 1rem;
 }
 
 .hex-workspace .battlemap-workspace__widget-template-wrapper {

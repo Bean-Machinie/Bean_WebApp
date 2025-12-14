@@ -32,7 +32,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     id: 'gravel-1x1',
     gridType: 'square',
     label: 'Gravel 1x1',
-    cols: 1,
+    cols: 2,
     rows: 1,
     image: '/assets/widgets/gravel_tile.webp',
     isFixed: true,
