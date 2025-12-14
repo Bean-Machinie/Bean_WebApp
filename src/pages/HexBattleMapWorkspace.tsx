@@ -63,8 +63,18 @@ function HexBattleMapWorkspace() {
     config.gridType === 'hex' ? config : DEFAULT_HEX_BATTLE_MAP_CONFIG;
   const hexSettings =
     hexConfig.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings ?? { hexSize: 80, orientation: 'pointy' as const };
-  const gridColumns = hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns || DEFAULT_BATTLE_MAP_CONFIG.gridColumns;
-  const gridRows = hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows || DEFAULT_BATTLE_MAP_CONFIG.gridRows;
+  const gridRadius =
+    hexConfig.hexSettings?.hexRadius ||
+    Math.max(
+      1,
+      Math.round(
+        Math.max(
+          hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
+          hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
+          DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
+        ) / 2,
+      ),
+    );
 
   const [hexWidgets, setHexWidgets] = useState<HexWidget[]>(hexConfig.hexWidgets ?? []);
   const [hoverHex, setHoverHex] = useState<Cube | null>(null);
@@ -97,14 +107,16 @@ function HexBattleMapWorkspace() {
   );
   const allowedCells = useMemo(() => {
     const cells: Cube[] = [];
-    for (let q = 0; q < gridColumns; q += 1) {
-      for (let r = 0; r < gridRows; r += 1) {
+    for (let q = -gridRadius + 1; q <= gridRadius - 1; q += 1) {
+      for (let r = -gridRadius + 1; r <= gridRadius - 1; r += 1) {
         const s = -q - r;
-        cells.push({ q, r, s });
+        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) < gridRadius) {
+          cells.push({ q, r, s });
+        }
       }
     }
     return cells;
-  }, [gridColumns, gridRows]);
+  }, [gridRadius]);
 
   const gridBounds = useMemo(() => {
     if (!allowedCells.length) return null;
@@ -142,11 +154,11 @@ function HexBattleMapWorkspace() {
     async (widgets: HexWidget[]) => {
       const nextConfig: BattleMapConfig = {
         gridType: 'hex',
-        gridColumns,
-        gridRows,
+        gridColumns: gridRadius * 2 - 1,
+        gridRows: gridRadius * 2 - 1,
         cellSize: hexConfig.cellSize || hexSettings.hexSize,
         widgets: [],
-        hexSettings,
+        hexSettings: { ...hexSettings, hexRadius: gridRadius },
         hexWidgets: widgets,
         version: hexConfig.version,
         updated_at: hexConfig.updated_at,
@@ -154,7 +166,7 @@ function HexBattleMapWorkspace() {
 
       await saveConfig(nextConfig);
     },
-    [gridColumns, gridRows, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
+    [gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
   );
 
   useEffect(() => {
@@ -258,7 +270,7 @@ function HexBattleMapWorkspace() {
       const point = toWorldPoint(event.clientX, event.clientY);
       const targetHex = point ? geometry.pixelToHex(point) : hoverHex;
       const isWithinBounds = targetHex
-        ? targetHex.q >= 0 && targetHex.q < gridColumns && targetHex.r >= 0 && targetHex.r < gridRows
+        ? Math.max(Math.abs(targetHex.q), Math.abs(targetHex.r), Math.abs(targetHex.s)) < gridRadius
         : false;
 
       if (targetHex && isWithinBounds) {
@@ -320,7 +332,7 @@ function HexBattleMapWorkspace() {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
     };
-  }, [dragPayload, draggingOrigin, geometry, gridColumns, gridRows, hexWidgets, hoverHex, persistHexWidgets, toWorldPoint]);
+  }, [dragPayload, draggingOrigin, geometry, gridRadius, hexWidgets, hoverHex, persistHexWidgets, toWorldPoint]);
 
   const handlePanStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -524,16 +536,6 @@ function HexBattleMapWorkspace() {
               })}
             </defs>
             <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
-              {gridBounds ? (
-                <rect
-                  className="hex-workspace__grid-boundary"
-                  x={gridBounds.minX}
-                  y={gridBounds.minY}
-                  width={gridBounds.width}
-                  height={gridBounds.height}
-                  fill="none"
-                />
-              ) : null}
               {allowedCells.map((hex) => {
                 const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
                 const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');

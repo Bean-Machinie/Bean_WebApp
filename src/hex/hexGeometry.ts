@@ -12,7 +12,7 @@ export type HexGeometry = {
 };
 
 export const createHexGeometry = (settings: HexGridSettings): HexGeometry => {
-  const orientation = settings.orientation === 'flat' ? Orientation.FLAT : Orientation.POINTY;
+  const orientation = Orientation.FLAT;
   const HexClass = defineHex({
     dimensions: settings.hexSize,
     orientation,

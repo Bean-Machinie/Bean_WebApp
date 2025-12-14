@@ -14,13 +14,14 @@ export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
 
 export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridType: 'hex',
-  gridColumns: 12,
-  gridRows: 8,
+  gridColumns: 7,
+  gridRows: 7,
   cellSize: 80,
   widgets: [],
   hexSettings: {
     hexSize: 80,
-    orientation: 'pointy',
+    orientation: 'flat',
+    hexRadius: 4,
   },
   hexWidgets: [],
   version: 1,
@@ -73,18 +74,20 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       Number((config as BattleMapConfig)?.hexSettings?.hexSize) ||
       DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ||
       DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize;
+    const hexRadius =
+      Number((config as BattleMapConfig)?.hexSettings?.hexRadius) ||
+      DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexRadius ||
+      3;
     const hexSettings = {
       hexSize,
-      orientation:
-        (config as BattleMapConfig)?.hexSettings?.orientation ??
-        DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.orientation ??
-        'pointy',
+      orientation: 'flat' as const,
+      hexRadius,
     };
 
     return {
       gridType: 'hex',
-      gridColumns: Number(config?.gridColumns) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
-      gridRows: Number(config?.gridRows) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
+      gridColumns: hexRadius * 2 - 1,
+      gridRows: hexRadius * 2 - 1,
       cellSize: Number(config?.cellSize) || hexSize,
       widgets: [],
       hexSettings,

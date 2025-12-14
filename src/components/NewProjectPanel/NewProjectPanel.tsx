@@ -55,9 +55,6 @@ function NewProjectPanel({
   const [hexSize, setHexSize] = useState(
     DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize,
   );
-  const [hexOrientation, setHexOrientation] = useState<'pointy' | 'flat'>(
-    DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.orientation ?? 'pointy',
-  );
 
   // Generate auto-placeholder for canvas projects
   // Count the actual canvas projects from the database
@@ -81,7 +78,6 @@ function NewProjectPanel({
     setBattleMapRows(DEFAULT_BATTLE_MAP_CONFIG.gridRows);
     setGridType('square');
     setHexSize(DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize);
-    setHexOrientation(DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.orientation ?? 'pointy');
   }, [isOpen]);
 
   const isCanvasProject = selectedProjectTypeId === 'canvas';
@@ -132,6 +128,7 @@ function NewProjectPanel({
       20,
       hexSize || (DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize),
     );
+    const hexRadius = Math.max(1, normalizedColumns);
 
     const config: Partial<BattleMapConfig> | Record<string, unknown> = isCanvasProject
       ? {
@@ -143,13 +140,14 @@ function NewProjectPanel({
         ? gridType === 'hex'
           ? {
               gridType,
-              gridColumns: normalizedColumns,
-              gridRows: normalizedRows,
+              gridColumns: hexRadius * 2 - 1,
+              gridRows: hexRadius * 2 - 1,
               cellSize: normalizedHexSize,
               widgets: [],
               hexSettings: {
                 hexSize: normalizedHexSize,
-                orientation: hexOrientation,
+                orientation: 'flat',
+                hexRadius,
               },
               hexWidgets: [],
               version: DEFAULT_HEX_BATTLE_MAP_CONFIG.version,
@@ -195,7 +193,6 @@ function NewProjectPanel({
     if (isBattleMapProject) {
       await createInitialBattleMap(createdProject.id, normalizedColumns, normalizedRows, gridType, {
         hexSize: normalizedHexSize,
-        orientation: hexOrientation,
       });
     }
 
@@ -248,7 +245,7 @@ function NewProjectPanel({
     gridColumns: number,
     gridRows: number,
     selectedGridType: GridType,
-    hexConfig?: { hexSize: number; orientation: 'pointy' | 'flat' },
+    hexConfig?: { hexSize: number },
   ) => {
     if (!user) return;
 
@@ -259,13 +256,14 @@ function NewProjectPanel({
       selectedGridType === 'hex'
         ? {
             gridType: 'hex',
-            gridColumns,
-            gridRows,
+            gridColumns: gridColumns * 2 - 1,
+            gridRows: gridColumns * 2 - 1,
             cellSize: hexSizeValue,
             widgets: [],
             hexSettings: {
               hexSize: hexSizeValue,
-              orientation: hexConfig?.orientation ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.orientation ?? 'pointy',
+              orientation: 'flat',
+              hexRadius: gridColumns,
             },
             hexWidgets: [],
             version: DEFAULT_HEX_BATTLE_MAP_CONFIG.version,
@@ -493,47 +491,69 @@ function NewProjectPanel({
                       </label>
                     </div>
                   </div>
-                  <div className="new-project-form__grid">
-                    <div className="new-project-form__group">
-                      <label className="new-project-form__label" htmlFor="battlemap-columns">
-                        Columns
-                      </label>
-                      <input
-                        id="battlemap-columns"
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={battleMapColumns}
-                        onChange={(event) => setBattleMapColumns(Number(event.target.value))}
-                        className="new-project-form__input"
-                        required
-                      />
-                    </div>
-                    <div className="new-project-form__group">
-                      <label className="new-project-form__label" htmlFor="battlemap-rows">
-                        Rows
-                      </label>
-                      <input
-                        id="battlemap-rows"
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={battleMapRows}
-                        onChange={(event) => setBattleMapRows(Number(event.target.value))}
-                        className="new-project-form__input"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <p className="new-project-form__optional">
-                    Set the starting grid size (default 12 columns by 8 rows). You can expand later.
-                  </p>
-                  {gridType === 'hex' ? (
+                  {gridType === 'square' ? (
                     <>
                       <div className="new-project-form__grid">
                         <div className="new-project-form__group">
+                          <label className="new-project-form__label" htmlFor="battlemap-columns">
+                            Columns
+                          </label>
+                          <input
+                            id="battlemap-columns"
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={battleMapColumns}
+                            onChange={(event) => setBattleMapColumns(Number(event.target.value))}
+                            className="new-project-form__input"
+                            required
+                          />
+                        </div>
+                        <div className="new-project-form__group">
+                          <label className="new-project-form__label" htmlFor="battlemap-rows">
+                            Rows
+                          </label>
+                          <input
+                            id="battlemap-rows"
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={battleMapRows}
+                            onChange={(event) => setBattleMapRows(Number(event.target.value))}
+                            className="new-project-form__input"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <p className="new-project-form__optional">
+                        Set the starting grid size (default 12 columns by 8 rows). You can expand later.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="new-project-form__grid">
+                        <div className="new-project-form__group">
+                          <label className="new-project-form__label" htmlFor="battlemap-columns">
+                            Radius (hexes from center)
+                          </label>
+                          <input
+                            id="battlemap-columns"
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={battleMapColumns}
+                            onChange={(event) => {
+                              const value = Number(event.target.value);
+                              setBattleMapColumns(value);
+                              setBattleMapRows(value);
+                            }}
+                            className="new-project-form__input"
+                            required
+                          />
+                        </div>
+                        <div className="new-project-form__group">
                           <label className="new-project-form__label" htmlFor="battlemap-hex-size">
-                            Hex Size
+                            Hex Size (px)
                           </label>
                           <input
                             id="battlemap-hex-size"
@@ -546,26 +566,12 @@ function NewProjectPanel({
                             required
                           />
                         </div>
-                        <div className="new-project-form__group">
-                          <label className="new-project-form__label" htmlFor="battlemap-hex-orientation">
-                            Orientation
-                          </label>
-                          <select
-                            id="battlemap-hex-orientation"
-                            className="new-project-form__input"
-                            value={hexOrientation}
-                            onChange={(event) => setHexOrientation(event.target.value as 'pointy' | 'flat')}
-                          >
-                            <option value="pointy">Pointy top</option>
-                            <option value="flat">Flat top</option>
-                          </select>
-                        </div>
                       </div>
                       <p className="new-project-form__optional">
-                        Hex grids use the same canvas size; tiles snap to open hexes inside the grid.
+                        Hex grids are hexagonal; radius controls size. Orientation is flat-top.
                       </p>
                     </>
-                  ) : null}
+                  )}
                 </>
               ) : null}
 
