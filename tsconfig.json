@@ -17,7 +17,8 @@
     /* Path Aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "hexagrid": ["./src/types/hexagrid"]
     },
 
     /* Linting */

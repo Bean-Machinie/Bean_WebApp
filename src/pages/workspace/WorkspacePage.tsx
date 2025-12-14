@@ -5,6 +5,8 @@ import { supabase } from '../../lib/supabaseClient';
 import type { Project } from '../../types/project';
 import CanvasWorkspace from '../../components/CanvasWorkspace/CanvasWorkspace';
 import BattleMapWorkspace from '../BattleMapWorkspace';
+import HexBattleMapWorkspace from '../HexBattleMapWorkspace';
+import type { BattleMapConfig } from '../../types/battlemap';
 
 function WorkspacePage() {
   const { projectId, projectType } = useParams();
@@ -44,12 +46,18 @@ function WorkspacePage() {
   const projectTypeValue = project?.project_type ?? projectType;
   const isCanvasProject = projectTypeValue === 'canvas';
   const isBattleMapProject = projectTypeValue === 'battle-maps';
+  const battleMapConfig = (project?.battle_map_config ?? {}) as Partial<BattleMapConfig>;
+  const battleMapGridType = (battleMapConfig as { gridType?: string }).gridType ?? 'square';
+  const isHexBattleMap = battleMapGridType === 'hex';
 
   if (isCanvasProject && project) {
     return <CanvasWorkspace project={project} />;
   }
 
   if (isBattleMapProject) {
+    if (isHexBattleMap) {
+      return <HexBattleMapWorkspace />;
+    }
     return <BattleMapWorkspace />;
   }
 

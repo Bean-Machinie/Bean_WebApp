@@ -1,0 +1,156 @@
+.hex-workspace {
+  display: flex;
+  min-height: 100vh;
+  background: #0b0d14;
+  color: #e5e7eb;
+}
+
+.hex-workspace__sidebar {
+  width: 320px;
+  border-right: 1px solid #1f2430;
+  padding: 16px;
+  background: #0f1320;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hex-workspace__sidebar-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hex-workspace__tiles-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hex-workspace__tiles-scroll {
+  max-height: calc(100vh - 200px);
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.hex-workspace__tile-group {
+  padding: 8px 0;
+}
+
+.hex-workspace__tile-group-title {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.hex-workspace__tile-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--hex-tile-columns, 3), minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hex-workspace__tile-button {
+  border: 1px solid #252c3b;
+  background: #161c2a;
+  border-radius: 10px;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: grab;
+  text-align: left;
+  width: 100%;
+}
+
+.hex-workspace__tile-button:active {
+  cursor: grabbing;
+}
+
+.hex-workspace__tile-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.hex-workspace__tile-label {
+  font-size: 0.9rem;
+  color: #e5e7eb;
+}
+
+.hex-workspace__status {
+  margin: 6px 0 0;
+  color: #9ae6b4;
+  font-size: 0.85rem;
+}
+
+.hex-workspace__main {
+  flex: 1;
+  position: relative;
+}
+
+.hex-workspace__viewport {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(circle at 20% 20%, #131926 0%, #0b0d14 55%);
+  cursor: crosshair;
+}
+
+.hex-workspace__viewport.is-space-held {
+  cursor: grab;
+}
+
+.hex-workspace__viewport.is-panning {
+  cursor: grabbing;
+}
+
+.hex-workspace__surface {
+  width: 100%;
+  height: 100%;
+}
+
+.hex-workspace__cell {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 1;
+}
+
+.hex-workspace__hover {
+  fill: rgba(90, 130, 255, 0.25);
+  stroke: #6b8cff;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.hex-workspace__tile {
+  cursor: pointer;
+}
+
+.hex-workspace__tile-border {
+  fill: none;
+  stroke: #0f1625;
+  stroke-width: 2;
+}
+
+.hex-workspace__tile.is-selected .hex-workspace__tile-border {
+  stroke: #7dd3fc;
+  stroke-width: 3;
+}
+
+.hex-workspace__drag-preview {
+  position: fixed;
+  width: 64px;
+  height: 64px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}

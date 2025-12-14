@@ -8,6 +8,8 @@ export type BattleMap = {
   created_at?: string;
 };
 
+export type GridType = 'square' | 'hex';
+
 export type Tile = {
   id: string;
   owner: string;
@@ -48,11 +50,30 @@ export type BattleMapWidget = {
   updated_at?: string;
 };
 
+export type HexGridSettings = {
+  hexSize: number;
+  orientation: 'pointy' | 'flat';
+};
+
+export type HexWidget = {
+  id: string;
+  gridType: 'hex';
+  q: number;
+  r: number;
+  s: number;
+  tileId: string;
+  appearance?: WidgetAppearance;
+  updated_at?: string;
+};
+
 export type BattleMapConfig = {
+  gridType: GridType;
   gridColumns: number;
   gridRows: number;
   cellSize: number;
   widgets: BattleMapWidget[];
+  hexSettings?: HexGridSettings;
+  hexWidgets?: HexWidget[];
   version?: number;
   updated_at?: string;
 };

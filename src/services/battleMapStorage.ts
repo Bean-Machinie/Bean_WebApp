@@ -1,13 +1,28 @@
 import { supabase } from '../lib/supabaseClient';
 import { generateClientId } from '../lib/utils';
 import { mergeAppearanceIntoContent, parseAppearanceFromContent, resolveAppearance } from '../lib/battlemapAppearance';
-import type { BattleMapConfig, BattleMapWidget } from '../types/battlemap';
+import type { BattleMapConfig, BattleMapWidget, HexWidget } from '../types/battlemap';
 
 export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
+  gridType: 'square',
   gridColumns: 12,
   gridRows: 8,
   cellSize: 80,
   widgets: [],
+  version: 1,
+};
+
+export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
+  gridType: 'hex',
+  gridColumns: 0,
+  gridRows: 0,
+  cellSize: 80,
+  widgets: [],
+  hexSettings: {
+    hexSize: 80,
+    orientation: 'pointy',
+  },
+  hexWidgets: [],
   version: 1,
 };
 
@@ -29,37 +44,89 @@ const isMissingColumnError = (error: unknown, column: string) => {
   return message.includes('does not exist') && message.includes(column.toLowerCase());
 };
 
-const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapConfig => ({
-  gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
-  gridRows: Number(config?.gridRows) || DEFAULT_BATTLE_MAP_CONFIG.gridRows,
-  cellSize: Number(config?.cellSize) || DEFAULT_BATTLE_MAP_CONFIG.cellSize,
-  widgets: (config?.widgets ?? []).map((widget) => {
-    const appearanceFromContent = parseAppearanceFromContent(widget.content ?? '');
-    const resolvedAppearance = resolveAppearance({
-      ...widget,
-      appearance: widget.appearance ?? appearanceFromContent,
-    });
-    const baseContent =
-      widget.content && widget.content.trim().length
-        ? widget.content
-        : `<div class="battlemap-widget-content">Widget</div>`;
-    const content = mergeAppearanceIntoContent(baseContent, resolvedAppearance);
+const normalizeHexWidget = (widget: Partial<HexWidget>): HexWidget => {
+  const q = Number(widget.q) || 0;
+  const r = Number(widget.r) || 0;
+  const s =
+    widget.s !== undefined && widget.s !== null
+      ? Number(widget.s)
+      : -(q + r);
+
+  return {
+    id: widget.id || generateClientId(),
+    gridType: 'hex',
+    q,
+    r,
+    s,
+    tileId: widget.tileId ?? '',
+    appearance: widget.appearance,
+    updated_at: widget.updated_at,
+  };
+};
+
+const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapConfig => {
+  const isHexConfig =
+    config?.gridType === 'hex' || Array.isArray((config as { hexWidgets?: HexWidget[] })?.hexWidgets);
+
+  if (isHexConfig) {
+    const hexSize =
+      Number((config as BattleMapConfig)?.hexSettings?.hexSize) ||
+      DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ||
+      DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize;
+    const hexSettings = {
+      hexSize,
+      orientation:
+        (config as BattleMapConfig)?.hexSettings?.orientation ??
+        DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.orientation ??
+        'pointy',
+    };
 
     return {
-      id: widget.id || generateClientId(),
-      x: widget.x ?? 0,
-      y: widget.y ?? 0,
-      w: widget.w ?? 1,
-      h: widget.h ?? 1,
-      content,
-      appearance: resolvedAppearance,
-      isFixed: widget.isFixed ?? false,
-      updated_at: widget.updated_at,
+      gridType: 'hex',
+      gridColumns: Number(config?.gridColumns) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
+      gridRows: Number(config?.gridRows) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
+      cellSize: Number(config?.cellSize) || hexSize,
+      widgets: [],
+      hexSettings,
+      hexWidgets: ((config as BattleMapConfig)?.hexWidgets ?? []).map(normalizeHexWidget),
+      version: config?.version ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.version,
+      updated_at: config?.updated_at,
     };
-  }),
-  version: config?.version ?? DEFAULT_BATTLE_MAP_CONFIG.version,
-  updated_at: config?.updated_at,
-});
+  }
+
+  return {
+    gridType: 'square',
+    gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
+    gridRows: Number(config?.gridRows) || DEFAULT_BATTLE_MAP_CONFIG.gridRows,
+    cellSize: Number(config?.cellSize) || DEFAULT_BATTLE_MAP_CONFIG.cellSize,
+    widgets: (config?.widgets ?? []).map((widget) => {
+      const appearanceFromContent = parseAppearanceFromContent(widget.content ?? '');
+      const resolvedAppearance = resolveAppearance({
+        ...widget,
+        appearance: widget.appearance ?? appearanceFromContent,
+      });
+      const baseContent =
+        widget.content && widget.content.trim().length
+          ? widget.content
+          : `<div class="battlemap-widget-content">Widget</div>`;
+      const content = mergeAppearanceIntoContent(baseContent, resolvedAppearance);
+
+      return {
+        id: widget.id || generateClientId(),
+        x: widget.x ?? 0,
+        y: widget.y ?? 0,
+        w: widget.w ?? 1,
+        h: widget.h ?? 1,
+        content,
+        appearance: resolvedAppearance,
+        isFixed: widget.isFixed ?? false,
+        updated_at: widget.updated_at,
+      };
+    }),
+    version: config?.version ?? DEFAULT_BATTLE_MAP_CONFIG.version,
+    updated_at: config?.updated_at,
+  };
+};
 
 async function checkAdvancedStorageAvailability() {
   if (hasCheckedAdvancedStorage) {
@@ -178,6 +245,11 @@ async function persistToAdvancedTables(
   config: BattleMapConfig,
 ): Promise<BattleMapConfig> {
   const normalizedConfig = normalizeConfig(config);
+
+  if (normalizedConfig.gridType === 'hex') {
+    return normalizedConfig;
+  }
+
   const nextVersion = (normalizedConfig.version ?? 1) + 1;
   const now = new Date().toISOString();
 
@@ -293,12 +365,27 @@ async function persistLegacySnapshot(
   userId: string,
   config: BattleMapConfig,
 ) {
-  const legacyConfig = {
-    gridColumns: config.gridColumns,
-    gridRows: config.gridRows,
-    cellSize: config.cellSize,
-    widgets: config.widgets,
-  };
+  const legacyConfig =
+    config.gridType === 'hex'
+      ? {
+          gridType: 'hex' as const,
+          gridColumns: config.gridColumns,
+          gridRows: config.gridRows,
+          cellSize: config.cellSize,
+          hexSettings: config.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings,
+          hexWidgets: config.hexWidgets ?? [],
+          version: config.version,
+          updated_at: config.updated_at,
+        }
+      : {
+          gridType: 'square' as const,
+          gridColumns: config.gridColumns,
+          gridRows: config.gridRows,
+          cellSize: config.cellSize,
+          widgets: config.widgets,
+          version: config.version,
+          updated_at: config.updated_at,
+        };
 
   await supabase
     .from('projects')
@@ -312,6 +399,10 @@ export async function loadBattleMapState(params: {
   userId: string;
   legacyConfig?: BattleMapConfig | null;
 }): Promise<{ config: BattleMapConfig; storage: StorageMode }> {
+  if (params.legacyConfig?.gridType === 'hex') {
+    return { config: normalizeConfig(params.legacyConfig), storage: 'legacy' };
+  }
+
   const supportsAdvanced = await checkAdvancedStorageAvailability();
 
   if (supportsAdvanced) {
@@ -346,6 +437,22 @@ export async function persistBattleMapState(params: {
 }): Promise<{ config: BattleMapConfig; storage: StorageMode }> {
   const supportsAdvanced = await checkAdvancedStorageAvailability();
   let persistedConfig = normalizeConfig(params.config);
+
+  if (persistedConfig.gridType === 'hex') {
+    persistedConfig = {
+      ...persistedConfig,
+      version: (persistedConfig.version ?? 1) + 1,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      await persistLegacySnapshot(params.projectId, params.userId, persistedConfig);
+    } catch (legacyError) {
+      console.warn('Failed to persist hex battle_map_config snapshot', legacyError);
+    }
+
+    return { config: persistedConfig, storage: 'legacy' };
+  }
 
   if (supportsAdvanced) {
     persistedConfig = await persistToAdvancedTables(params.projectId, params.userId, persistedConfig);
