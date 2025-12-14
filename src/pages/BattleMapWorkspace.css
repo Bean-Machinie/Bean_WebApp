@@ -231,12 +231,13 @@
 }
 
 .battlemap-workspace__tile-group > .battlemap-workspace__widget-tray {
+  --widget-preview-scale: 0.4;
   border-top: 1px solid var(--sidebar-border);
   padding: 0.85rem 0.85rem;
   background: color-mix(in srgb, var(--bg) 85%, var(--card) 15%);
   display: grid;
   grid-template-columns: repeat(var(--tile-preview-columns, 3), minmax(56px, 1fr));
-  grid-auto-rows: minmax(56px, auto);
+  grid-auto-rows: calc(var(--grid-cell-height, 80px) * var(--widget-preview-scale, 0.4));
   grid-auto-flow: row dense;
   align-items: start;
   column-gap: 0.9rem;

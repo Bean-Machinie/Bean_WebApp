@@ -150,12 +150,17 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     ? 'grid_columns, grid_rows, cell_size, version, updated_at, allowed_square_cells'
     : 'grid_columns, grid_rows, cell_size, version, updated_at';
 
-  let configRowResult: any = await (supabase as any)
-    .from('battle_map_configs')
-    .select(configSelect)
-    .eq('project_id', projectId)
-    .eq('user_id', userId)
-    .limit(1);
+  let configRowResult: any;
+  try {
+    configRowResult = await (supabase as any)
+      .from('battle_map_configs')
+      .select(configSelect)
+      .eq('project_id', projectId)
+      .eq('user_id', userId)
+      .limit(1);
+  } catch (err) {
+    configRowResult = { error: err };
+  }
 
   if (configRowResult.error) {
     if (isMissingColumnError(configRowResult.error, 'allowed_square_cells')) {
@@ -170,7 +175,14 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
       supportsAdvancedStorageCache = false;
       return null;
     } else {
-      throw configRowResult.error;
+      // If any other error occurs (e.g., 400 from unknown column), fall back without the column.
+      hasAllowedCellsColumn = false;
+      configRowResult = await (supabase as any)
+        .from('battle_map_configs')
+        .select('grid_columns, grid_rows, cell_size, version, updated_at')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .limit(1);
     }
   }
 

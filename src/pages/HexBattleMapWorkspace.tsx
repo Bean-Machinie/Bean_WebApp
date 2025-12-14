@@ -11,8 +11,8 @@ import { useAuth } from '../context/AuthContext';
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG, DEFAULT_HEX_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, HexWidget } from '../types/battlemap';
-import type { TileDefinition } from '../data/tiles/types';
-import { TILE_SETS } from '../data/tiles/tileSets';
+import type { HexTileDefinition } from '../data/tiles/types';
+import { HEX_TILE_SETS } from '../data/tiles/tileSets';
 import { createHexGeometry } from '../hex/hexGeometry';
 import type { Cube } from '../hex/hexTypes';
 import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
@@ -22,11 +22,11 @@ import './HexBattleMapWorkspace.css';
 const TILE_PREVIEW_COLUMNS = 3;
 
 type DragPayload =
-  | { type: 'palette'; tile: TileDefinition }
+  | { type: 'palette'; tile: HexTileDefinition }
   | { type: 'widget'; widget: HexWidget };
 
-const packTilesForPreview = (tiles: TileDefinition[], columns: number) => {
-  const placements: Array<{ tile: TileDefinition; col: number; row: number }> = [];
+const packTilesForPreview = (tiles: HexTileDefinition[], columns: number) => {
+  const placements: Array<{ tile: HexTileDefinition; col: number; row: number }> = [];
   let col = 0;
   let row = 0;
 
@@ -87,7 +87,7 @@ function HexBattleMapWorkspace() {
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
+    () => Object.fromEntries(HEX_TILE_SETS.map((set) => [set.title, false])),
   );
   const [hoverVisible, setHoverVisible] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
@@ -97,8 +97,8 @@ function HexBattleMapWorkspace() {
   const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
 
   const tileMap = useMemo(() => {
-    const map = new Map<string, TileDefinition>();
-    TILE_SETS.forEach((set) => {
+    const map = new Map<string, HexTileDefinition>();
+    HEX_TILE_SETS.forEach((set) => {
       set.tiles.forEach((tile) => {
         map.set(tile.id, tile);
       });
@@ -598,7 +598,7 @@ function HexBattleMapWorkspace() {
     [scale, toWorldPoint],
   );
 
-  const handleTilePointerDown = useCallback((tile: TileDefinition, event: ReactMouseEvent<HTMLElement>) => {
+  const handleTilePointerDown = useCallback((tile: HexTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
     setDragPayload({ type: 'palette', tile });
     setStatusMessage(null);
@@ -827,7 +827,7 @@ function HexBattleMapWorkspace() {
             <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
           <div className="battlemap-workspace__tiles-scroll">
-            {TILE_SETS.map((set) => (
+            {HEX_TILE_SETS.map((set) => (
               <div
                 key={set.title}
                 className={`battlemap-workspace__tile-group${accordionOpen[set.title] ? ' is-open' : ''}`}

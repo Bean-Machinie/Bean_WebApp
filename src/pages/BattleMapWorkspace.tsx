@@ -11,8 +11,8 @@ import { useAuth } from '../context/AuthContext';
 import { useBattleMap } from '../hooks/useBattleMap';
 import { DEFAULT_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, BattleMapWidget, SquareCell } from '../types/battlemap';
-import type { TileDefinition } from '../data/tiles/types';
-import { TILE_SETS } from '../data/tiles/tileSets';
+import type { SquareTileDefinition } from '../data/tiles/types';
+import { SQUARE_TILE_SETS } from '../data/tiles/tileSets';
 import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
 import { generateClientId } from '../lib/utils';
 import './BattleMapWorkspace.css';
@@ -20,28 +20,11 @@ import './BattleMapWorkspace.css';
 const TILE_PREVIEW_COLUMNS = 3;
 
 type DragPayload =
-  | { type: 'palette'; tile: TileDefinition }
+  | { type: 'palette'; tile: SquareTileDefinition }
   | { type: 'widget'; widget: BattleMapWidget };
 
-const packTilesForPreview = (tiles: TileDefinition[], columns: number) => {
-  const placements: Array<{ tile: TileDefinition; col: number; row: number }> = [];
-  let col = 0;
-  let row = 0;
-
-  tiles.forEach((tile, index) => {
-    placements.push({ tile, col, row });
-    col += 1;
-    if (col >= columns) {
-      col = 0;
-      row += 1;
-    }
-    if (index === tiles.length - 1 && col !== 0) {
-      row += 1;
-      col = 0;
-    }
-  });
-
-  return placements;
+const packTilesForPreview = (tiles: SquareTileDefinition[]) => {
+  return tiles.map((tile, index) => ({ tile, index }));
 };
 
 function BattleMapWorkspace() {
@@ -75,7 +58,7 @@ function BattleMapWorkspace() {
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [accordionOpen, setAccordionOpen] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(TILE_SETS.map((set) => [set.title, false])),
+    () => Object.fromEntries(SQUARE_TILE_SETS.map((set) => [set.title, false])),
   );
   const [hoverVisible, setHoverVisible] = useState(false);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
@@ -85,8 +68,8 @@ function BattleMapWorkspace() {
   const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
 
   const tileMap = useMemo(() => {
-    const map = new Map<string, TileDefinition>();
-    TILE_SETS.forEach((set) => {
+    const map = new Map<string, SquareTileDefinition>();
+    SQUARE_TILE_SETS.forEach((set) => {
       set.tiles.forEach((tile) => {
         map.set(tile.id, tile);
       });
@@ -222,6 +205,52 @@ function BattleMapWorkspace() {
     },
     [cellSize],
   );
+
+  const buildFootprint = useCallback(
+    (origin: SquareCell, cols: number, rows: number): SquareCell[] => {
+      const footprint: SquareCell[] = [];
+      for (let dx = 0; dx < Math.max(1, cols); dx += 1) {
+        for (let dy = 0; dy < Math.max(1, rows); dy += 1) {
+          footprint.push({ x: origin.x + dx, y: origin.y + dy });
+        }
+      }
+      return footprint;
+    },
+    [],
+  );
+
+  const isFootprintAllowed = useCallback(
+    (origin: SquareCell, cols: number, rows: number) => {
+      const footprint = buildFootprint(origin, cols, rows);
+      return footprint.every((cell) =>
+        allowedCells.some((allowed) => allowed.x === cell.x && allowed.y === cell.y),
+      );
+    },
+    [allowedCells, buildFootprint],
+  );
+
+  const findCollision = useCallback(
+    (origin: SquareCell, cols: number, rows: number, ignoreId?: string) => {
+      const width = Math.max(1, cols);
+      const height = Math.max(1, rows);
+      return widgets.find((widget) => {
+        if (ignoreId && widget.id === ignoreId) return false;
+        const otherWidth = Math.max(1, widget.w ?? 1);
+        const otherHeight = Math.max(1, widget.h ?? 1);
+        const overlapX = origin.x < widget.x + otherWidth && origin.x + width > widget.x;
+        const overlapY = origin.y < widget.y + otherHeight && origin.y + height > widget.y;
+        return overlapX && overlapY;
+      });
+    },
+    [widgets],
+  );
+
+  const getPayloadSize = useCallback((payload: DragPayload): { cols: number; rows: number } => {
+    if (payload.type === 'palette') {
+      return { cols: payload.tile.cols ?? 1, rows: payload.tile.rows ?? 1 };
+    }
+    return { cols: payload.widget.w ?? 1, rows: payload.widget.h ?? 1 };
+  }, []);
 
   const recenterGrid = useCallback((scaleOverride?: number) => {
     const rect = viewportRef.current?.getBoundingClientRect();
@@ -387,11 +416,11 @@ function BattleMapWorkspace() {
         return;
       }
       const cellAtPoint = pointToCell(point.x, point.y);
-      const isValidCell = allowedCells.some(
-        (cell) => cell.x === cellAtPoint.x && cell.y === cellAtPoint.y,
-      );
+      const size = getPayloadSize(dragPayload);
+      const isValidCell = isFootprintAllowed(cellAtPoint, size.cols, size.rows);
+      const collides = findCollision(cellAtPoint, size.cols, size.rows, dragPayload?.type === 'widget' ? dragPayload.widget.id : undefined);
       setHoverCell(cellAtPoint);
-      setHoverVisible(isValidCell);
+      setHoverVisible(isValidCell && !collides);
       updateDeleteZoneHighlight(event.clientX, event.clientY);
     };
 
@@ -400,27 +429,25 @@ function BattleMapWorkspace() {
       const activeDelete = updateDeleteZoneHighlight(event.clientX, event.clientY);
       const point = toWorldPoint(event.clientX, event.clientY);
       const targetCell = point ? pointToCell(point.x, point.y) : hoverCell;
-      const isWithinBounds = targetCell
-        ? allowedCells.some((cell) => cell.x === targetCell.x && cell.y === targetCell.y)
-        : false;
+      const payloadSize = dragPayload ? getPayloadSize(dragPayload) : { cols: 1, rows: 1 };
+      const fitsInGrid = targetCell ? isFootprintAllowed(targetCell, payloadSize.cols, payloadSize.rows) : false;
+      const collision = targetCell
+        ? findCollision(targetCell, payloadSize.cols, payloadSize.rows, dragPayload?.type === 'widget' ? dragPayload.widget.id : undefined)
+        : undefined;
 
       if (activeDelete && dragPayload?.type === 'widget') {
         handleDelete(dragPayload.widget.id);
-      } else if (targetCell && isWithinBounds) {
-        const occupant = widgets.find(
-          (widget) => widget.x === targetCell.x && widget.y === targetCell.y,
-        );
-
+      } else if (targetCell && fitsInGrid) {
         if (dragPayload.type === 'palette') {
-          if (occupant) {
-            setStatusMessage('That cell is already occupied.');
+          if (collision) {
+            setStatusMessage('That placement overlaps another tile.');
           } else {
             const newWidget: BattleMapWidget = {
               id: generateClientId(),
               x: targetCell.x,
               y: targetCell.y,
-              w: 1,
-              h: 1,
+              w: payloadSize.cols,
+              h: payloadSize.rows,
               content: '',
               tileId: dragPayload.tile.id,
               appearance: {
@@ -435,19 +462,8 @@ function BattleMapWorkspace() {
         } else {
           const origin = draggingOrigin ?? dragPayload.widget;
           const isSameSpot = origin.x === targetCell.x && origin.y === targetCell.y;
-          if (occupant && occupant.id !== dragPayload.widget.id) {
-            const nextWidgets = widgets.map((widget) => {
-              if (widget.id === dragPayload.widget.id) {
-                return { ...widget, x: targetCell.x, y: targetCell.y };
-              }
-              if (widget.id === occupant.id) {
-                return { ...widget, x: origin.x, y: origin.y };
-              }
-              return widget;
-            });
-            setWidgets(nextWidgets);
-            persistWidgets(nextWidgets, allowedCells);
-            setStatusMessage('Swapped tiles.');
+          if (collision) {
+            setStatusMessage('That spot is already occupied.');
           } else if (!isSameSpot) {
             const nextWidgets = widgets.map((widget) =>
               widget.id === dragPayload.widget.id
@@ -459,6 +475,8 @@ function BattleMapWorkspace() {
             setStatusMessage('Moved tile.');
           }
         }
+      } else if (targetCell && !fitsInGrid) {
+        setStatusMessage('Tile does not fit in the grid here.');
       } else if (dragPayload.type === 'widget') {
         setStatusMessage('Outside the grid. Returning tile to its spot.');
       } else if (dragPayload.type === 'palette') {
@@ -485,10 +503,13 @@ function BattleMapWorkspace() {
     allowedCells,
     dragPayload,
     draggingOrigin,
-    handleDelete,
     hoverCell,
+    handleDelete,
+    isFootprintAllowed,
     persistWidgets,
     pointToCell,
+    findCollision,
+    getPayloadSize,
     setIsDeleteDrag,
     toWorldPoint,
     updateDeleteZoneHighlight,
@@ -596,7 +617,7 @@ function BattleMapWorkspace() {
     [scale, toWorldPoint],
   );
 
-  const handleTilePointerDown = useCallback((tile: TileDefinition, event: ReactMouseEvent<HTMLElement>) => {
+  const handleTilePointerDown = useCallback((tile: SquareTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
     event.preventDefault();
     setDragPayload({ type: 'palette', tile });
     setStatusMessage(null);
@@ -676,16 +697,18 @@ function BattleMapWorkspace() {
         widgets.forEach((widget) => {
           const x = widget.x * cellSize;
           const y = widget.y * cellSize;
+          const w = (widget.w ?? 1) * cellSize;
+          const h = (widget.h ?? 1) * cellSize;
           const tileSrc =
             tileMap.get(widget.tileId ?? '')?.image ?? widget.appearance?.backgroundImageUrl ?? '';
           const href = tileSrc ? inlineImages.get(tileSrc) ?? tileSrc : '';
 
           if (href) {
             svgParts.push(
-              `<image href="${href}" x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" preserveAspectRatio="xMidYMid slice" />`,
+              `<image href="${href}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" />`,
             );
           } else {
-            svgParts.push(`<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="#d0d0d0" />`);
+            svgParts.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#d0d0d0" />`);
           }
         });
 
@@ -769,7 +792,7 @@ function BattleMapWorkspace() {
             <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
           <div className="battlemap-workspace__tiles-scroll">
-            {TILE_SETS.map((set) => (
+            {SQUARE_TILE_SETS.map((set) => (
               <div
                 key={set.title}
                 className={`battlemap-workspace__tile-group${accordionOpen[set.title] ? ' is-open' : ''}`}
@@ -789,20 +812,20 @@ function BattleMapWorkspace() {
                 </button>
                 <div
                   id={`tile-group-${set.title}`}
-                  className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
-                  role="region"
-                  aria-label={`${set.title} tiles`}
-                  style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS } as CSSProperties}
+                className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
+                role="region"
+                aria-label={`${set.title} tiles`}
+                  style={{ '--tile-preview-columns': TILE_PREVIEW_COLUMNS, '--widget-preview-scale': 0.4 } as CSSProperties}
                 >
-                  {packTilesForPreview(set.tiles, TILE_PREVIEW_COLUMNS).map(({ tile, col, row }) => (
+                  {packTilesForPreview(set.tiles).map(({ tile, index }) => (
                     <div
-                      key={`${tile.id}-${row}-${col}`}
+                      key={`${tile.id}-${index}`}
                       className="battlemap-workspace__widget-template-wrapper"
                       style={{
-                        gridColumnStart: col + 1,
-                        gridColumnEnd: `span 1`,
-                        gridRowStart: row + 1,
-                        gridRowEnd: `span 1`,
+                        gridColumnEnd: `span ${tile.cols}`,
+                        gridRowEnd: `span ${tile.rows}`,
+                        '--tile-cols': tile.cols,
+                        '--tile-rows': tile.rows,
                       }}
                     >
                       <div
@@ -812,6 +835,8 @@ function BattleMapWorkspace() {
                         style={
                           {
                             '--widget-bg-image': `url("${tile.image}")`,
+                            '--tile-cols': tile.cols,
+                            '--tile-rows': tile.rows,
                           } as CSSProperties
                         }
                       />
@@ -877,8 +902,8 @@ function BattleMapWorkspace() {
                   className="square-workspace__hover"
                   x={hoverCell.x * cellSize}
                   y={hoverCell.y * cellSize}
-                  width={cellSize}
-                  height={cellSize}
+                  width={cellSize * getPayloadSize(dragPayload).cols}
+                  height={cellSize * getPayloadSize(dragPayload).rows}
                 />
               ) : null}
 
@@ -912,6 +937,8 @@ function BattleMapWorkspace() {
                 const x = widget.x * cellSize;
                 const y = widget.y * cellSize;
                 const tile = tileMap.get(widget.tileId ?? '');
+                const width = cellSize * (widget.w ?? 1);
+                const height = cellSize * (widget.h ?? 1);
 
                 return (
                   <g
@@ -924,14 +951,14 @@ function BattleMapWorkspace() {
                         href={tile?.image ?? widget.appearance?.backgroundImageUrl}
                         x={x}
                         y={y}
-                        width={cellSize}
-                        height={cellSize}
+                        width={width}
+                        height={height}
                         preserveAspectRatio="xMidYMid slice"
                       />
                     ) : (
-                      <rect x={x} y={y} width={cellSize} height={cellSize} fill="#d0d0d0" />
+                      <rect x={x} y={y} width={width} height={height} fill="#d0d0d0" />
                     )}
-                    <rect className="square-workspace__tile-border" x={x} y={y} width={cellSize} height={cellSize} />
+                    <rect className="square-workspace__tile-border" x={x} y={y} width={width} height={height} />
                   </g>
                 );
               })}
@@ -968,8 +995,8 @@ function BattleMapWorkspace() {
                 left: `${dragPosition.x}px`,
                 top: `${dragPosition.y}px`,
                 transform: 'translate(-50%, -50%)',
-                width: `${cellSize * scale}px`,
-                height: `${cellSize * scale}px`,
+                width: `${cellSize * (dragPayload.type === 'palette' ? dragPayload.tile.cols : dragPayload.widget.w ?? 1) * scale}px`,
+                height: `${cellSize * (dragPayload.type === 'palette' ? dragPayload.tile.rows : dragPayload.widget.h ?? 1) * scale}px`,
               }}
             >
               <img

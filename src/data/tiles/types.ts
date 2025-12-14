@@ -1,13 +1,23 @@
-export type TileDefinition = {
+type BaseTileDefinition = {
   id: string;
   label: string;
-  cols: number;
-  rows: number;
   image: string;
   isFixed?: boolean;
 };
 
-export type TileGroup = {
+export type SquareTileDefinition = BaseTileDefinition & {
+  gridType: 'square';
+  cols: number;
+  rows: number;
+};
+
+export type HexTileDefinition = BaseTileDefinition & {
+  gridType: 'hex';
+};
+
+export type TileDefinition = SquareTileDefinition | HexTileDefinition;
+
+export type TileGroup<T extends TileDefinition = TileDefinition> = {
   title: string;
-  tiles: TileDefinition[];
+  tiles: T[];
 };

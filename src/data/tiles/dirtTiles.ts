@@ -1,9 +1,10 @@
-import type { TileDefinition } from './types';
+import type { SquareTileDefinition } from './types';
 
-export const dirtTiles: TileDefinition[] = [
+export const dirtTiles: SquareTileDefinition[] = [
   {
-    id: 'stone-1x1',
-    label: 'Small Stone',
+    id: 'dirt-1x1',
+    gridType: 'square',
+    label: 'Dirt 1x1',
     cols: 1,
     rows: 1,
     image: '/assets/widgets/stone_tile.webp',
