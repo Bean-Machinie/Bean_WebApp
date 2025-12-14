@@ -21,7 +21,6 @@ export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
   hexSettings: {
     hexSize: 80,
     orientation: 'flat',
-    hexRadius: 4,
   },
   hexWidgets: [],
   version: 1,
@@ -74,14 +73,10 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       Number((config as BattleMapConfig)?.hexSettings?.hexSize) ||
       DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ||
       DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize;
-    const hexRadius =
-      Number((config as BattleMapConfig)?.hexSettings?.hexRadius) ||
-      DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexRadius ||
-      3;
+    const hexRadius = 3;
     const hexSettings = {
       hexSize,
       orientation: 'flat' as const,
-      hexRadius,
     };
 
     return {
@@ -92,6 +87,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       widgets: [],
       hexSettings,
       hexWidgets: ((config as BattleMapConfig)?.hexWidgets ?? []).map(normalizeHexWidget),
+      allowedHexCells: (config as BattleMapConfig)?.allowedHexCells,
       version: config?.version ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.version,
       updated_at: config?.updated_at,
     };
@@ -377,6 +373,7 @@ async function persistLegacySnapshot(
           cellSize: config.cellSize,
           hexSettings: config.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings,
           hexWidgets: config.hexWidgets ?? [],
+          allowedHexCells: config.allowedHexCells,
           version: config.version,
           updated_at: config.updated_at,
         }

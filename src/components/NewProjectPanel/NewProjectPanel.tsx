@@ -141,7 +141,6 @@ function NewProjectPanel({
               hexSettings: {
                 hexSize: normalizedHexSize,
                 orientation: 'flat',
-                hexRadius,
               },
               hexWidgets: [],
               version: DEFAULT_HEX_BATTLE_MAP_CONFIG.version,
@@ -257,7 +256,6 @@ function NewProjectPanel({
             hexSettings: {
               hexSize: hexSizeValue,
               orientation: 'flat',
-              hexRadius: gridColumns,
             },
             hexWidgets: [],
             version: DEFAULT_HEX_BATTLE_MAP_CONFIG.version,

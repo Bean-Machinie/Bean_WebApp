@@ -66,6 +66,12 @@ export type HexWidget = {
   updated_at?: string;
 };
 
+export type HexCell = {
+  q: number;
+  r: number;
+  s: number;
+};
+
 export type BattleMapConfig = {
   gridType: GridType;
   gridColumns: number;
@@ -74,6 +80,7 @@ export type BattleMapConfig = {
   widgets: BattleMapWidget[];
   hexSettings?: HexGridSettings;
   hexWidgets?: HexWidget[];
+  allowedHexCells?: HexCell[];
   version?: number;
   updated_at?: string;
 };

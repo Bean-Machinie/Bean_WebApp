@@ -112,6 +112,9 @@ function HexBattleMapWorkspace() {
   );
 
   const [allowedCells, setAllowedCells] = useState<Cube[]>(() => {
+    if (hexConfig.allowedHexCells && hexConfig.allowedHexCells.length > 0) {
+      return hexConfig.allowedHexCells;
+    }
     const cells: Cube[] = [];
     for (let q = -gridRadius + 1; q <= gridRadius - 1; q += 1) {
       for (let r = -gridRadius + 1; r <= gridRadius - 1; r += 1) {
@@ -197,18 +200,22 @@ function HexBattleMapWorkspace() {
         widgets: [],
         hexSettings: hexSettings,
         hexWidgets: widgets,
+        allowedHexCells: allowedCells,
         version: hexConfig.version,
         updated_at: hexConfig.updated_at,
       };
 
       await saveConfig(nextConfig);
     },
-    [gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
+    [allowedCells, gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
   );
 
   useEffect(() => {
     if (config.gridType === 'hex') {
       setHexWidgets(config.hexWidgets ?? []);
+      if (config.allowedHexCells && config.allowedHexCells.length > 0) {
+        setAllowedCells(config.allowedHexCells);
+      }
     }
   }, [config]);
 
@@ -263,6 +270,26 @@ function HexBattleMapWorkspace() {
     [geometry, handleDelete, hexWidgets, toWorldPoint],
   );
 
+  const persistAllowedCells = useCallback(
+    async (cells: Cube[]) => {
+      const nextConfig: BattleMapConfig = {
+        gridType: 'hex',
+        gridColumns: gridRadius * 2 - 1,
+        gridRows: gridRadius * 2 - 1,
+        cellSize: hexConfig.cellSize || hexSettings.hexSize,
+        widgets: [],
+        hexSettings: hexSettings,
+        hexWidgets: hexWidgets,
+        allowedHexCells: cells,
+        version: hexConfig.version,
+        updated_at: hexConfig.updated_at,
+      };
+
+      await saveConfig(nextConfig);
+    },
+    [gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, hexWidgets, saveConfig],
+  );
+
   const addHexAtPoint = useCallback(
     (clientX?: number, clientY?: number) => {
       if (clientX === undefined || clientY === undefined) return;
@@ -279,10 +306,12 @@ function HexBattleMapWorkspace() {
         return;
       }
 
-      setAllowedCells((prev) => [...prev, targetHex]);
+      const newCells = [...allowedCells, targetHex];
+      setAllowedCells(newCells);
+      persistAllowedCells(newCells);
       setStatusMessage('Added hex tile to grid.');
     },
-    [allowedCells, geometry, toWorldPoint],
+    [allowedCells, geometry, persistAllowedCells, toWorldPoint],
   );
 
   const isPointInsideDeleteZone = useCallback(
@@ -360,8 +389,12 @@ function HexBattleMapWorkspace() {
         updateDeleteZoneHighlight(event.clientX, event.clientY);
         return;
       }
-      setHoverHex(geometry.pixelToHex(point));
-      setHoverVisible(true);
+      const hexAtPoint = geometry.pixelToHex(point);
+      const isValidCell = allowedCells.some(
+        (cell) => cell.q === hexAtPoint.q && cell.r === hexAtPoint.r,
+      );
+      setHoverHex(hexAtPoint);
+      setHoverVisible(isValidCell);
       updateDeleteZoneHighlight(event.clientX, event.clientY);
     };
 
@@ -371,7 +404,7 @@ function HexBattleMapWorkspace() {
       const point = toWorldPoint(event.clientX, event.clientY);
       const targetHex = point ? geometry.pixelToHex(point) : hoverHex;
       const isWithinBounds = targetHex
-        ? Math.max(Math.abs(targetHex.q), Math.abs(targetHex.r), Math.abs(targetHex.s)) < gridRadius
+        ? allowedCells.some((cell) => cell.q === targetHex.q && cell.r === targetHex.r)
         : false;
 
       if (activeDelete && dragPayload?.type === 'widget') {
@@ -451,10 +484,10 @@ function HexBattleMapWorkspace() {
       setIsDeleteDrag(false);
     };
   }, [
+    allowedCells,
     dragPayload,
     draggingOrigin,
     geometry,
-    gridRadius,
     handleDelete,
     hexWidgets,
     hoverHex,
