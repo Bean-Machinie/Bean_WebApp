@@ -645,6 +645,16 @@ function BattleMapWorkspace() {
     return tileMap.get(dragPayload.widget.tileId ?? '')?.image ?? dragPayload.widget.appearance?.backgroundImageUrl ?? null;
   }, [dragPayload, tileMap]);
 
+  const getSquareStyleValues = useCallback(() => {
+    const workspaceEl = viewportRef.current?.closest('.square-workspace') as HTMLElement | null;
+    const styles = workspaceEl ? getComputedStyle(workspaceEl) : getComputedStyle(document.documentElement);
+    return {
+      background: styles.getPropertyValue('--bg').trim() || '#0f172a',
+      gridLine: styles.getPropertyValue('--grid-line-color').trim() || 'rgba(255,255,255,0.12)',
+      gridBorder: styles.getPropertyValue('--grid-border-color').trim() || 'rgba(255,255,255,0.35)',
+    };
+  }, []);
+
   const handleExportBattleMap = useCallback(
     async (format: 'png' | 'jpeg') => {
       if (!gridBounds) {
@@ -658,6 +668,7 @@ function BattleMapWorkspace() {
         const viewMinY = gridBounds.minY - padding;
         const viewWidth = gridBounds.width + padding * 2;
         const viewHeight = gridBounds.height + padding * 2;
+        const { background, gridBorder, gridLine } = getSquareStyleValues();
 
         const inlineImages = new Map<string, string>();
         await Promise.all(
@@ -682,14 +693,14 @@ function BattleMapWorkspace() {
           const x = cell.x * cellSize;
           const y = cell.y * cellSize;
           svgParts.push(
-            `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1" />`,
+            `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" fill="none" stroke="${gridLine}" stroke-width="1" />`,
           );
         });
 
         // Grid boundary
         gridBoundarySegments.forEach((seg) => {
           svgParts.push(
-            `<line x1="${seg.x1}" y1="${seg.y1}" x2="${seg.x2}" y2="${seg.y2}" stroke="rgba(255,255,255,0.35)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`,
+            `<line x1="${seg.x1}" y1="${seg.y1}" x2="${seg.x2}" y2="${seg.y2}" stroke="${gridBorder}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`,
           );
         });
 
@@ -729,9 +740,8 @@ function BattleMapWorkspace() {
           return;
         }
 
-        // Use the same background color as the page
-        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0f172a';
-        ctx.fillStyle = bgColor;
+        // Use the same background color as the page/workspace
+        ctx.fillStyle = background;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
