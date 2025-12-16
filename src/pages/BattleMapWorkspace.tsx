@@ -66,6 +66,10 @@ function BattleMapWorkspace() {
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
+  const [isDrawMode, setIsDrawMode] = useState(false);
+  const [selectedDrawTileId, setSelectedDrawTileId] = useState<string | null>(null);
+  const [isDrawPainting, setIsDrawPainting] = useState(false);
+  const lastPaintedCellRef = useRef<string | null>(null);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, SquareTileDefinition>();
@@ -245,6 +249,59 @@ function BattleMapWorkspace() {
     [widgets],
   );
 
+  const placeDrawTileAtCell = useCallback(
+    (cell: SquareCell) => {
+      if (!isDrawMode || !selectedDrawTileId) return;
+      const tile = tileMap.get(selectedDrawTileId);
+      if (!tile) return;
+
+      const cols = Math.max(1, tile.cols ?? 1);
+      const rows = Math.max(1, tile.rows ?? 1);
+
+      if (!isFootprintAllowed(cell, cols, rows)) return;
+
+      const key = `${cell.x}-${cell.y}`;
+      if (lastPaintedCellRef.current === key) return;
+
+      let placed = false;
+      setWidgets((current) => {
+        const collision = current.find((widget) => {
+          const otherWidth = Math.max(1, widget.w ?? 1);
+          const otherHeight = Math.max(1, widget.h ?? 1);
+          const overlapX = cell.x < widget.x + otherWidth && cell.x + cols > widget.x;
+          const overlapY = cell.y < widget.y + otherHeight && cell.y + rows > widget.y;
+          return overlapX && overlapY;
+        });
+
+        if (collision) return current;
+
+        const newWidget: BattleMapWidget = {
+          id: generateClientId(),
+          x: cell.x,
+          y: cell.y,
+          w: cols,
+          h: rows,
+          content: '',
+          tileId: tile.id,
+          appearance: {
+            backgroundImageUrl: tile.image,
+          },
+        };
+
+        const next = [...current, newWidget];
+        persistWidgets(next, allowedCells);
+        placed = true;
+        return next;
+      });
+
+      lastPaintedCellRef.current = key;
+      if (placed) {
+        setStatusMessage('Painted tile.');
+      }
+    },
+    [allowedCells, isDrawMode, isFootprintAllowed, persistWidgets, selectedDrawTileId, tileMap],
+  );
+
   const getPayloadSize = useCallback((payload: DragPayload): { cols: number; rows: number } => {
     if (payload.type === 'palette') {
       return { cols: payload.tile.cols ?? 1, rows: payload.tile.rows ?? 1 };
@@ -402,6 +459,14 @@ function BattleMapWorkspace() {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [handleDelete, selectedWidgetId]);
+
+  useEffect(() => {
+    if (!isDrawMode) {
+      setIsDrawPainting(false);
+      setSelectedDrawTileId(null);
+      lastPaintedCellRef.current = null;
+    }
+  }, [isDrawMode]);
 
   useEffect(() => {
     if (!dragPayload) return undefined;
@@ -617,11 +682,19 @@ function BattleMapWorkspace() {
     [scale, toWorldPoint],
   );
 
-  const handleTilePointerDown = useCallback((tile: SquareTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    setDragPayload({ type: 'palette', tile });
-    setStatusMessage(null);
-  }, []);
+  const handleTilePointerDown = useCallback(
+    (tile: SquareTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      if (isDrawMode) {
+        setSelectedDrawTileId(tile.id);
+        setStatusMessage(`Draw mode: ${tile.label} selected.`);
+        return;
+      }
+      setDragPayload({ type: 'palette', tile });
+      setStatusMessage(null);
+    },
+    [isDrawMode],
+  );
 
   const handleWidgetPointerDown = useCallback(
     (widget: BattleMapWidget, event: ReactMouseEvent<SVGGElement>) => {
@@ -638,6 +711,42 @@ function BattleMapWorkspace() {
     },
     [handleDelete, isDeleteMode],
   );
+
+  const startDrawPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isDrawMode || isSpaceHeld) return;
+      if (!selectedDrawTileId) {
+        setStatusMessage('Select a tile to draw.');
+        return;
+      }
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      lastPaintedCellRef.current = null;
+      const cell = pointToCell(point.x, point.y);
+      placeDrawTileAtCell(cell);
+      setIsDrawPainting(true);
+    },
+    [isDrawMode, isSpaceHeld, placeDrawTileAtCell, pointToCell, selectedDrawTileId, toWorldPoint],
+  );
+
+  const continueDrawPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isDrawMode || !isDrawPainting) return;
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const cell = pointToCell(point.x, point.y);
+      placeDrawTileAtCell(cell);
+    },
+    [isDrawMode, isDrawPainting, placeDrawTileAtCell, pointToCell, toWorldPoint],
+  );
+
+  const stopDrawPainting = useCallback(() => {
+    if (!isDrawPainting) return;
+    setIsDrawPainting(false);
+    lastPaintedCellRef.current = null;
+  }, [isDrawPainting]);
 
   const dragPreviewImage = useMemo(() => {
     if (!dragPayload) return null;
@@ -786,11 +895,11 @@ function BattleMapWorkspace() {
 
   return (
     <div className={`battlemap-workspace square-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
-      <div className="battlemap-workspace__sidebar square-workspace__sidebar">
-        <div className="battlemap-workspace__sidebar-header">
-          <button
-            className="button button--ghost battlemap-workspace__back-button"
-            onClick={() => navigate('/app')}
+        <div className="battlemap-workspace__sidebar square-workspace__sidebar">
+          <div className="battlemap-workspace__sidebar-header">
+            <button
+              className="button button--ghost battlemap-workspace__back-button"
+              onClick={() => navigate('/app')}
           >
             Back to Projects
           </button>
@@ -798,6 +907,30 @@ function BattleMapWorkspace() {
         </div>
 
         <div className="battlemap-workspace__tiles-panel">
+          <div className="battlemap-workspace__mode-toggle">
+            <button
+              type="button"
+              className={`button ${isDrawMode ? 'button--primary' : 'button--ghost'}`}
+              onClick={() => {
+                setIsDrawMode((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setIsDeleteMode(false);
+                    setIsExpandMode(false);
+                    setStatusMessage('Draw mode enabled. Pick a tile, then click or drag on the grid.');
+                  } else {
+                    setStatusMessage('Draw mode disabled.');
+                  }
+                  return next;
+                });
+                setDragPayload(null);
+                setHoverVisible(false);
+                lastPaintedCellRef.current = null;
+              }}
+            >
+              {isDrawMode ? 'Draw Mode: ON' : 'Draw Mode'}
+            </button>
+          </div>
           <div className="battlemap-workspace__tiles-header">
             <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
@@ -847,7 +980,7 @@ function BattleMapWorkspace() {
                       }}
                     >
                       <div
-                        className="battlemap-workspace__widget-template"
+                        className={`battlemap-workspace__widget-template${isDrawMode ? ' is-draw-mode' : ''}${selectedDrawTileId === tile.id ? ' is-selected' : ''}`}
                         onMouseDown={(event) => handleTilePointerDown(tile, event)}
                         aria-label={`${tile.label} tile`}
                         style={
@@ -876,7 +1009,9 @@ function BattleMapWorkspace() {
           ref={viewportRef}
           className={`battlemap-workspace__viewport square-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
           onMouseDown={(event) => {
-            if (isExpandMode) {
+            if (isDrawMode && !isSpaceHeld) {
+              startDrawPainting(event.clientX, event.clientY);
+            } else if (isExpandMode) {
               handleExpandClickStart(event);
             } else if (isDeleteMode) {
               handleDeleteDragStart(event);
@@ -885,7 +1020,9 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseMove={(event) => {
-            if (isExpandMode) {
+            if (isDrawMode && isDrawPainting) {
+              continueDrawPainting(event.clientX, event.clientY);
+            } else if (isExpandMode) {
               // No drag behavior in expand mode
             } else if (isDeleteMode) {
               handleDeleteDragMove(event);
@@ -894,7 +1031,9 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseUp={(event) => {
-            if (isExpandMode) {
+            if (isDrawMode && isDrawPainting) {
+              stopDrawPainting();
+            } else if (isExpandMode) {
               handleExpandClickEnd(event);
             } else if (isDeleteMode) {
               handleDeleteDragEnd();
@@ -903,7 +1042,9 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseLeave={() => {
-            if (isExpandMode) {
+            if (isDrawMode && isDrawPainting) {
+              stopDrawPainting();
+            } else if (isExpandMode) {
               setExpandClickStart(null);
             } else if (isDeleteMode) {
               handleDeleteDragEnd();

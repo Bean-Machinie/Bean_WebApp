@@ -66,6 +66,10 @@ function HexBattleMapWorkspace() {
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
+  const [isDrawMode, setIsDrawMode] = useState(false);
+  const [selectedDrawTileId, setSelectedDrawTileId] = useState<string | null>(null);
+  const [isDrawPainting, setIsDrawPainting] = useState(false);
+  const lastPaintedHexRef = useRef<string | null>(null);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, HexTileDefinition>();
@@ -197,6 +201,49 @@ function HexBattleMapWorkspace() {
     // Rebuild allowed cells from the saved grid radius when none were persisted.
     setAllowedCells(buildFilledHexagon(gridRadius));
   }, [buildFilledHexagon, config, gridRadius]);
+
+  const placeDrawHexAtCell = useCallback(
+    (hex: Cube) => {
+      if (!isDrawMode || !selectedDrawTileId) return;
+      const within = allowedCells.some((cell) => cell.q === hex.q && cell.r === hex.r);
+      if (!within) return;
+
+      const key = `${hex.q},${hex.r}`;
+      if (lastPaintedHexRef.current === key) return;
+
+      const tile = tileMap.get(selectedDrawTileId);
+      if (!tile) return;
+
+      let placed = false;
+      setHexWidgets((current) => {
+        const occupied = current.some((widget) => widget.q === hex.q && widget.r === hex.r);
+        if (occupied) return current;
+
+        const newWidget: HexWidget = {
+          id: generateClientId(),
+          gridType: 'hex',
+          q: hex.q,
+          r: hex.r,
+          s: hex.s ?? -(hex.q + hex.r),
+          tileId: tile.id,
+          appearance: {
+            backgroundImageUrl: tile.image,
+          },
+        };
+
+        const next = [...current, newWidget];
+        persistHexWidgets(next);
+        placed = true;
+        return next;
+      });
+
+      lastPaintedHexRef.current = key;
+      if (placed) {
+        setStatusMessage('Painted tile.');
+      }
+    },
+    [allowedCells, isDrawMode, persistHexWidgets, selectedDrawTileId, tileMap],
+  );
 
   const toWorldPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -355,6 +402,14 @@ function HexBattleMapWorkspace() {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [handleDelete, selectedWidgetId]);
+
+  useEffect(() => {
+    if (!isDrawMode) {
+      setIsDrawPainting(false);
+      setSelectedDrawTileId(null);
+      lastPaintedHexRef.current = null;
+    }
+  }, [isDrawMode]);
 
   useEffect(() => {
     if (!dragPayload) return undefined;
@@ -577,11 +632,19 @@ function HexBattleMapWorkspace() {
     [scale, toWorldPoint],
   );
 
-  const handleTilePointerDown = useCallback((tile: HexTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    setDragPayload({ type: 'palette', tile });
-    setStatusMessage(null);
-  }, []);
+  const handleTilePointerDown = useCallback(
+    (tile: HexTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
+      event.preventDefault();
+      if (isDrawMode) {
+        setSelectedDrawTileId(tile.id);
+        setStatusMessage(`Draw mode: ${tile.label} selected.`);
+        return;
+      }
+      setDragPayload({ type: 'palette', tile });
+      setStatusMessage(null);
+    },
+    [isDrawMode],
+  );
 
   const handleWidgetPointerDown = useCallback(
     (widget: HexWidget, event: ReactMouseEvent<SVGGElement>) => {
@@ -598,6 +661,42 @@ function HexBattleMapWorkspace() {
     },
     [handleDelete, isDeleteMode],
   );
+
+  const startDrawPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isDrawMode || isSpaceHeld) return;
+      if (!selectedDrawTileId) {
+        setStatusMessage('Select a tile to draw.');
+        return;
+      }
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      lastPaintedHexRef.current = null;
+      const targetHex = geometry.pixelToHex(point);
+      placeDrawHexAtCell(targetHex);
+      setIsDrawPainting(true);
+    },
+    [geometry, isDrawMode, isSpaceHeld, placeDrawHexAtCell, selectedDrawTileId, toWorldPoint],
+  );
+
+  const continueDrawPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isDrawMode || !isDrawPainting) return;
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const targetHex = geometry.pixelToHex(point);
+      placeDrawHexAtCell(targetHex);
+    },
+    [geometry, isDrawMode, isDrawPainting, placeDrawHexAtCell, toWorldPoint],
+  );
+
+  const stopDrawPainting = useCallback(() => {
+    if (!isDrawPainting) return;
+    setIsDrawPainting(false);
+    lastPaintedHexRef.current = null;
+  }, [isDrawPainting]);
 
   const dragPreviewImage = useMemo(() => {
     if (!dragPayload) return null;
@@ -802,6 +901,30 @@ function HexBattleMapWorkspace() {
         </div>
 
         <div className="battlemap-workspace__tiles-panel">
+          <div className="battlemap-workspace__mode-toggle">
+            <button
+              type="button"
+              className={`button ${isDrawMode ? 'button--primary' : 'button--ghost'}`}
+              onClick={() => {
+                setIsDrawMode((prev) => {
+                  const next = !prev;
+                  if (next) {
+                    setIsDeleteMode(false);
+                    setIsExpandMode(false);
+                    setStatusMessage('Draw mode enabled. Pick a tile, then click or drag on the grid.');
+                  } else {
+                    setStatusMessage('Draw mode disabled.');
+                  }
+                  return next;
+                });
+                setDragPayload(null);
+                setHoverVisible(false);
+                lastPaintedHexRef.current = null;
+              }}
+            >
+              {isDrawMode ? 'Draw Mode: ON' : 'Draw Mode'}
+            </button>
+          </div>
           <div className="battlemap-workspace__tiles-header">
             <h3 className="battlemap-workspace__control-title">Tiles</h3>
           </div>
@@ -836,7 +959,7 @@ function HexBattleMapWorkspace() {
                       className="battlemap-workspace__widget-template-wrapper"
                     >
                       <div
-                        className="battlemap-workspace__widget-template battlemap-workspace__widget-template--hex"
+                        className={`battlemap-workspace__widget-template battlemap-workspace__widget-template--hex${isDrawMode ? ' is-draw-mode' : ''}${selectedDrawTileId === tile.id ? ' is-selected' : ''}`}
                         onMouseDown={(event) => handleTilePointerDown(tile, event)}
                         aria-label={`${tile.label} tile`}
                         style={
@@ -865,7 +988,9 @@ function HexBattleMapWorkspace() {
           ref={viewportRef}
           className={`battlemap-workspace__viewport hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
           onMouseDown={(event) => {
-            if (isExpandMode) {
+            if (isDrawMode && !isSpaceHeld) {
+              startDrawPainting(event.clientX, event.clientY);
+            } else if (isExpandMode) {
               handleExpandClickStart(event);
             } else if (isDeleteMode) {
               handleDeleteDragStart(event);
@@ -874,7 +999,9 @@ function HexBattleMapWorkspace() {
             }
           }}
           onMouseMove={(event) => {
-            if (isExpandMode) {
+            if (isDrawMode && isDrawPainting) {
+              continueDrawPainting(event.clientX, event.clientY);
+            } else if (isExpandMode) {
               // No drag behavior in expand mode
             } else if (isDeleteMode) {
               handleDeleteDragMove(event);
@@ -883,7 +1010,9 @@ function HexBattleMapWorkspace() {
             }
           }}
           onMouseUp={(event) => {
-            if (isExpandMode) {
+            if (isDrawMode && isDrawPainting) {
+              stopDrawPainting();
+            } else if (isExpandMode) {
               handleExpandClickEnd(event);
             } else if (isDeleteMode) {
               handleDeleteDragEnd();
@@ -892,7 +1021,9 @@ function HexBattleMapWorkspace() {
             }
           }}
           onMouseLeave={() => {
-            if (isExpandMode) {
+            if (isDrawMode && isDrawPainting) {
+              stopDrawPainting();
+            } else if (isExpandMode) {
               setExpandClickStart(null);
             } else if (isDeleteMode) {
               handleDeleteDragEnd();

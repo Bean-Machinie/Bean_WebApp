@@ -13,6 +13,12 @@
   font-size: 0.85rem;
 }
 
+.battlemap-workspace__mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .hex-workspace__main {
   flex: 1;
   position: relative;
@@ -134,9 +140,22 @@
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 
+.battlemap-workspace__widget-template--hex.is-draw-mode {
+  cursor: pointer;
+}
+
 .battlemap-workspace__widget-template--hex:hover {
   transform: scale(1.08);
   filter: brightness(1.06);
+}
+
+.battlemap-workspace__widget-template--hex.is-selected {
+  box-shadow: 0 0 0 2px var(--primary);
+  filter: brightness(1.08);
+}
+
+.battlemap-workspace__widget-template--hex.is-selected .battlemap-workspace__widget-template-inner--hex {
+  filter: brightness(1.08);
 }
 
 .battlemap-workspace__widget-template-inner--hex {

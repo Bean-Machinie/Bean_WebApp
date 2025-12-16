@@ -44,6 +44,12 @@
   flex: 1;
 }
 
+.battlemap-workspace__mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .battlemap-workspace__tiles-header {
   padding-bottom: 0.25rem;
   border-bottom: 1px solid var(--sidebar-border);
@@ -318,6 +324,10 @@
   transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, filter 0.12s ease;
 }
 
+.battlemap-workspace__widget-template.is-draw-mode {
+  cursor: pointer;
+}
+
 .battlemap-workspace__widget-template-inner {
   width: 100%;
   height: 100%;
@@ -337,6 +347,11 @@
   transform: scale(1.015);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
   filter: brightness(1.04);
+}
+
+.battlemap-workspace__widget-template.is-selected {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  filter: brightness(1.08);
 }
 
 
