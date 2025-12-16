@@ -81,11 +81,7 @@ function BattleMapWorkspace() {
     return map;
   }, []);
 
-  const [allowedCells, setAllowedCells] = useState<SquareCell[]>(() => {
-    if (squareConfig.allowedSquareCells && squareConfig.allowedSquareCells.length > 0) {
-      return squareConfig.allowedSquareCells;
-    }
-
+  const buildDefaultSquareCells = useCallback(() => {
     const cells: SquareCell[] = [];
     for (let y = 0; y < gridRows; y += 1) {
       for (let x = 0; x < gridColumns; x += 1) {
@@ -93,6 +89,13 @@ function BattleMapWorkspace() {
       }
     }
     return cells;
+  }, [gridColumns, gridRows]);
+
+  const [allowedCells, setAllowedCells] = useState<SquareCell[]>(() => {
+    if (squareConfig.allowedSquareCells && squareConfig.allowedSquareCells.length > 0) {
+      return squareConfig.allowedSquareCells;
+    }
+    return buildDefaultSquareCells();
   });
 
   const gridBounds = useMemo(() => {
@@ -160,10 +163,40 @@ function BattleMapWorkspace() {
   const hasCenteredRef = useRef(false);
   const lastBoundsRef = useRef(gridBounds);
   const exportImageCacheRef = useRef<Map<string, string>>(new Map());
+  const saveBufferRef = useRef<BattleMapConfig | null>(null);
+  const saveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
+  const hasUnsavedChangesRef = useRef(false);
+  const hasHydratedConfigRef = useRef(false);
+  const lastHydratedVersionRef = useRef<number | null>(null);
+  const lastHydratedProjectRef = useRef<string | undefined>(project?.id);
 
-  const persistWidgets = useCallback(
-    async (updatedWidgets: BattleMapWidget[], currentAllowedCells: SquareCell[]) => {
-      const nextConfig: BattleMapConfig = {
+  const flushPendingSave = useCallback(async () => {
+    if (saveInFlightRef.current || !saveBufferRef.current) return;
+    const payload = saveBufferRef.current;
+    saveBufferRef.current = null;
+    saveInFlightRef.current = true;
+    let failed = false;
+
+    try {
+      await saveConfig(payload);
+    } catch (err) {
+      console.error('Failed to save battle map', err);
+      failed = true;
+    } finally {
+      saveInFlightRef.current = false;
+      if (saveBufferRef.current) {
+        void flushPendingSave();
+      } else if (!failed) {
+        hasUnsavedChangesRef.current = false;
+      }
+    }
+  }, [saveConfig]);
+
+  const queueSave = useCallback(
+    (updatedWidgets: BattleMapWidget[], currentAllowedCells: SquareCell[]) => {
+      hasUnsavedChangesRef.current = true;
+      saveBufferRef.current = {
         gridType: 'square',
         gridColumns,
         gridRows,
@@ -174,19 +207,49 @@ function BattleMapWorkspace() {
         updated_at: config.updated_at,
       };
 
-      await saveConfig(nextConfig);
+      if (saveThrottleRef.current) {
+        clearTimeout(saveThrottleRef.current);
+      }
+
+      saveThrottleRef.current = setTimeout(() => {
+        saveThrottleRef.current = null;
+        flushPendingSave();
+      }, 80);
     },
-    [cellSize, config.updated_at, config.version, gridColumns, gridRows, saveConfig],
+    [cellSize, config.updated_at, config.version, flushPendingSave, gridColumns, gridRows],
   );
 
   useEffect(() => {
-    if (config.gridType === 'square') {
-      setWidgets(config.widgets ?? []);
-      if (config.allowedSquareCells && config.allowedSquareCells.length > 0) {
-        setAllowedCells(config.allowedSquareCells);
-      }
+    const projectChanged = project?.id && project?.id !== lastHydratedProjectRef.current;
+    if (config.gridType !== 'square') return;
+    const incomingVersion = config.version ?? 0;
+    const shouldHydrate =
+      projectChanged ||
+      !hasHydratedConfigRef.current ||
+      (!hasUnsavedChangesRef.current && incomingVersion >= (lastHydratedVersionRef.current ?? -1));
+
+    if (!shouldHydrate) return;
+
+    setWidgets(config.widgets ?? []);
+    if (config.allowedSquareCells && config.allowedSquareCells.length > 0) {
+      setAllowedCells(config.allowedSquareCells);
+    } else if (projectChanged || !hasHydratedConfigRef.current) {
+      setAllowedCells(buildDefaultSquareCells());
     }
-  }, [config]);
+
+    hasHydratedConfigRef.current = true;
+    lastHydratedVersionRef.current = incomingVersion;
+    lastHydratedProjectRef.current = project?.id;
+  }, [buildDefaultSquareCells, config, project?.id]);
+
+  useEffect(
+    () => () => {
+      if (saveThrottleRef.current) {
+        clearTimeout(saveThrottleRef.current);
+      }
+    },
+    [],
+  );
 
   const toWorldPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -289,7 +352,7 @@ function BattleMapWorkspace() {
         };
 
         const next = [...current, newWidget];
-        persistWidgets(next, allowedCells);
+        queueSave(next, allowedCells);
         placed = true;
         return next;
       });
@@ -299,7 +362,7 @@ function BattleMapWorkspace() {
         setStatusMessage('Painted tile.');
       }
     },
-    [allowedCells, isDrawMode, isFootprintAllowed, persistWidgets, selectedDrawTileId, tileMap],
+    [allowedCells, isDrawMode, isFootprintAllowed, queueSave, selectedDrawTileId, tileMap],
   );
 
   const getPayloadSize = useCallback((payload: DragPayload): { cols: number; rows: number } => {
@@ -325,11 +388,11 @@ function BattleMapWorkspace() {
     (widgetId: string) => {
       const nextWidgets = widgets.filter((widget) => widget.id !== widgetId);
       setWidgets(nextWidgets);
-      persistWidgets(nextWidgets, allowedCells);
+      queueSave(nextWidgets, allowedCells);
       setSelectedWidgetId(null);
       setStatusMessage('Tile deleted.');
     },
-    [allowedCells, persistWidgets, widgets],
+    [allowedCells, queueSave, widgets],
   );
 
   const deleteCellAtPoint = useCallback(
@@ -346,24 +409,6 @@ function BattleMapWorkspace() {
       }
     },
     [handleDelete, pointToCell, toWorldPoint, widgets],
-  );
-
-  const persistAllowedCells = useCallback(
-    async (cells: SquareCell[], currentWidgets: BattleMapWidget[]) => {
-      const nextConfig: BattleMapConfig = {
-        gridType: 'square',
-        gridColumns,
-        gridRows,
-        cellSize,
-        widgets: currentWidgets,
-        allowedSquareCells: cells,
-        version: config.version,
-        updated_at: config.updated_at,
-      };
-
-      await saveConfig(nextConfig);
-    },
-    [cellSize, config.updated_at, config.version, gridColumns, gridRows, saveConfig],
   );
 
   const addCellAtPoint = useCallback(
@@ -387,14 +432,14 @@ function BattleMapWorkspace() {
       setStatusMessage('Saving expanded grid...');
 
       try {
-        await persistAllowedCells(newCells, widgets);
-        setStatusMessage('Grid cell added and saved.');
+        queueSave(widgets, newCells);
+        setStatusMessage('Grid cell added (saving...).');
       } catch (error) {
         console.error('Failed to save expanded grid:', error);
         setStatusMessage('Failed to save grid expansion!');
       }
     },
-    [allowedCells, persistAllowedCells, pointToCell, toWorldPoint, widgets],
+    [allowedCells, pointToCell, queueSave, toWorldPoint, widgets],
   );
 
   const isPointInsideDeleteZone = useCallback(
@@ -521,7 +566,7 @@ function BattleMapWorkspace() {
             };
             const nextWidgets = [...widgets, newWidget];
             setWidgets(nextWidgets);
-            persistWidgets(nextWidgets, allowedCells);
+            queueSave(nextWidgets, allowedCells);
             setStatusMessage('Placed tile on grid.');
           }
         } else {
@@ -536,7 +581,7 @@ function BattleMapWorkspace() {
                 : widget,
             );
             setWidgets(nextWidgets);
-            persistWidgets(nextWidgets, allowedCells);
+            queueSave(nextWidgets, allowedCells);
             setStatusMessage('Moved tile.');
           }
         }
@@ -571,7 +616,7 @@ function BattleMapWorkspace() {
     hoverCell,
     handleDelete,
     isFootprintAllowed,
-    persistWidgets,
+    queueSave,
     pointToCell,
     findCollision,
     getPayloadSize,

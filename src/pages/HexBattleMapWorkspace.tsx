@@ -168,39 +168,96 @@ function HexBattleMapWorkspace() {
   const hasCenteredRef = useRef(false);
   const lastBoundsRef = useRef(gridBounds);
   const exportImageCacheRef = useRef<Map<string, string>>(new Map());
+  const saveBufferRef = useRef<BattleMapConfig | null>(null);
+  const saveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
+  const hasUnsavedChangesRef = useRef(false);
+  const hasHydratedConfigRef = useRef(false);
+  const lastHydratedVersionRef = useRef<number | null>(null);
+  const lastHydratedProjectRef = useRef<string | undefined>(project?.id);
 
-  const persistHexWidgets = useCallback(
-    async (widgets: HexWidget[]) => {
-      const nextConfig: BattleMapConfig = {
+  const flushPendingSave = useCallback(async () => {
+    if (saveInFlightRef.current || !saveBufferRef.current) return;
+    const payload = saveBufferRef.current;
+    saveBufferRef.current = null;
+    saveInFlightRef.current = true;
+    let failed = false;
+
+    try {
+      await saveConfig(payload);
+    } catch (err) {
+      console.error('Failed to save hex battle map', err);
+      failed = true;
+    } finally {
+      saveInFlightRef.current = false;
+      if (saveBufferRef.current) {
+        void flushPendingSave();
+      } else if (!failed) {
+        hasUnsavedChangesRef.current = false;
+      }
+    }
+  }, [saveConfig]);
+
+  const queueSave = useCallback(
+    (widgets: HexWidget[]) => {
+      hasUnsavedChangesRef.current = true;
+      saveBufferRef.current = {
         gridType: 'hex',
         gridColumns: gridRadius * 2 - 1,
         gridRows: gridRadius * 2 - 1,
         cellSize: hexConfig.cellSize || hexSettings.hexSize,
         widgets: [],
-        hexSettings: hexSettings,
+        hexSettings,
         hexWidgets: widgets,
         allowedHexCells: allowedCells,
         version: hexConfig.version,
         updated_at: hexConfig.updated_at,
       };
 
-      await saveConfig(nextConfig);
+      if (saveThrottleRef.current) {
+        clearTimeout(saveThrottleRef.current);
+      }
+
+      saveThrottleRef.current = setTimeout(() => {
+        saveThrottleRef.current = null;
+        flushPendingSave();
+      }, 80);
     },
-    [allowedCells, gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, saveConfig],
+    [allowedCells, flushPendingSave, gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings],
   );
 
   useEffect(() => {
+    const projectChanged = project?.id && project?.id !== lastHydratedProjectRef.current;
     if (config.gridType !== 'hex') return;
+    const incomingVersion = config.version ?? 0;
+    const shouldHydrate =
+      projectChanged ||
+      !hasHydratedConfigRef.current ||
+      (!hasUnsavedChangesRef.current && incomingVersion >= (lastHydratedVersionRef.current ?? -1));
+
+    if (!shouldHydrate) return;
+
     setHexWidgets(config.hexWidgets ?? []);
 
     if (config.allowedHexCells && config.allowedHexCells.length > 0) {
       setAllowedCells(config.allowedHexCells);
-      return;
+    } else if (projectChanged || !hasHydratedConfigRef.current) {
+      setAllowedCells(buildFilledHexagon(gridRadius));
     }
 
-    // Rebuild allowed cells from the saved grid radius when none were persisted.
-    setAllowedCells(buildFilledHexagon(gridRadius));
-  }, [buildFilledHexagon, config, gridRadius]);
+    hasHydratedConfigRef.current = true;
+    lastHydratedVersionRef.current = incomingVersion;
+    lastHydratedProjectRef.current = project?.id;
+  }, [buildFilledHexagon, config, gridRadius, project?.id]);
+
+  useEffect(
+    () => () => {
+      if (saveThrottleRef.current) {
+        clearTimeout(saveThrottleRef.current);
+      }
+    },
+    [],
+  );
 
   const placeDrawHexAtCell = useCallback(
     (hex: Cube) => {
@@ -232,7 +289,7 @@ function HexBattleMapWorkspace() {
         };
 
         const next = [...current, newWidget];
-        persistHexWidgets(next);
+        queueSave(next);
         placed = true;
         return next;
       });
@@ -242,7 +299,7 @@ function HexBattleMapWorkspace() {
         setStatusMessage('Painted tile.');
       }
     },
-    [allowedCells, isDrawMode, persistHexWidgets, selectedDrawTileId, tileMap],
+    [allowedCells, isDrawMode, queueSave, selectedDrawTileId, tileMap],
   );
 
   const toWorldPoint = useCallback(
@@ -273,11 +330,11 @@ function HexBattleMapWorkspace() {
     (widgetId: string) => {
       const nextWidgets = hexWidgets.filter((widget) => widget.id !== widgetId);
       setHexWidgets(nextWidgets);
-      persistHexWidgets(nextWidgets);
+      queueSave(nextWidgets);
       setSelectedWidgetId(null);
       setStatusMessage('Tile deleted.');
     },
-    [hexWidgets, persistHexWidgets],
+    [hexWidgets, queueSave],
   );
 
   const deleteHexAtPoint = useCallback(
@@ -465,7 +522,7 @@ function HexBattleMapWorkspace() {
             };
             const nextWidgets = [...hexWidgets, newWidget];
             setHexWidgets(nextWidgets);
-            persistHexWidgets(nextWidgets);
+            queueSave(nextWidgets);
             setStatusMessage('Placed tile on hex grid.');
           }
         } else {
@@ -482,7 +539,7 @@ function HexBattleMapWorkspace() {
               return widget;
             });
             setHexWidgets(nextWidgets);
-            persistHexWidgets(nextWidgets);
+            queueSave(nextWidgets);
             setStatusMessage('Swapped tiles.');
           } else if (!isSameSpot) {
             const nextWidgets = hexWidgets.map((widget) =>
@@ -491,7 +548,7 @@ function HexBattleMapWorkspace() {
                 : widget,
             );
             setHexWidgets(nextWidgets);
-            persistHexWidgets(nextWidgets);
+            queueSave(nextWidgets);
             setStatusMessage('Moved tile.');
           }
         }
@@ -525,7 +582,7 @@ function HexBattleMapWorkspace() {
     handleDelete,
     hexWidgets,
     hoverHex,
-    persistHexWidgets,
+    queueSave,
     setIsDeleteDrag,
     toWorldPoint,
     updateDeleteZoneHighlight,
