@@ -15,18 +15,4 @@ export const hexTiles: HexTileDefinition[] = [
     image: '/assets/widgets/gravel_tile.webp',
     isFixed: true,
   },
-  {
-    id: 'hex-gravel',
-    gridType: 'hex',
-    label: 'Hex Gravel',
-    image: '/assets/widgets/gravel_tile.webp',
-    isFixed: true,
-  },
-  {
-    id: 'hex-gravel',
-    gridType: 'hex',
-    label: 'Hex Gravel',
-    image: '/assets/widgets/gravel_tile.webp',
-    isFixed: true,
-  },
 ];

@@ -523,40 +523,24 @@ function NewProjectPanel({
                     </>
                   ) : (
                     <>
-                      <div className="new-project-form__grid">
-                        <div className="new-project-form__group">
-                          <label className="new-project-form__label" htmlFor="battlemap-columns">
-                            Radius (hexes from center)
-                          </label>
-                          <input
-                            id="battlemap-columns"
-                            type="number"
-                            min="1"
-                            max="50"
-                            value={battleMapColumns}
-                            onChange={(event) => {
-                              const value = Number(event.target.value);
-                              setBattleMapColumns(value);
-                              setBattleMapRows(value);
-                            }}
-                            className="new-project-form__input"
-                            required
-                          />
-                        </div>
-                        <div className="new-project-form__group">
-                          <label className="new-project-form__label" htmlFor="battlemap-hex-size">
-                            Hex Size (px)
-                          </label>
-                          <input
-                            id="battlemap-hex-size"
-                            type="number"
-                            min={fixedHexSize}
-                            max={fixedHexSize}
-                            value={fixedHexSize}
-                            readOnly
-                            className="new-project-form__input"
-                          />
-                        </div>
+                      <div className="new-project-form__group">
+                        <label className="new-project-form__label" htmlFor="battlemap-columns">
+                          Radius (hexes from center)
+                        </label>
+                        <input
+                          id="battlemap-columns"
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={battleMapColumns}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            setBattleMapColumns(value);
+                            setBattleMapRows(value);
+                          }}
+                          className="new-project-form__input"
+                          required
+                        />
                       </div>
                       <p className="new-project-form__optional">
                         Hex grids are hexagonal; radius controls size. Orientation is flat-top.

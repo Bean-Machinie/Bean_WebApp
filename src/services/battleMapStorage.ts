@@ -31,7 +31,7 @@ type StorageMode = 'advanced' | 'legacy';
 let hasCheckedAdvancedStorage = false;
 let supportsAdvancedStorageCache = true;
 let hasIsFixedColumn = true;
-let hasAllowedCellsColumn = true;
+let hasAllowedCellsColumn = false;
 
 const isMissingTableError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -74,16 +74,19 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       Number((config as BattleMapConfig)?.hexSettings?.hexSize) ||
       DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings?.hexSize ||
       DEFAULT_HEX_BATTLE_MAP_CONFIG.cellSize;
-    const hexRadius = 3;
+    const orientation =
+      (config as BattleMapConfig)?.hexSettings?.orientation === 'pointy' ? 'pointy' : 'flat';
+    const gridColumns = Number(config?.gridColumns) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns;
+    const gridRows = Number(config?.gridRows) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows;
     const hexSettings = {
       hexSize,
-      orientation: 'flat' as const,
+      orientation,
     };
 
     return {
       gridType: 'hex',
-      gridColumns: hexRadius * 2 - 1,
-      gridRows: hexRadius * 2 - 1,
+      gridColumns,
+      gridRows,
       cellSize: Number(config?.cellSize) || hexSize,
       widgets: [],
       hexSettings,

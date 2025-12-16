@@ -40,16 +40,11 @@ function HexBattleMapWorkspace() {
     config.gridType === 'hex' ? config : DEFAULT_HEX_BATTLE_MAP_CONFIG;
   const hexSettings =
     hexConfig.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings ?? { hexSize: 80, orientation: 'pointy' as const };
-  const gridRadius = Math.max(
-    1,
-    Math.round(
-      Math.max(
-        hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
-        hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
-        DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
-      ) / 2,
-    ),
+  const widestHexSpan = Math.max(
+    hexConfig.gridColumns || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns,
+    hexConfig.gridRows || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows,
   );
+  const gridRadius = Math.max(1, Math.ceil(widestHexSpan / 2));
 
   const [hexWidgets, setHexWidgets] = useState<HexWidget[]>(hexConfig.hexWidgets ?? []);
   const [hoverHex, setHoverHex] = useState<Cube | null>(null);
@@ -87,20 +82,24 @@ function HexBattleMapWorkspace() {
     [hexSettings.hexSize, hexSettings.orientation],
   );
 
-  const [allowedCells, setAllowedCells] = useState<Cube[]>(() => {
-    if (hexConfig.allowedHexCells && hexConfig.allowedHexCells.length > 0) {
-      return hexConfig.allowedHexCells;
-    }
+  const buildFilledHexagon = useCallback((radius: number) => {
     const cells: Cube[] = [];
-    for (let q = -gridRadius + 1; q <= gridRadius - 1; q += 1) {
-      for (let r = -gridRadius + 1; r <= gridRadius - 1; r += 1) {
+    for (let q = -radius + 1; q <= radius - 1; q += 1) {
+      for (let r = -radius + 1; r <= radius - 1; r += 1) {
         const s = -q - r;
-        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) < gridRadius) {
+        if (Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) < radius) {
           cells.push({ q, r, s });
         }
       }
     }
     return cells;
+  }, []);
+
+  const [allowedCells, setAllowedCells] = useState<Cube[]>(() => {
+    if (hexConfig.allowedHexCells && hexConfig.allowedHexCells.length > 0) {
+      return hexConfig.allowedHexCells;
+    }
+    return buildFilledHexagon(gridRadius);
   });
 
   const gridBounds = useMemo(() => {
@@ -187,13 +186,17 @@ function HexBattleMapWorkspace() {
   );
 
   useEffect(() => {
-    if (config.gridType === 'hex') {
-      setHexWidgets(config.hexWidgets ?? []);
-      if (config.allowedHexCells && config.allowedHexCells.length > 0) {
-        setAllowedCells(config.allowedHexCells);
-      }
+    if (config.gridType !== 'hex') return;
+    setHexWidgets(config.hexWidgets ?? []);
+
+    if (config.allowedHexCells && config.allowedHexCells.length > 0) {
+      setAllowedCells(config.allowedHexCells);
+      return;
     }
-  }, [config]);
+
+    // Rebuild allowed cells from the saved grid radius when none were persisted.
+    setAllowedCells(buildFilledHexagon(gridRadius));
+  }, [buildFilledHexagon, config, gridRadius]);
 
   const toWorldPoint = useCallback(
     (clientX: number, clientY: number) => {
