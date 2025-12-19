@@ -80,6 +80,10 @@
   cursor: grabbing;
 }
 
+.hex-workspace__tile.is-drag-origin {
+  opacity: 0.4;
+}
+
 .hex-workspace__tile-border {
   fill: none;
   stroke: color-mix(in srgb, var(--text) 30%, transparent);

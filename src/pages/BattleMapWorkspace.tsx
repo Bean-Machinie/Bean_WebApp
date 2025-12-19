@@ -1143,11 +1143,13 @@ function BattleMapWorkspace() {
                 const tile = tileMap.get(widget.tileId ?? '');
                 const width = cellSize * (widget.w ?? 1);
                 const height = cellSize * (widget.h ?? 1);
+                const isDragOrigin =
+                  dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
 
                 return (
                   <g
                     key={widget.id}
-                    className="square-workspace__tile"
+                    className={`square-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
                     onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
                   >
                     {tile || widget.appearance?.backgroundImageUrl ? (

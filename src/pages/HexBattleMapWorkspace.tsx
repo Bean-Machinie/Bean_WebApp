@@ -1144,11 +1144,13 @@ function HexBattleMapWorkspace() {
                 const minY = Math.min(...corners.map((corner) => corner.y));
                 const maxY = Math.max(...corners.map((corner) => corner.y));
                 const tile = tileMap.get(widget.tileId);
+                const isDragOrigin =
+                  dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
 
                 return (
                   <g
                     key={widget.id}
-                    className="hex-workspace__tile"
+                    className={`hex-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
                     onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
                   >
                     {tile ? (
