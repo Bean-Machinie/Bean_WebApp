@@ -326,17 +326,47 @@ function BattleMapWorkspace() {
       const key = `${cell.x}-${cell.y}`;
       if (lastPaintedCellRef.current === key) return;
 
+      const overlapsFootprint = (
+        widget: BattleMapWidget,
+        origin: SquareCell,
+        width: number,
+        height: number,
+      ) => {
+        const otherWidth = Math.max(1, widget.w ?? 1);
+        const otherHeight = Math.max(1, widget.h ?? 1);
+        const overlapX = origin.x < widget.x + otherWidth && origin.x + width > widget.x;
+        const overlapY = origin.y < widget.y + otherHeight && origin.y + height > widget.y;
+        return overlapX && overlapY;
+      };
+
       let placed = false;
       setWidgets((current) => {
-        const collision = current.find((widget) => {
-          const otherWidth = Math.max(1, widget.w ?? 1);
-          const otherHeight = Math.max(1, widget.h ?? 1);
-          const overlapX = cell.x < widget.x + otherWidth && cell.x + cols > widget.x;
-          const overlapY = cell.y < widget.y + otherHeight && cell.y + rows > widget.y;
-          return overlapX && overlapY;
-        });
+        const collision = current.find((widget) => overlapsFootprint(widget, cell, cols, rows));
+        if (collision) {
+          const otherCollision = current.find(
+            (widget) => widget.id !== collision.id && overlapsFootprint(widget, cell, cols, rows),
+          );
+          if (otherCollision) return current;
 
-        if (collision) return current;
+          const next = current.map((widget) =>
+            widget.id === collision.id
+              ? {
+                  ...widget,
+                  x: cell.x,
+                  y: cell.y,
+                  w: cols,
+                  h: rows,
+                  tileId: tile.id,
+                  appearance: {
+                    backgroundImageUrl: tile.image,
+                  },
+                }
+              : widget,
+          );
+          queueSave(next, allowedCells);
+          placed = true;
+          return next;
+        }
 
         const newWidget: BattleMapWidget = {
           id: generateClientId(),
@@ -743,6 +773,9 @@ function BattleMapWorkspace() {
 
   const handleWidgetPointerDown = useCallback(
     (widget: BattleMapWidget, event: ReactMouseEvent<SVGGElement>) => {
+      if (isSpaceHeld || isDrawMode) {
+        return;
+      }
       event.preventDefault();
       if (isDeleteMode) {
         handleDelete(widget.id);
@@ -754,7 +787,7 @@ function BattleMapWorkspace() {
       setDragPosition({ x: event.clientX, y: event.clientY });
       setStatusMessage(null);
     },
-    [handleDelete, isDeleteMode],
+    [handleDelete, isDeleteMode, isDrawMode, isSpaceHeld],
   );
 
   const startDrawPainting = useCallback(
@@ -972,6 +1005,11 @@ function BattleMapWorkspace() {
                 setHoverVisible(false);
                 lastPaintedCellRef.current = null;
               }}
+              onKeyDown={(event) => {
+                if (event.code === 'Space') {
+                  event.preventDefault();
+                }
+              }}
             >
               {isDrawMode ? 'Draw Mode: ON' : 'Draw Mode'}
             </button>
@@ -1054,7 +1092,9 @@ function BattleMapWorkspace() {
           ref={viewportRef}
           className={`battlemap-workspace__viewport square-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
           onMouseDown={(event) => {
-            if (isDrawMode && !isSpaceHeld) {
+            if (isSpaceHeld) {
+              handlePanStart(event);
+            } else if (isDrawMode) {
               startDrawPainting(event.clientX, event.clientY);
             } else if (isExpandMode) {
               handleExpandClickStart(event);
@@ -1065,7 +1105,9 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseMove={(event) => {
-            if (isDrawMode && isDrawPainting) {
+            if (isPanning) {
+              handlePanMove(event);
+            } else if (isDrawMode && isDrawPainting) {
               continueDrawPainting(event.clientX, event.clientY);
             } else if (isExpandMode) {
               // No drag behavior in expand mode
@@ -1076,7 +1118,9 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseUp={(event) => {
-            if (isDrawMode && isDrawPainting) {
+            if (isPanning) {
+              stopPan();
+            } else if (isDrawMode && isDrawPainting) {
               stopDrawPainting();
             } else if (isExpandMode) {
               handleExpandClickEnd(event);
@@ -1087,7 +1131,9 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseLeave={() => {
-            if (isDrawMode && isDrawPainting) {
+            if (isPanning) {
+              stopPan();
+            } else if (isDrawMode && isDrawPainting) {
               stopDrawPainting();
             } else if (isExpandMode) {
               setExpandClickStart(null);
@@ -1177,15 +1223,16 @@ function BattleMapWorkspace() {
             className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}${isDeleteMode ? ' is-toggle-active' : ''}`}
             aria-label="Drop tiles here to delete them"
             role="presentation"
-            onClick={() => {
-              setIsDeleteMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setIsExpandMode(false);
-                  setStatusMessage('Delete mode enabled.');
-                } else {
-                  setStatusMessage('Delete mode disabled.');
-                }
+          onClick={() => {
+            setIsDeleteMode((prev) => {
+              const next = !prev;
+              if (next) {
+                setIsExpandMode(false);
+                setIsDrawMode(false);
+                setStatusMessage('Delete mode enabled.');
+              } else {
+                setStatusMessage('Delete mode disabled.');
+              }
                 setIsDeleteDrag(false);
                 return next;
               });
@@ -1253,12 +1300,18 @@ function BattleMapWorkspace() {
                 const next = !prev;
                 if (next) {
                   setIsDeleteMode(false);
+                  setIsDrawMode(false);
                   setStatusMessage('Expand Grid Mode enabled. Click to add cells.');
                 } else {
                   setStatusMessage('Expand Grid Mode disabled.');
                 }
                 return next;
               });
+            }}
+            onKeyDown={(event) => {
+              if (event.code === 'Space') {
+                event.preventDefault();
+              }
             }}
           >
             {isExpandMode ? 'Expand Mode: ON' : 'Expand Grid'}

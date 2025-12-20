@@ -273,8 +273,23 @@ function HexBattleMapWorkspace() {
 
       let placed = false;
       setHexWidgets((current) => {
-        const occupied = current.some((widget) => widget.q === hex.q && widget.r === hex.r);
-        if (occupied) return current;
+        const existing = current.find((widget) => widget.q === hex.q && widget.r === hex.r);
+        if (existing) {
+          const next = current.map((widget) =>
+            widget.id === existing.id
+              ? {
+                  ...widget,
+                  tileId: tile.id,
+                  appearance: {
+                    backgroundImageUrl: tile.image,
+                  },
+                }
+              : widget,
+          );
+          queueSave(next);
+          placed = true;
+          return next;
+        }
 
         const newWidget: HexWidget = {
           id: generateClientId(),
@@ -705,6 +720,9 @@ function HexBattleMapWorkspace() {
 
   const handleWidgetPointerDown = useCallback(
     (widget: HexWidget, event: ReactMouseEvent<SVGGElement>) => {
+      if (isSpaceHeld || isDrawMode) {
+        return;
+      }
       event.preventDefault();
       if (isDeleteMode) {
         handleDelete(widget.id);
@@ -716,7 +734,7 @@ function HexBattleMapWorkspace() {
       setDragPosition({ x: event.clientX, y: event.clientY });
       setStatusMessage(null);
     },
-    [handleDelete, isDeleteMode],
+    [handleDelete, isDeleteMode, isDrawMode, isSpaceHeld],
   );
 
   const startDrawPainting = useCallback(
@@ -978,6 +996,11 @@ function HexBattleMapWorkspace() {
                 setHoverVisible(false);
                 lastPaintedHexRef.current = null;
               }}
+              onKeyDown={(event) => {
+                if (event.code === 'Space') {
+                  event.preventDefault();
+                }
+              }}
             >
               {isDrawMode ? 'Draw Mode: ON' : 'Draw Mode'}
             </button>
@@ -1045,7 +1068,9 @@ function HexBattleMapWorkspace() {
           ref={viewportRef}
           className={`battlemap-workspace__viewport hex-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
           onMouseDown={(event) => {
-            if (isDrawMode && !isSpaceHeld) {
+            if (isSpaceHeld) {
+              handlePanStart(event);
+            } else if (isDrawMode) {
               startDrawPainting(event.clientX, event.clientY);
             } else if (isExpandMode) {
               handleExpandClickStart(event);
@@ -1056,7 +1081,9 @@ function HexBattleMapWorkspace() {
             }
           }}
           onMouseMove={(event) => {
-            if (isDrawMode && isDrawPainting) {
+            if (isPanning) {
+              handlePanMove(event);
+            } else if (isDrawMode && isDrawPainting) {
               continueDrawPainting(event.clientX, event.clientY);
             } else if (isExpandMode) {
               // No drag behavior in expand mode
@@ -1067,7 +1094,9 @@ function HexBattleMapWorkspace() {
             }
           }}
           onMouseUp={(event) => {
-            if (isDrawMode && isDrawPainting) {
+            if (isPanning) {
+              stopPan();
+            } else if (isDrawMode && isDrawPainting) {
               stopDrawPainting();
             } else if (isExpandMode) {
               handleExpandClickEnd(event);
@@ -1078,7 +1107,9 @@ function HexBattleMapWorkspace() {
             }
           }}
           onMouseLeave={() => {
-            if (isDrawMode && isDrawPainting) {
+            if (isPanning) {
+              stopPan();
+            } else if (isDrawMode && isDrawPainting) {
               stopDrawPainting();
             } else if (isExpandMode) {
               setExpandClickStart(null);
@@ -1179,15 +1210,16 @@ function HexBattleMapWorkspace() {
             className={`battlemap-delete-panel${isDeleteZoneActive ? ' is-active' : ''}${isDeleteMode ? ' is-toggle-active' : ''}`}
             aria-label="Drop tiles here to delete them"
             role="presentation"
-            onClick={() => {
-              setIsDeleteMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setIsExpandMode(false);
-                  setStatusMessage('Delete mode enabled.');
-                } else {
-                  setStatusMessage('Delete mode disabled.');
-                }
+          onClick={() => {
+            setIsDeleteMode((prev) => {
+              const next = !prev;
+              if (next) {
+                setIsExpandMode(false);
+                setIsDrawMode(false);
+                setStatusMessage('Delete mode enabled.');
+              } else {
+                setStatusMessage('Delete mode disabled.');
+              }
                 setIsDeleteDrag(false);
                 return next;
               });
@@ -1267,12 +1299,18 @@ function HexBattleMapWorkspace() {
                 const next = !prev;
                 if (next) {
                   setIsDeleteMode(false);
+                  setIsDrawMode(false);
                   setStatusMessage('Expand Hex Grid Mode enabled. Click to add tiles.');
                 } else {
                   setStatusMessage('Expand Hex Grid Mode disabled.');
                 }
                 return next;
               });
+            }}
+            onKeyDown={(event) => {
+              if (event.code === 'Space') {
+                event.preventDefault();
+              }
             }}
           >
             {isExpandMode ? 'Expand Mode: ON' : 'Expand Hex Grid'}
