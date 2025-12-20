@@ -7,7 +7,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'Dirt 1x1',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/stone_tile.webp',
+    image: '/assets/widgets/grass_tile.webp',
     isFixed: true,
   },
 ];
