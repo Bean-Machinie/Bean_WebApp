@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -162,9 +163,15 @@ function HexBattleMapWorkspace() {
   }, [allowedCells, geometry]);
 
   const viewportRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<SVGGElement>(null);
   const deleteZoneRef = useRef<HTMLDivElement>(null);
   const deleteZoneActiveRef = useRef(false);
   const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const isPanningRef = useRef(false);
+  const panRef = useRef({ x: 0, y: 0 });
+  const scaleRef = useRef(scale);
+  const transformRafRef = useRef<number | null>(null);
+  const pendingTransformRef = useRef<{ pan: { x: number; y: number }; scale: number } | null>(null);
   const hasCenteredRef = useRef(false);
   const lastBoundsRef = useRef(gridBounds);
   const exportImageCacheRef = useRef<Map<string, string>>(new Map());
@@ -317,17 +324,70 @@ function HexBattleMapWorkspace() {
     [allowedCells, isDrawMode, queueSave, selectedDrawTileId, tileMap],
   );
 
-  const toWorldPoint = useCallback(
-    (clientX: number, clientY: number) => {
-      const rect = viewportRef.current?.getBoundingClientRect();
-      if (!rect) return null;
-      return {
-        x: (clientX - rect.left - pan.x) / scale,
-        y: (clientY - rect.top - pan.y) / scale,
-      };
+  const scheduleTransform = useCallback(
+    (nextPan: { x: number; y: number }, nextScale = scaleRef.current) => {
+      panRef.current = nextPan;
+      pendingTransformRef.current = { pan: nextPan, scale: nextScale };
+
+      if (surfaceRef.current) {
+        surfaceRef.current.setAttribute(
+          'transform',
+          `translate(${nextPan.x} ${nextPan.y}) scale(${nextScale})`,
+        );
+      }
+
+      if (transformRafRef.current !== null) return;
+
+      transformRafRef.current = requestAnimationFrame(() => {
+        transformRafRef.current = null;
+        const pending = pendingTransformRef.current;
+        if (!pending || !surfaceRef.current) return;
+        surfaceRef.current.setAttribute(
+          'transform',
+          `translate(${pending.pan.x} ${pending.pan.y}) scale(${pending.scale})`,
+        );
+      });
     },
-    [pan.x, pan.y, scale],
+    [],
   );
+
+  const commitPan = useCallback(
+    (nextPan: { x: number; y: number }, nextScale?: number) => {
+      scheduleTransform(nextPan, nextScale ?? scaleRef.current);
+      setPan(nextPan);
+    },
+    [scheduleTransform],
+  );
+
+  useEffect(
+    () => () => {
+      if (transformRafRef.current !== null) {
+        cancelAnimationFrame(transformRafRef.current);
+      }
+    },
+    [],
+  );
+
+  useLayoutEffect(() => {
+    scaleRef.current = scale;
+    scheduleTransform(panRef.current, scale);
+  }, [scale, scheduleTransform]);
+
+  useLayoutEffect(() => {
+    panRef.current = pan;
+    scheduleTransform(pan, scaleRef.current);
+  }, [pan, scheduleTransform]);
+
+  const toWorldPoint = useCallback((clientX: number, clientY: number) => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const currentPan = panRef.current;
+    const currentScale = scaleRef.current;
+    return {
+      x: (clientX - rect.left - currentPan.x) / currentScale,
+      y: (clientY - rect.top - currentPan.y) / currentScale,
+    };
+  }, []);
 
   const recenterGrid = useCallback((scaleOverride?: number) => {
     const rect = viewportRef.current?.getBoundingClientRect();
@@ -335,11 +395,11 @@ function HexBattleMapWorkspace() {
     const effectiveScale = scaleOverride ?? scale;
     const centerX = gridBounds.minX + gridBounds.width / 2;
     const centerY = gridBounds.minY + gridBounds.height / 2;
-    setPan({
+    commitPan({
       x: rect.width / 2 - centerX * effectiveScale,
       y: rect.height / 2 - centerY * effectiveScale,
     });
-  }, [gridBounds, scale]);
+  }, [commitPan, gridBounds, scale]);
 
   const handleDelete = useCallback(
     (widgetId: string) => {
@@ -608,25 +668,61 @@ function HexBattleMapWorkspace() {
       if (!isSpaceHeld) return;
       event.preventDefault();
       setIsPanning(true);
-      panStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+      isPanningRef.current = true;
+      panStartRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+      };
     },
-    [isSpaceHeld, pan.x, pan.y],
+    [isSpaceHeld],
   );
 
   const handlePanMove = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!isPanning || !panStartRef.current) return;
+      if (!isPanningRef.current || !panStartRef.current) return;
       const dx = event.clientX - panStartRef.current.x;
       const dy = event.clientY - panStartRef.current.y;
-      setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
+      scheduleTransform(
+        { x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy },
+        scaleRef.current,
+      );
     },
-    [isPanning],
+    [scheduleTransform],
   );
 
   const stopPan = useCallback(() => {
     setIsPanning(false);
+    isPanningRef.current = false;
     panStartRef.current = null;
+    setPan(panRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!isPanning) return;
+
+    const handleWindowMove = (event: MouseEvent) => {
+      if (!isPanningRef.current || !panStartRef.current) return;
+      const dx = event.clientX - panStartRef.current.x;
+      const dy = event.clientY - panStartRef.current.y;
+      scheduleTransform(
+        { x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy },
+        scaleRef.current,
+      );
+    };
+
+    const handleWindowUp = () => {
+      stopPan();
+    };
+
+    window.addEventListener('mousemove', handleWindowMove);
+    window.addEventListener('mouseup', handleWindowUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMove);
+      window.removeEventListener('mouseup', handleWindowUp);
+    };
+  }, [isPanning, scheduleTransform, stopPan]);
 
   const handleDeleteDragStart = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -681,27 +777,30 @@ function HexBattleMapWorkspace() {
 
   const handleWheelZoom = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
-      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.55 ;
       const nextScale = Math.min(2.5, Math.max(0.4, scale * zoomFactor));
       const rect = viewportRef.current?.getBoundingClientRect();
       if (!rect) {
         setScale(nextScale);
-        return;
+        scaleRef.current = nextScale;
+        scheduleTransform(panRef.current, nextScale);
+        return; 
       }
 
       const worldBefore = toWorldPoint(event.clientX, event.clientY);
       setScale(nextScale);
+      scaleRef.current = nextScale;
 
       if (worldBefore) {
         const screenX = event.clientX - rect.left;
         const screenY = event.clientY - rect.top;
-        setPan({
+        commitPan({
           x: screenX - worldBefore.x * nextScale,
           y: screenY - worldBefore.y * nextScale,
-        });
+        }, nextScale);
       }
     },
-    [scale, toWorldPoint],
+    [commitPan, scheduleTransform, toWorldPoint],
   );
 
   const handleTilePointerDown = useCallback(
@@ -1133,7 +1232,10 @@ function HexBattleMapWorkspace() {
                 );
               })}
             </defs>
-            <g transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}>
+            <g
+              ref={surfaceRef}
+              transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}
+            >
               {boundaryEdges.map((edge, index) => (
                 <line
                   key={`boundary-${index}`}
