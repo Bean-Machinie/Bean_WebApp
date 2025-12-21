@@ -66,11 +66,16 @@ function BattleMapWorkspace() {
   const [isDeleteDrag, setIsDeleteDrag] = useState(false);
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
   const [isExpandMode, setIsExpandMode] = useState(false);
-  const [expandClickStart, setExpandClickStart] = useState<{ x: number; y: number } | null>(null);
+  const [isExpandPainting, setIsExpandPainting] = useState(false);
+  const [isShrinkMode, setIsShrinkMode] = useState(false);
+  const [isShrinkPainting, setIsShrinkPainting] = useState(false);
   const [isDrawMode, setIsDrawMode] = useState(false);
   const [selectedDrawTileId, setSelectedDrawTileId] = useState<string | null>(null);
   const [isDrawPainting, setIsDrawPainting] = useState(false);
+  const [gridHoverCell, setGridHoverCell] = useState<SquareCell | null>(null);
+  const [gridHoverMode, setGridHoverMode] = useState<'expand' | 'shrink' | null>(null);
   const lastPaintedCellRef = useRef<string | null>(null);
+  const lastGridPaintedRef = useRef<string | null>(null);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, SquareTileDefinition>();
@@ -98,6 +103,10 @@ function BattleMapWorkspace() {
     }
     return buildDefaultSquareCells();
   });
+  const allowedCellSet = useMemo(
+    () => new Set(allowedCells.map((cell) => `${cell.x},${cell.y}`)),
+    [allowedCells],
+  );
 
   const gridBounds = useMemo(() => {
     if (!allowedCells.length) return null;
@@ -168,7 +177,6 @@ function BattleMapWorkspace() {
   const transformRafRef = useRef<number | null>(null);
   const pendingTransformRef = useRef<{ pan: { x: number; y: number }; scale: number } | null>(null);
   const hasCenteredRef = useRef(false);
-  const lastBoundsRef = useRef(gridBounds);
   const exportImageCacheRef = useRef<Map<string, string>>(new Map());
   const saveBufferRef = useRef<BattleMapConfig | null>(null);
   const saveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -349,11 +357,9 @@ function BattleMapWorkspace() {
   const isFootprintAllowed = useCallback(
     (origin: SquareCell, cols: number, rows: number) => {
       const footprint = buildFootprint(origin, cols, rows);
-      return footprint.every((cell) =>
-        allowedCells.some((allowed) => allowed.x === cell.x && allowed.y === cell.y),
-      );
+      return footprint.every((cell) => allowedCellSet.has(`${cell.x},${cell.y}`));
     },
-    [allowedCells, buildFootprint],
+    [allowedCellSet, buildFootprint],
   );
 
   const findCollision = useCallback(
@@ -371,6 +377,17 @@ function BattleMapWorkspace() {
     },
     [widgets],
   );
+
+  const doesWidgetOverlapCell = useCallback((widget: BattleMapWidget, cell: SquareCell) => {
+    const width = Math.max(1, widget.w ?? 1);
+    const height = Math.max(1, widget.h ?? 1);
+    return (
+      cell.x >= widget.x &&
+      cell.x < widget.x + width &&
+      cell.y >= widget.y &&
+      cell.y < widget.y + height
+    );
+  }, []);
 
   const placeDrawTileAtCell = useCallback(
     (cell: SquareCell) => {
@@ -502,34 +519,74 @@ function BattleMapWorkspace() {
   );
 
   const addCellAtPoint = useCallback(
-    async (clientX?: number, clientY?: number) => {
+    (clientX?: number, clientY?: number) => {
       if (clientX === undefined || clientY === undefined) return;
       const point = toWorldPoint(clientX, clientY);
       if (!point) return;
       const targetCell = pointToCell(point.x, point.y);
+      const key = `${targetCell.x},${targetCell.y}`;
 
-      const alreadyExists = allowedCells.some(
-        (cell) => cell.x === targetCell.x && cell.y === targetCell.y,
-      );
+      if (lastGridPaintedRef.current === key) return;
+      lastGridPaintedRef.current = key;
 
-      if (alreadyExists) {
-        setStatusMessage('Grid cell already exists at this location.');
-        return;
-      }
-
-      const newCells = [...allowedCells, targetCell];
-      setAllowedCells(newCells);
-      setStatusMessage('Saving expanded grid...');
-
-      try {
-        queueSave(widgets, newCells);
+      setAllowedCells((current) => {
+        const alreadyExists = current.some(
+          (cell) => cell.x === targetCell.x && cell.y === targetCell.y,
+        );
+        if (alreadyExists) {
+          return current;
+        }
+        const newCells = [...current, targetCell];
         setStatusMessage('Grid cell added (saving...).');
-      } catch (error) {
-        console.error('Failed to save expanded grid:', error);
-        setStatusMessage('Failed to save grid expansion!');
-      }
+        queueSave(widgets, newCells);
+        return newCells;
+      });
     },
-    [allowedCells, pointToCell, queueSave, toWorldPoint, widgets],
+    [pointToCell, queueSave, toWorldPoint, widgets],
+  );
+
+  const removeCellAtPoint = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (clientX === undefined || clientY === undefined) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) return;
+      const targetCell = pointToCell(point.x, point.y);
+      const key = `${targetCell.x},${targetCell.y}`;
+
+      if (lastGridPaintedRef.current === key) return;
+      lastGridPaintedRef.current = key;
+
+      setAllowedCells((current) => {
+        const exists = current.some(
+          (cell) => cell.x === targetCell.x && cell.y === targetCell.y,
+        );
+        if (!exists) {
+          return current;
+        }
+
+        const nextCells = current.filter(
+          (cell) => cell.x !== targetCell.x || cell.y !== targetCell.y,
+        );
+
+        setWidgets((currentWidgets) => {
+          const nextWidgets = currentWidgets.filter(
+            (widget) => !doesWidgetOverlapCell(widget, targetCell),
+          );
+          if (selectedWidgetId && currentWidgets.some((widget) => widget.id === selectedWidgetId)) {
+            const selectedStillExists = nextWidgets.some((widget) => widget.id === selectedWidgetId);
+            if (!selectedStillExists) {
+              setSelectedWidgetId(null);
+            }
+          }
+          setStatusMessage('Grid cell removed (saving...).');
+          queueSave(nextWidgets, nextCells);
+          return nextWidgets;
+        });
+
+        return nextCells;
+      });
+    },
+    [doesWidgetOverlapCell, pointToCell, queueSave, selectedWidgetId, toWorldPoint],
   );
 
   const isPointInsideDeleteZone = useCallback(
@@ -556,10 +613,9 @@ function BattleMapWorkspace() {
     const handleResize = () => {
       const rect = viewportRef.current?.getBoundingClientRect();
       if (rect && gridBounds) {
-        if (!hasCenteredRef.current || lastBoundsRef.current !== gridBounds) {
+        if (!hasCenteredRef.current) {
           recenterGrid();
           hasCenteredRef.current = true;
-          lastBoundsRef.current = gridBounds;
         }
       }
     };
@@ -602,6 +658,20 @@ function BattleMapWorkspace() {
       lastPaintedCellRef.current = null;
     }
   }, [isDrawMode]);
+
+  useEffect(() => {
+    if (!isExpandMode) {
+      setIsExpandPainting(false);
+    }
+    if (!isShrinkMode) {
+      setIsShrinkPainting(false);
+    }
+    if (!isExpandMode && !isShrinkMode) {
+      setGridHoverCell(null);
+      setGridHoverMode(null);
+      lastGridPaintedRef.current = null;
+    }
+  }, [isExpandMode, isShrinkMode]);
 
   useEffect(() => {
     if (!dragPayload) return undefined;
@@ -801,32 +871,84 @@ function BattleMapWorkspace() {
     setIsDeleteDrag(false);
   }, [isDeleteMode]);
 
-  const handleExpandClickStart = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!isExpandMode) return;
-      event.preventDefault();
-      setExpandClickStart({ x: event.clientX, y: event.clientY });
-    },
-    [isExpandMode],
-  );
+  const updateGridHover = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (clientX === undefined || clientY === undefined) return;
+      if (!isExpandMode && !isShrinkMode) return;
+      const point = toWorldPoint(clientX, clientY);
+      if (!point) {
+        setGridHoverCell(null);
+        setGridHoverMode(null);
+        return;
+      }
+      const cell = pointToCell(point.x, point.y);
+      const key = `${cell.x},${cell.y}`;
 
-  const handleExpandClickEnd = useCallback(
-    (event: ReactMouseEvent<HTMLDivElement>) => {
-      if (!isExpandMode || !expandClickStart) return;
-      event.preventDefault();
-
-      const dx = Math.abs(event.clientX - expandClickStart.x);
-      const dy = Math.abs(event.clientY - expandClickStart.y);
-      const threshold = 5;
-
-      if (dx < threshold && dy < threshold) {
-        addCellAtPoint(event.clientX, event.clientY);
+      if (isExpandMode && !allowedCellSet.has(key)) {
+        setGridHoverCell(cell);
+        setGridHoverMode('expand');
+        return;
       }
 
-      setExpandClickStart(null);
+      if (isShrinkMode && allowedCellSet.has(key)) {
+        setGridHoverCell(cell);
+        setGridHoverMode('shrink');
+        return;
+      }
+
+      setGridHoverCell(null);
+      setGridHoverMode(null);
     },
-    [addCellAtPoint, expandClickStart, isExpandMode],
+    [allowedCellSet, isExpandMode, isShrinkMode, pointToCell, toWorldPoint],
   );
+
+  const startExpandPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isExpandMode) return;
+      lastGridPaintedRef.current = null;
+      setIsExpandPainting(true);
+      addCellAtPoint(clientX, clientY);
+    },
+    [addCellAtPoint, isExpandMode],
+  );
+
+  const continueExpandPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isExpandMode || !isExpandPainting) return;
+      addCellAtPoint(clientX, clientY);
+    },
+    [addCellAtPoint, isExpandMode, isExpandPainting],
+  );
+
+  const stopExpandPainting = useCallback(() => {
+    if (!isExpandPainting) return;
+    setIsExpandPainting(false);
+    lastGridPaintedRef.current = null;
+  }, [isExpandPainting]);
+
+  const startShrinkPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isShrinkMode) return;
+      lastGridPaintedRef.current = null;
+      setIsShrinkPainting(true);
+      removeCellAtPoint(clientX, clientY);
+    },
+    [isShrinkMode, removeCellAtPoint],
+  );
+
+  const continueShrinkPainting = useCallback(
+    (clientX?: number, clientY?: number) => {
+      if (!isShrinkMode || !isShrinkPainting) return;
+      removeCellAtPoint(clientX, clientY);
+    },
+    [isShrinkMode, isShrinkPainting, removeCellAtPoint],
+  );
+
+  const stopShrinkPainting = useCallback(() => {
+    if (!isShrinkPainting) return;
+    setIsShrinkPainting(false);
+    lastGridPaintedRef.current = null;
+  }, [isShrinkPainting]);
 
   const handleWheelZoom = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -1098,6 +1220,7 @@ function BattleMapWorkspace() {
                   if (next) {
                     setIsDeleteMode(false);
                     setIsExpandMode(false);
+                    setIsShrinkMode(false);
                     setStatusMessage('Draw mode enabled. Pick a tile, then click or drag on the grid.');
                   } else {
                     setStatusMessage('Draw mode disabled.');
@@ -1193,14 +1316,16 @@ function BattleMapWorkspace() {
       <div className="battlemap-workspace__main square-workspace__main">
         <div
           ref={viewportRef}
-          className={`battlemap-workspace__viewport square-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}`}
+          className={`battlemap-workspace__viewport square-workspace__viewport${isSpaceHeld ? ' is-space-held' : ''}${isPanning ? ' is-panning' : ''}${isExpandMode ? ' is-expand-mode' : ''}${isShrinkMode ? ' is-shrink-mode' : ''}`}
           onMouseDown={(event) => {
             if (isSpaceHeld) {
               handlePanStart(event);
             } else if (isDrawMode) {
               startDrawPainting(event.clientX, event.clientY);
             } else if (isExpandMode) {
-              handleExpandClickStart(event);
+              startExpandPainting(event.clientX, event.clientY);
+            } else if (isShrinkMode) {
+              startShrinkPainting(event.clientX, event.clientY);
             } else if (isDeleteMode) {
               handleDeleteDragStart(event);
             } else {
@@ -1208,12 +1333,17 @@ function BattleMapWorkspace() {
             }
           }}
           onMouseMove={(event) => {
+            if (isExpandMode || isShrinkMode) {
+              updateGridHover(event.clientX, event.clientY);
+            }
             if (isPanning) {
               handlePanMove(event);
             } else if (isDrawMode && isDrawPainting) {
               continueDrawPainting(event.clientX, event.clientY);
             } else if (isExpandMode) {
-              // No drag behavior in expand mode
+              continueExpandPainting(event.clientX, event.clientY);
+            } else if (isShrinkMode) {
+              continueShrinkPainting(event.clientX, event.clientY);
             } else if (isDeleteMode) {
               handleDeleteDragMove(event);
             } else {
@@ -1226,7 +1356,9 @@ function BattleMapWorkspace() {
             } else if (isDrawMode && isDrawPainting) {
               stopDrawPainting();
             } else if (isExpandMode) {
-              handleExpandClickEnd(event);
+              stopExpandPainting();
+            } else if (isShrinkMode) {
+              stopShrinkPainting();
             } else if (isDeleteMode) {
               handleDeleteDragEnd();
             } else {
@@ -1239,7 +1371,13 @@ function BattleMapWorkspace() {
             } else if (isDrawMode && isDrawPainting) {
               stopDrawPainting();
             } else if (isExpandMode) {
-              setExpandClickStart(null);
+              stopExpandPainting();
+              setGridHoverCell(null);
+              setGridHoverMode(null);
+            } else if (isShrinkMode) {
+              stopShrinkPainting();
+              setGridHoverCell(null);
+              setGridHoverMode(null);
             } else if (isDeleteMode) {
               handleDeleteDragEnd();
             } else {
@@ -1320,6 +1458,26 @@ function BattleMapWorkspace() {
                   </g>
                 );
               })}
+
+              {gridHoverCell && gridHoverMode === 'expand' ? (
+                <rect
+                  className="square-workspace__expand-preview"
+                  x={gridHoverCell.x * cellSize}
+                  y={gridHoverCell.y * cellSize}
+                  width={cellSize}
+                  height={cellSize}
+                />
+              ) : null}
+
+              {gridHoverCell && gridHoverMode === 'shrink' ? (
+                <rect
+                  className="square-workspace__shrink-preview"
+                  x={gridHoverCell.x * cellSize}
+                  y={gridHoverCell.y * cellSize}
+                  width={cellSize}
+                  height={cellSize}
+                />
+              ) : null}
             </g>
           </svg>
 
@@ -1335,6 +1493,7 @@ function BattleMapWorkspace() {
               if (next) {
                 setIsExpandMode(false);
                 setIsDrawMode(false);
+                setIsShrinkMode(false);
                 setStatusMessage('Delete mode enabled.');
               } else {
                 setStatusMessage('Delete mode disabled.');
@@ -1407,7 +1566,8 @@ function BattleMapWorkspace() {
                 if (next) {
                   setIsDeleteMode(false);
                   setIsDrawMode(false);
-                  setStatusMessage('Expand Grid Mode enabled. Click to add cells.');
+                  setIsShrinkMode(false);
+                  setStatusMessage('Expand Grid Mode enabled. Click or drag to add cells.');
                 } else {
                   setStatusMessage('Expand Grid Mode disabled.');
                 }
@@ -1421,6 +1581,31 @@ function BattleMapWorkspace() {
             }}
           >
             {isExpandMode ? 'Expand Mode: ON' : 'Expand Grid'}
+          </button>
+          <button
+            type="button"
+            className={`button ${isShrinkMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+            onClick={() => {
+              setIsShrinkMode((prev) => {
+                const next = !prev;
+                if (next) {
+                  setIsDeleteMode(false);
+                  setIsDrawMode(false);
+                  setIsExpandMode(false);
+                  setStatusMessage('Decrease Grid Mode enabled. Click or drag to remove cells.');
+                } else {
+                  setStatusMessage('Decrease Grid Mode disabled.');
+                }
+                return next;
+              });
+            }}
+            onKeyDown={(event) => {
+              if (event.code === 'Space') {
+                event.preventDefault();
+              }
+            }}
+          >
+            {isShrinkMode ? 'Decrease Mode: ON' : 'Decrease Grid'}
           </button>
           <div className="battlemap-workspace__export-actions">
             <button
