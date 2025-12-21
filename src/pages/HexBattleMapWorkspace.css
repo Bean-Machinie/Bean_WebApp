@@ -90,11 +90,6 @@
   stroke-width: 1.5px;
 }
 
-.hex-workspace__tile image,
-.hex-workspace__tile polygon {
-  filter: drop-shadow(var(--tile-shadow));
-}
-
 .hex-workspace__drag-preview {
   position: fixed;
   display: inline-block;
@@ -188,11 +183,6 @@
   stroke: var(--danger);
   stroke-width: 2px;
   filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--danger) 20%, transparent));
-}
-
-.hex-workspace.is-delete-mode .hex-workspace__tile image,
-.hex-workspace.is-delete-mode .hex-workspace__tile polygon {
-  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--danger) 26%, transparent));
 }
 
 .battlemap-delete-panel {

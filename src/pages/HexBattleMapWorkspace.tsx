@@ -777,8 +777,12 @@ function HexBattleMapWorkspace() {
 
   const handleWheelZoom = useCallback(
     (event: ReactWheelEvent<HTMLDivElement>) => {
-      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.55 ;
-      const nextScale = Math.min(2.5, Math.max(0.4, scale * zoomFactor));
+      event.preventDefault();
+      const zoomIntensity = 0.0015;
+      const nextScale = Math.min(
+        10,
+        Math.max(0.1, scaleRef.current * Math.exp(-event.deltaY * zoomIntensity)),
+      );
       const rect = viewportRef.current?.getBoundingClientRect();
       if (!rect) {
         setScale(nextScale);

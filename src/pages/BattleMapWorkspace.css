@@ -915,11 +915,6 @@
   pointer-events: none;
 }
 
-.square-workspace__tile image,
-.square-workspace__tile rect {
-  filter: drop-shadow(var(--tile-shadow));
-}
-
 .square-workspace__drag-preview {
   position: fixed;
   display: inline-block;
@@ -944,7 +939,3 @@
   filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--danger) 20%, transparent));
 }
 
-.square-workspace.is-delete-mode .square-workspace__tile image,
-.square-workspace.is-delete-mode .square-workspace__tile rect {
-  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--danger) 26%, transparent));
-}
