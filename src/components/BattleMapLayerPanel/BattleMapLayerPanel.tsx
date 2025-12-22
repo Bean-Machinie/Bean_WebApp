@@ -16,15 +16,18 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { ContextMenu } from '@base-ui-components/react/context-menu';
-import { Edit3, Trash2 } from 'lucide-react';
+import { Menu } from '@base-ui-components/react/menu';
+import { Edit3, Trash2, Plus } from 'lucide-react';
 import './BattleMapLayerPanel.css';
 import '../LayerPanel/LayerContextMenu.css';
 import '../LayerPanel/LayerPanel.css';
 
+export type BattleMapLayerKind = 'grid' | 'layer' | 'image' | 'background';
+
 export type BattleMapLayer = {
   id: string;
   name: string;
-  kind: 'grid' | 'layer';
+  kind: BattleMapLayerKind;
   visible: boolean;
 };
 
@@ -33,7 +36,7 @@ type BattleMapLayerPanelProps = {
   activeLayerId: string;
   onActiveLayerChange: (layerId: string) => void;
   onToggleVisibility: (layerId: string) => void;
-  onAddLayer: () => void;
+  onAddLayer: (kind: BattleMapLayerKind) => void;
   onRenameLayer: (layerId: string, nextName: string) => void;
   onMoveLayerUp: (layerId: string) => void;
   onMoveLayerDown: (layerId: string) => void;
@@ -79,9 +82,33 @@ function BattleMapLayerPanel({
     <div className="layer-panel battlemap-layer-panel">
       <div className="layer-panel__header">
         <h3>Layers</h3>
-        <button type="button" className="layer-panel__new-button" onClick={onAddLayer}>
-          + New
-        </button>
+        <Menu.Root>
+          <Menu.Trigger
+            type="button"
+            className="layer-panel__new-button battlemap-layer-panel__new-button"
+            title="Add layer"
+          >
+            <Plus size={16} aria-hidden />
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Positioner className="layer-context-menu__positioner">
+              <Menu.Popup className="layer-context-menu__popup">
+                <Menu.Item
+                  className="layer-context-menu__item"
+                  onClick={() => onAddLayer('image')}
+                >
+                  Image
+                </Menu.Item>
+                <Menu.Item
+                  className="layer-context-menu__item"
+                  onClick={() => onAddLayer('background')}
+                >
+                  Background
+                </Menu.Item>
+              </Menu.Popup>
+            </Menu.Positioner>
+          </Menu.Portal>
+        </Menu.Root>
       </div>
       <DndContext
         sensors={sensors}

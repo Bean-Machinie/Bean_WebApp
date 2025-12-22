@@ -81,7 +81,7 @@ export type SquareCell = {
 export type BattleMapLayerState = {
   id: string;
   name: string;
-  kind: 'grid' | 'layer';
+  kind: 'grid' | 'layer' | 'image' | 'background';
   visible: boolean;
 };
 

@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBattleMap } from '../hooks/useBattleMap';
@@ -76,6 +76,8 @@ function HexBattleMapWorkspace() {
   const [activeLayerId, setActiveLayerId] = useState(
     hexConfig.activeLayerId ?? GRID_LAYER_ID,
   );
+  const mapLayersRef = useRef(mapLayers);
+  const activeLayerIdRef = useRef(activeLayerId);
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [isExpandPainting, setIsExpandPainting] = useState(false);
   const [isShrinkMode, setIsShrinkMode] = useState(false);
@@ -218,6 +220,14 @@ function HexBattleMapWorkspace() {
   const lastHydratedVersionRef = useRef<number | null>(null);
   const lastHydratedProjectRef = useRef<string | undefined>(project?.id);
 
+  useEffect(() => {
+    mapLayersRef.current = mapLayers;
+  }, [mapLayers]);
+
+  useEffect(() => {
+    activeLayerIdRef.current = activeLayerId;
+  }, [activeLayerId]);
+
   const flushPendingSave = useCallback(async () => {
     if (saveInFlightRef.current || !saveBufferRef.current) return;
     const payload = saveBufferRef.current;
@@ -241,7 +251,11 @@ function HexBattleMapWorkspace() {
   }, [saveConfig]);
 
   const queueSave = useCallback(
-    (widgets: HexWidget[], layerOverrides?: { layers?: BattleMapLayer[]; activeLayerId?: string }) => {
+    (
+      widgets: HexWidget[],
+      layerOverrides?: { layers?: BattleMapLayer[]; activeLayerId?: string },
+      allowedCellsOverride?: Cube[],
+    ) => {
       hasUnsavedChangesRef.current = true;
       saveBufferRef.current = {
         gridType: 'hex',
@@ -251,9 +265,9 @@ function HexBattleMapWorkspace() {
         widgets: [],
         hexSettings,
         hexWidgets: widgets,
-        allowedHexCells: allowedCells,
-        layers: layerOverrides?.layers ?? mapLayers,
-        activeLayerId: layerOverrides?.activeLayerId ?? activeLayerId,
+        allowedHexCells: allowedCellsOverride ?? allowedCells,
+        layers: layerOverrides?.layers ?? mapLayersRef.current,
+        activeLayerId: layerOverrides?.activeLayerId ?? activeLayerIdRef.current,
         version: hexConfig.version,
         updated_at: hexConfig.updated_at,
       };
@@ -268,7 +282,6 @@ function HexBattleMapWorkspace() {
       }, 80);
     },
     [
-      activeLayerId,
       allowedCells,
       flushPendingSave,
       gridRadius,
@@ -276,7 +289,6 @@ function HexBattleMapWorkspace() {
       hexConfig.updated_at,
       hexConfig.version,
       hexSettings,
-      mapLayers,
     ],
   );
 
@@ -495,27 +507,6 @@ function HexBattleMapWorkspace() {
     [],
   );
 
-  const persistAllowedCells = useCallback(
-    async (cells: Cube[], widgetsOverride?: HexWidget[]) => {
-      const widgetsToSave = widgetsOverride ?? hexWidgets;
-      const nextConfig: BattleMapConfig = {
-        gridType: 'hex',
-        gridColumns: gridRadius * 2 - 1,
-        gridRows: gridRadius * 2 - 1,
-        cellSize: hexConfig.cellSize || hexSettings.hexSize,
-        widgets: [],
-        hexSettings: hexSettings,
-        hexWidgets: widgetsToSave,
-        allowedHexCells: cells,
-        version: hexConfig.version,
-        updated_at: hexConfig.updated_at,
-      };
-
-      await saveConfig(nextConfig);
-    },
-    [gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings, hexWidgets, saveConfig],
-  );
-
   const addHexAtPoint = useCallback(
     (clientX?: number, clientY?: number) => {
       if (clientX === undefined || clientY === undefined) return;
@@ -536,12 +527,12 @@ function HexBattleMapWorkspace() {
         }
 
         const newCells = [...current, targetHex];
-        persistAllowedCells(newCells);
+        queueSave(hexWidgets, undefined, newCells);
         setStatusMessage('Added hex tile to grid.');
         return newCells;
       });
     },
-    [geometry, persistAllowedCells, toWorldPoint],
+    [geometry, hexWidgets, queueSave, toWorldPoint],
   );
 
   const removeHexAtPoint = useCallback(
@@ -577,7 +568,7 @@ function HexBattleMapWorkspace() {
               setSelectedWidgetId(null);
             }
           }
-          persistAllowedCells(nextCells, nextWidgets);
+          queueSave(nextWidgets, undefined, nextCells);
           setStatusMessage('Removed hex tile from grid.');
           return nextWidgets;
         });
@@ -585,7 +576,7 @@ function HexBattleMapWorkspace() {
         return nextCells;
       });
     },
-    [doesWidgetMatchHex, geometry, persistAllowedCells, selectedWidgetId, toWorldPoint],
+    [doesWidgetMatchHex, geometry, queueSave, selectedWidgetId, toWorldPoint],
   );
 
   const isPointInsideDeleteZone = useCallback(
@@ -957,7 +948,7 @@ function HexBattleMapWorkspace() {
   }, [isShrinkPainting]);
 
   const handleWheelZoom = useCallback(
-    (event: ReactWheelEvent<HTMLDivElement>) => {
+    (event: WheelEvent) => {
       event.preventDefault();
       const zoomIntensity = 0.0015;
       const nextScale = Math.min(
@@ -987,6 +978,20 @@ function HexBattleMapWorkspace() {
     },
     [commitPan, scheduleTransform, toWorldPoint],
   );
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+
+    const handleWheel = (event: WheelEvent) => {
+      handleWheelZoom(event);
+    };
+
+    viewport.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheelZoom, isLoading]);
 
   const handleTilePointerDown = useCallback(
     (tile: HexTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
@@ -1448,7 +1453,6 @@ function HexBattleMapWorkspace() {
               stopPan();
             }
           }}
-          onWheel={handleWheelZoom}
         >
           <svg className="hex-workspace__surface">
             <defs>
@@ -1634,11 +1638,17 @@ function HexBattleMapWorkspace() {
             );
             commitLayerState(nextLayers);
           }}
-          onAddLayer={() => {
+          onAddLayer={(kind) => {
+            const baseName = (() => {
+              if (kind === 'grid') return 'Grid Layer';
+              if (kind === 'image') return 'Image Layer';
+              if (kind === 'background') return 'Background Layer';
+              return 'Layer';
+            })();
             const nextLayer = {
               id: crypto.randomUUID(),
-              name: `Layer ${mapLayers.length}`,
-              kind: 'layer' as const,
+              name: `${baseName} ${mapLayers.length}`,
+              kind,
               visible: true,
             };
             const nextLayers = [...mapLayers, nextLayer];
@@ -1740,9 +1750,6 @@ function HexBattleMapWorkspace() {
               Grid tools appear when the Grid Map Layer is active.
             </p>
           )}
-          <p className="battlemap-workspace__hint">
-            Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the nearest open hex. Occupied hexes are rejected (no swaps).
-          </p>
         </div>
       </div>
     </div>

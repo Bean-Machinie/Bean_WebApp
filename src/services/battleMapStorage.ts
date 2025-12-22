@@ -35,7 +35,7 @@ type StorageMode = 'advanced' | 'legacy';
 let hasCheckedAdvancedStorage = false;
 let supportsAdvancedStorageCache = true;
 let hasIsFixedColumn = true;
-let hasAllowedCellsColumn = false;
+let hasAllowedCellsColumn = true;
 let hasLayersColumn = true;
 let hasActiveLayerIdColumn = true;
 
@@ -57,7 +57,9 @@ const normalizeLayers = (layers?: BattleMapLayerState[] | null): BattleMapLayerS
     return {
       id: typeof layer.id === 'string' && layer.id.length > 0 ? layer.id : generateClientId(),
       name,
-      kind: layer.kind === 'grid' ? 'grid' : 'layer',
+      kind: layer.kind === 'grid' || layer.kind === 'image' || layer.kind === 'background'
+        ? layer.kind
+        : 'layer',
       visible: layer.visible !== false,
     };
   });

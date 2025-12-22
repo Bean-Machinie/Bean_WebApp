@@ -9,12 +9,31 @@
   height: auto;
 }
 
+.battlemap-layer-panel .layer-panel__header {
+  padding: 0.35rem 0.6rem;
+}
+
+.battlemap-layer-panel .layer-panel__header h3 {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.battlemap-layer-panel .layer-panel__new-button {
+  padding: 0.25rem;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .battlemap-layer-panel .layer-item {
   cursor: pointer;
 }
 
 .battlemap-layer-panel .layer-panel__list {
-  max-height: 240px;
+  height: 240px;
+  flex: 0 0 240px;
   scrollbar-color: color-mix(in srgb, var(--sidebar-text) 35%, transparent)
     color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
   scrollbar-width: thin;

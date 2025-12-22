@@ -11,6 +11,9 @@ create table if not exists public.battle_map_configs (
   grid_columns integer not null default 12,
   grid_rows integer not null default 12,
   cell_size integer not null default 80,
+  allowed_square_cells jsonb,
+  layers jsonb,
+  active_layer_id uuid,
   version integer not null default 1,
   updated_at timestamptz not null default now()
 );
@@ -20,6 +23,15 @@ alter table public.battle_map_configs
 
 alter table public.battle_map_configs
   add column if not exists cell_size integer not null default 80;
+
+alter table public.battle_map_configs
+  add column if not exists allowed_square_cells jsonb;
+
+alter table public.battle_map_configs
+  add column if not exists layers jsonb;
+
+alter table public.battle_map_configs
+  add column if not exists active_layer_id uuid;
 
 create table if not exists public.battle_map_widgets (
   id uuid primary key,
@@ -67,13 +79,27 @@ begin
 end $$;
 
 -- Backfill from legacy projects.battle_map_config JSON column
-insert into public.battle_map_configs (project_id, user_id, grid_columns, grid_rows, cell_size, version, updated_at)
+insert into public.battle_map_configs (
+  project_id,
+  user_id,
+  grid_columns,
+  grid_rows,
+  cell_size,
+  allowed_square_cells,
+  layers,
+  active_layer_id,
+  version,
+  updated_at
+)
 select
   p.id as project_id,
   p.user_id,
   coalesce((p.battle_map_config->>'gridColumns')::integer, 12) as grid_columns,
   coalesce((p.battle_map_config->>'gridRows')::integer, (p.battle_map_config->>'gridColumns')::integer, 12) as grid_rows,
   coalesce((p.battle_map_config->>'cellSize')::integer, 80) as cell_size,
+  p.battle_map_config->'allowedSquareCells' as allowed_square_cells,
+  p.battle_map_config->'layers' as layers,
+  nullif(p.battle_map_config->>'activeLayerId', '')::uuid as active_layer_id,
   1 as version,
   now() as updated_at
 from public.projects p
@@ -83,6 +109,9 @@ on conflict (project_id) do update
 set grid_columns = excluded.grid_columns,
     grid_rows = excluded.grid_rows,
     cell_size = excluded.cell_size,
+    allowed_square_cells = excluded.allowed_square_cells,
+    layers = excluded.layers,
+    active_layer_id = excluded.active_layer_id,
     updated_at = now(),
     version = public.battle_map_configs.version + 1;
 

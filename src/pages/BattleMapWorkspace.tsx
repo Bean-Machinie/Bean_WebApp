@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBattleMap } from '../hooks/useBattleMap';
@@ -75,6 +75,8 @@ function BattleMapWorkspace() {
   const [activeLayerId, setActiveLayerId] = useState(
     squareConfig.activeLayerId ?? GRID_LAYER_ID,
   );
+  const mapLayersRef = useRef(mapLayers);
+  const activeLayerIdRef = useRef(activeLayerId);
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [isExpandPainting, setIsExpandPainting] = useState(false);
   const [isShrinkMode, setIsShrinkMode] = useState(false);
@@ -212,6 +214,14 @@ function BattleMapWorkspace() {
   const lastHydratedVersionRef = useRef<number | null>(null);
   const lastHydratedProjectRef = useRef<string | undefined>(project?.id);
 
+  useEffect(() => {
+    mapLayersRef.current = mapLayers;
+  }, [mapLayers]);
+
+  useEffect(() => {
+    activeLayerIdRef.current = activeLayerId;
+  }, [activeLayerId]);
+
   const flushPendingSave = useCallback(async () => {
     if (saveInFlightRef.current || !saveBufferRef.current) return;
     const payload = saveBufferRef.current;
@@ -248,8 +258,8 @@ function BattleMapWorkspace() {
         cellSize,
         widgets: updatedWidgets,
         allowedSquareCells: currentAllowedCells,
-        layers: layerOverrides?.layers ?? mapLayers,
-        activeLayerId: layerOverrides?.activeLayerId ?? activeLayerId,
+        layers: layerOverrides?.layers ?? mapLayersRef.current,
+        activeLayerId: layerOverrides?.activeLayerId ?? activeLayerIdRef.current,
         version: config.version,
         updated_at: config.updated_at,
       };
@@ -264,14 +274,12 @@ function BattleMapWorkspace() {
       }, 80);
     },
     [
-      activeLayerId,
       cellSize,
       config.updated_at,
       config.version,
       flushPendingSave,
       gridColumns,
       gridRows,
-      mapLayers,
     ],
   );
 
@@ -1007,7 +1015,7 @@ function BattleMapWorkspace() {
   }, [isShrinkPainting]);
 
   const handleWheelZoom = useCallback(
-    (event: ReactWheelEvent<HTMLDivElement>) => {
+    (event: WheelEvent) => {
       event.preventDefault();
       const zoomIntensity = 0.0015;
       const nextScale = Math.min(
@@ -1037,6 +1045,20 @@ function BattleMapWorkspace() {
     },
     [commitPan, scheduleTransform, toWorldPoint],
   );
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return undefined;
+
+    const handleWheel = (event: WheelEvent) => {
+      handleWheelZoom(event);
+    };
+
+    viewport.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheelZoom, isLoading]);
 
   const handleTilePointerDown = useCallback(
     (tile: SquareTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
@@ -1471,7 +1493,6 @@ function BattleMapWorkspace() {
               stopPan();
             }
           }}
-          onWheel={handleWheelZoom}
         >
           <svg className="square-workspace__surface">
             <g
@@ -1636,11 +1657,17 @@ function BattleMapWorkspace() {
             );
             commitLayerState(nextLayers);
           }}
-          onAddLayer={() => {
+          onAddLayer={(kind) => {
+            const baseName = (() => {
+              if (kind === 'grid') return 'Grid Layer';
+              if (kind === 'image') return 'Image Layer';
+              if (kind === 'background') return 'Background Layer';
+              return 'Layer';
+            })();
             const nextLayer = {
               id: crypto.randomUUID(),
-              name: `Layer ${mapLayers.length}`,
-              kind: 'layer' as const,
+              name: `${baseName} ${mapLayers.length}`,
+              kind,
               visible: true,
             };
             const nextLayers = [...mapLayers, nextLayer];
