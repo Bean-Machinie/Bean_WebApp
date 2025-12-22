@@ -1,0 +1,39 @@
+.battlemap-layer-panel {
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.battlemap-layer-panel.layer-panel {
+  border-top: none;
+  height: auto;
+}
+
+.battlemap-layer-panel .layer-item {
+  cursor: pointer;
+}
+
+.battlemap-layer-panel .layer-panel__list {
+  max-height: 240px;
+}
+
+.battlemap-layer-panel__thumbnail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-color: var(--sidebar-border);
+  color: var(--sidebar-text);
+}
+
+.battlemap-layer-panel .layer-item__visibility {
+  color: var(--sidebar-text);
+}
+
+.battlemap-layer-panel__item--grid .layer-item__name::after {
+  content: ' (Grid)';
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 0.35rem;
+}

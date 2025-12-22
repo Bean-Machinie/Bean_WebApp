@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { generateClientId } from '../lib/utils';
 import { mergeAppearanceIntoContent, parseAppearanceFromContent, resolveAppearance } from '../lib/battlemapAppearance';
-import type { BattleMapConfig, BattleMapWidget, HexWidget } from '../types/battlemap';
+import type { BattleMapConfig, BattleMapLayerState, BattleMapWidget, HexWidget } from '../types/battlemap';
 
 export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridType: 'square',
@@ -9,6 +9,8 @@ export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridRows: 8,
   cellSize: 80,
   widgets: [],
+  layers: [{ id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true }],
+  activeLayerId: 'grid-layer',
   version: 1,
 };
 
@@ -23,6 +25,8 @@ export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
     orientation: 'flat',
   },
   hexWidgets: [],
+  layers: [{ id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true }],
+  activeLayerId: 'grid-layer',
   version: 1,
 };
 
@@ -32,6 +36,46 @@ let hasCheckedAdvancedStorage = false;
 let supportsAdvancedStorageCache = true;
 let hasIsFixedColumn = true;
 let hasAllowedCellsColumn = false;
+let hasLayersColumn = true;
+let hasActiveLayerIdColumn = true;
+
+const GRID_LAYER_ID = 'grid-layer';
+
+const buildDefaultLayers = (): BattleMapLayerState[] => [
+  { id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true },
+];
+
+const normalizeLayers = (layers?: BattleMapLayerState[] | null): BattleMapLayerState[] => {
+  if (!Array.isArray(layers) || layers.length === 0) {
+    return buildDefaultLayers();
+  }
+
+  const normalized = layers.map((layer, index) => {
+    const name = typeof layer.name === 'string' && layer.name.trim().length > 0
+      ? layer.name.trim()
+      : `Layer ${index + 1}`;
+    return {
+      id: typeof layer.id === 'string' && layer.id.length > 0 ? layer.id : generateClientId(),
+      name,
+      kind: layer.kind === 'grid' ? 'grid' : 'layer',
+      visible: layer.visible !== false,
+    };
+  });
+
+  const hasGridLayer = normalized.some((layer) => layer.kind === 'grid');
+  return hasGridLayer ? normalized : [...buildDefaultLayers(), ...normalized];
+};
+
+const normalizeActiveLayerId = (
+  activeLayerId: BattleMapConfig['activeLayerId'],
+  layers: BattleMapLayerState[],
+) => {
+  if (activeLayerId && layers.some((layer) => layer.id === activeLayerId)) {
+    return activeLayerId;
+  }
+  const gridLayer = layers.find((layer) => layer.kind === 'grid');
+  return gridLayer?.id ?? layers[0]?.id ?? GRID_LAYER_ID;
+};
 
 const isMissingTableError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -83,6 +127,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       orientation,
     };
 
+    const layers = normalizeLayers((config as BattleMapConfig)?.layers);
     return {
       gridType: 'hex',
       gridColumns,
@@ -92,11 +137,14 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       hexSettings,
       hexWidgets: ((config as BattleMapConfig)?.hexWidgets ?? []).map(normalizeHexWidget),
       allowedHexCells: (config as BattleMapConfig)?.allowedHexCells,
+      layers,
+      activeLayerId: normalizeActiveLayerId((config as BattleMapConfig)?.activeLayerId, layers),
       version: config?.version ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.version,
       updated_at: config?.updated_at,
     };
   }
 
+  const layers = normalizeLayers((config as BattleMapConfig)?.layers);
   return {
     gridType: 'square',
     gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
@@ -128,6 +176,8 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       };
     }),
     allowedSquareCells: (config as BattleMapConfig)?.allowedSquareCells,
+    layers,
+    activeLayerId: normalizeActiveLayerId((config as BattleMapConfig)?.activeLayerId, layers),
     version: config?.version ?? DEFAULT_BATTLE_MAP_CONFIG.version,
     updated_at: config?.updated_at,
   };
@@ -149,44 +199,49 @@ async function checkAdvancedStorageAvailability() {
 }
 
 async function loadFromAdvancedTables(projectId: string, userId: string): Promise<BattleMapConfig | null> {
-  const configSelect = hasAllowedCellsColumn
-    ? 'grid_columns, grid_rows, cell_size, version, updated_at, allowed_square_cells'
-    : 'grid_columns, grid_rows, cell_size, version, updated_at';
-
   let configRowResult: any;
-  try {
-    configRowResult = await (supabase as any)
-      .from('battle_map_configs')
-      .select(configSelect)
-      .eq('project_id', projectId)
-      .eq('user_id', userId)
-      .limit(1);
-  } catch (err) {
-    configRowResult = { error: err };
-  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const selectParts = ['grid_columns', 'grid_rows', 'cell_size', 'version', 'updated_at'];
+    if (hasAllowedCellsColumn) selectParts.push('allowed_square_cells');
+    if (hasLayersColumn) selectParts.push('layers');
+    if (hasActiveLayerIdColumn) selectParts.push('active_layer_id');
 
-  if (configRowResult.error) {
-    if (isMissingColumnError(configRowResult.error, 'allowed_square_cells')) {
-      hasAllowedCellsColumn = false;
+    try {
       configRowResult = await (supabase as any)
         .from('battle_map_configs')
-        .select('grid_columns, grid_rows, cell_size, version, updated_at')
+        .select(selectParts.join(', '))
         .eq('project_id', projectId)
         .eq('user_id', userId)
         .limit(1);
-    } else if (isMissingTableError(configRowResult.error)) {
+    } catch (err) {
+      configRowResult = { error: err };
+    }
+
+    if (!configRowResult.error) {
+      break;
+    }
+
+    if (isMissingTableError(configRowResult.error)) {
       supportsAdvancedStorageCache = false;
       return null;
-    } else {
-      // If any other error occurs (e.g., 400 from unknown column), fall back without the column.
-      hasAllowedCellsColumn = false;
-      configRowResult = await (supabase as any)
-        .from('battle_map_configs')
-        .select('grid_columns, grid_rows, cell_size, version, updated_at')
-        .eq('project_id', projectId)
-        .eq('user_id', userId)
-        .limit(1);
     }
+
+    if (isMissingColumnError(configRowResult.error, 'allowed_square_cells')) {
+      hasAllowedCellsColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configRowResult.error, 'layers')) {
+      hasLayersColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configRowResult.error, 'active_layer_id')) {
+      hasActiveLayerIdColumn = false;
+      continue;
+    }
+
+    hasAllowedCellsColumn = false;
+    hasLayersColumn = false;
+    hasActiveLayerIdColumn = false;
   }
 
   if (configRowResult.error) {
@@ -275,6 +330,8 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     allowedSquareCells: hasAllowedCellsColumn
       ? (configRow as { allowed_square_cells?: BattleMapConfig['allowedSquareCells'] }).allowed_square_cells
       : undefined,
+    layers: hasLayersColumn ? (configRow as { layers?: BattleMapLayerState[] }).layers : undefined,
+    activeLayerId: hasActiveLayerIdColumn ? (configRow as { active_layer_id?: string }).active_layer_id : undefined,
     version: configRow.version,
     updated_at: configRow.updated_at,
   });
@@ -304,22 +361,44 @@ async function persistToAdvancedTables(
     updated_at: now,
   };
 
-  const configUpsert = hasAllowedCellsColumn
-    ? { ...baseConfigUpsert, allowed_square_cells: normalizedConfig.allowedSquareCells ?? null }
-    : baseConfigUpsert;
+  let configResult: any;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let configUpsert = baseConfigUpsert;
+    if (hasAllowedCellsColumn) {
+      configUpsert = { ...configUpsert, allowed_square_cells: normalizedConfig.allowedSquareCells ?? null };
+    }
+    if (hasLayersColumn) {
+      configUpsert = { ...configUpsert, layers: normalizedConfig.layers ?? null };
+    }
+    if (hasActiveLayerIdColumn) {
+      configUpsert = { ...configUpsert, active_layer_id: normalizedConfig.activeLayerId ?? null };
+    }
 
-  let configResult: any = await (supabase as any).from('battle_map_configs').upsert(configUpsert);
+    configResult = await (supabase as any).from('battle_map_configs').upsert(configUpsert);
 
-  if (configResult.error) {
+    if (!configResult.error) {
+      break;
+    }
+
     if (isMissingColumnError(configResult.error, 'allowed_square_cells')) {
       hasAllowedCellsColumn = false;
-      configResult = await (supabase as any).from('battle_map_configs').upsert(baseConfigUpsert);
-    } else if (isMissingTableError(configResult.error)) {
+      continue;
+    }
+    if (isMissingColumnError(configResult.error, 'layers')) {
+      hasLayersColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configResult.error, 'active_layer_id')) {
+      hasActiveLayerIdColumn = false;
+      continue;
+    }
+
+    if (isMissingTableError(configResult.error)) {
       supportsAdvancedStorageCache = false;
       return normalizedConfig;
-    } else {
-      throw configResult.error;
     }
+
+    throw configResult.error;
   }
 
   if (configResult.error) {
@@ -434,6 +513,8 @@ async function persistLegacySnapshot(
           hexSettings: config.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings,
           hexWidgets: config.hexWidgets ?? [],
           allowedHexCells: config.allowedHexCells,
+          layers: config.layers,
+          activeLayerId: config.activeLayerId,
           version: config.version,
           updated_at: config.updated_at,
         }
@@ -444,6 +525,8 @@ async function persistLegacySnapshot(
           cellSize: config.cellSize,
           widgets: config.widgets,
           allowedSquareCells: config.allowedSquareCells,
+          layers: config.layers,
+          activeLayerId: config.activeLayerId,
           version: config.version,
           updated_at: config.updated_at,
         };
@@ -471,10 +554,24 @@ export async function loadBattleMapState(params: {
 
     if (config) {
       const mergedConfig =
-        config.gridType === 'square' &&
-        (!config.allowedSquareCells || config.allowedSquareCells.length === 0) &&
-        params.legacyConfig?.allowedSquareCells?.length
-          ? { ...config, allowedSquareCells: params.legacyConfig.allowedSquareCells }
+        config.gridType === 'square'
+          ? {
+              ...config,
+              ...((!config.allowedSquareCells || config.allowedSquareCells.length === 0) &&
+              params.legacyConfig?.allowedSquareCells?.length
+                ? { allowedSquareCells: params.legacyConfig.allowedSquareCells }
+                : {}),
+              ...(config.layers && config.layers.length > 0
+                ? {}
+                : params.legacyConfig?.layers
+                  ? { layers: params.legacyConfig.layers }
+                  : {}),
+              ...(config.activeLayerId
+                ? {}
+                : params.legacyConfig?.activeLayerId
+                  ? { activeLayerId: params.legacyConfig.activeLayerId }
+                  : {}),
+            }
           : config;
       return { config: mergedConfig, storage: 'advanced' };
     }

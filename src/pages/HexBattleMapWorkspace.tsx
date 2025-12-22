@@ -18,11 +18,14 @@ import { createHexGeometry } from '../hex/hexGeometry';
 import type { Cube } from '../hex/hexTypes';
 import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
 import { generateClientId } from '../lib/utils';
+import BattleMapLayerPanel, { type BattleMapLayer } from '../components/BattleMapLayerPanel/BattleMapLayerPanel';
 import './HexBattleMapWorkspace.css';
 
 type DragPayload =
   | { type: 'palette'; tile: HexTileDefinition }
   | { type: 'widget'; widget: HexWidget };
+
+const GRID_LAYER_ID = 'grid-layer';
 
 function HexBattleMapWorkspace() {
   const { projectId } = useParams();
@@ -65,6 +68,14 @@ function HexBattleMapWorkspace() {
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [isDeleteDrag, setIsDeleteDrag] = useState(false);
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+  const [mapLayers, setMapLayers] = useState<BattleMapLayer[]>(() => (
+    hexConfig.layers && hexConfig.layers.length > 0
+      ? hexConfig.layers
+      : [{ id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true }]
+  ));
+  const [activeLayerId, setActiveLayerId] = useState(
+    hexConfig.activeLayerId ?? GRID_LAYER_ID,
+  );
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [isExpandPainting, setIsExpandPainting] = useState(false);
   const [isShrinkMode, setIsShrinkMode] = useState(false);
@@ -76,6 +87,22 @@ function HexBattleMapWorkspace() {
   const [gridHoverMode, setGridHoverMode] = useState<'expand' | 'shrink' | null>(null);
   const lastPaintedHexRef = useRef<string | null>(null);
   const lastGridPaintedRef = useRef<string | null>(null);
+
+  const activeLayer = useMemo(
+    () => mapLayers.find((layer) => layer.id === activeLayerId),
+    [mapLayers, activeLayerId],
+  );
+  const isGridLayerActive = activeLayer?.kind === 'grid';
+  const isGridLayerVisible =
+    mapLayers.find((layer) => layer.kind === 'grid')?.visible ?? true;
+
+  useEffect(() => {
+    if (!isGridLayerActive) {
+      setIsExpandMode(false);
+      setIsShrinkMode(false);
+      setIsDrawMode(false);
+    }
+  }, [isGridLayerActive]);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, HexTileDefinition>();
@@ -214,7 +241,7 @@ function HexBattleMapWorkspace() {
   }, [saveConfig]);
 
   const queueSave = useCallback(
-    (widgets: HexWidget[]) => {
+    (widgets: HexWidget[], layerOverrides?: { layers?: BattleMapLayer[]; activeLayerId?: string }) => {
       hasUnsavedChangesRef.current = true;
       saveBufferRef.current = {
         gridType: 'hex',
@@ -225,6 +252,8 @@ function HexBattleMapWorkspace() {
         hexSettings,
         hexWidgets: widgets,
         allowedHexCells: allowedCells,
+        layers: layerOverrides?.layers ?? mapLayers,
+        activeLayerId: layerOverrides?.activeLayerId ?? activeLayerId,
         version: hexConfig.version,
         updated_at: hexConfig.updated_at,
       };
@@ -238,7 +267,26 @@ function HexBattleMapWorkspace() {
         flushPendingSave();
       }, 80);
     },
-    [allowedCells, flushPendingSave, gridRadius, hexConfig.cellSize, hexConfig.updated_at, hexConfig.version, hexSettings],
+    [
+      activeLayerId,
+      allowedCells,
+      flushPendingSave,
+      gridRadius,
+      hexConfig.cellSize,
+      hexConfig.updated_at,
+      hexConfig.version,
+      hexSettings,
+      mapLayers,
+    ],
+  );
+
+  const commitLayerState = useCallback(
+    (nextLayers: BattleMapLayer[], nextActiveLayerId = activeLayerId) => {
+      setMapLayers(nextLayers);
+      setActiveLayerId(nextActiveLayerId);
+      queueSave(hexWidgets, { layers: nextLayers, activeLayerId: nextActiveLayerId });
+    },
+    [activeLayerId, hexWidgets, queueSave],
   );
 
   useEffect(() => {
@@ -253,6 +301,12 @@ function HexBattleMapWorkspace() {
     if (!shouldHydrate) return;
 
     setHexWidgets(config.hexWidgets ?? []);
+    setMapLayers(
+      config.layers && config.layers.length > 0
+        ? config.layers
+        : [{ id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true }],
+    );
+    setActiveLayerId(config.activeLayerId ?? GRID_LAYER_ID);
 
     if (config.allowedHexCells && config.allowedHexCells.length > 0) {
       setAllowedCells(config.allowedHexCells);
@@ -1210,6 +1264,7 @@ function HexBattleMapWorkspace() {
             <button
               type="button"
               className={`button ${isDrawMode ? 'button--primary' : 'button--ghost'}`}
+              disabled={!isGridLayerActive}
               onClick={() => {
                 setIsDrawMode((prev) => {
                   const next = !prev;
@@ -1286,6 +1341,34 @@ function HexBattleMapWorkspace() {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="battlemap-workspace__sidebar-actions">
+            <button
+              type="button"
+              className="button button--ghost battlemap-workspace__reset-button"
+              onClick={() => {
+                setScale(1);
+                recenterGrid(1);
+              }}
+            >
+              Reset View
+            </button>
+            <div className="battlemap-workspace__export-actions">
+              <button
+                type="button"
+                className="button battlemap-workspace__export-button"
+                onClick={() => handleExportHexBattleMap('png')}
+              >
+                Save Battle Map (PNG)
+              </button>
+              <button
+                type="button"
+                className="button button--ghost battlemap-workspace__export-button"
+                onClick={() => handleExportHexBattleMap('jpeg')}
+              >
+                Save Battle Map (JPEG)
+              </button>
+            </div>
           </div>
           <p className="battlemap-workspace__hint battlemap-workspace__autosave">
             Auto-save: {isSaving ? 'Saving...' : 'Synced'}
@@ -1383,92 +1466,96 @@ function HexBattleMapWorkspace() {
               ref={surfaceRef}
               transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}
             >
-              {boundaryEdges.map((edge, index) => (
-                <line
-                  key={`boundary-${index}`}
-                  className="hex-workspace__grid-boundary"
-                  x1={edge.start.x}
-                  y1={edge.start.y}
-                  x2={edge.end.x}
-                  y2={edge.end.y}
-                />
-              ))}
+              {isGridLayerVisible ? (
+                <>
+                  {boundaryEdges.map((edge, index) => (
+                    <line
+                      key={`boundary-${index}`}
+                      className="hex-workspace__grid-boundary"
+                      x1={edge.start.x}
+                      y1={edge.start.y}
+                      x2={edge.end.x}
+                      y2={edge.end.y}
+                    />
+                  ))}
 
-              {hoverHex && hoverVisible && dragPayload ? (
-                <polygon
-                  className="hex-workspace__hover"
-                  points={geometry
-                    .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
-                    .map((corner) => `${corner.x},${corner.y}`)
-                    .join(' ')}
-                />
-              ) : null}
+                  {hoverHex && hoverVisible && dragPayload ? (
+                    <polygon
+                      className="hex-workspace__hover"
+                      points={geometry
+                        .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
+                        .map((corner) => `${corner.x},${corner.y}`)
+                        .join(' ')}
+                    />
+                  ) : null}
 
-              {allowedCells.map((hex) => {
-                const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
-                const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
-                return (
-                  <polygon
-                    key={`${hex.q}-${hex.r}`}
-                    className="hex-workspace__cell"
-                    points={points}
-                  />
-                );
-              })}
-
-              {hexWidgets.map((widget) => {
-                const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
-                const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
-                const minX = Math.min(...corners.map((corner) => corner.x));
-                const maxX = Math.max(...corners.map((corner) => corner.x));
-                const minY = Math.min(...corners.map((corner) => corner.y));
-                const maxY = Math.max(...corners.map((corner) => corner.y));
-                const tile = tileMap.get(widget.tileId);
-                const isDragOrigin =
-                  dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
-
-                return (
-                  <g
-                    key={widget.id}
-                    className={`hex-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
-                    onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
-                  >
-                    {tile ? (
-                      <image
-                        href={tile.image}
-                        x={minX}
-                        y={minY}
-                        width={maxX - minX}
-                        height={maxY - minY}
-                        preserveAspectRatio="xMidYMid slice"
-                        clipPath={`url(#hex-clip-${widget.id})`}
+                  {allowedCells.map((hex) => {
+                    const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
+                    const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+                    return (
+                      <polygon
+                        key={`${hex.q}-${hex.r}`}
+                        className="hex-workspace__cell"
+                        points={points}
                       />
-                    ) : (
-                      <polygon points={points} fill="#d0d0d0" />
-                    )}
-                    <polygon className="hex-workspace__tile-border" points={points} />
-                  </g>
-                );
-              })}
+                    );
+                  })}
 
-              {gridHoverHex && gridHoverMode === 'expand' ? (
-                <polygon
-                  className="hex-workspace__expand-preview"
-                  points={geometry
-                    .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
-                    .map((corner) => `${corner.x},${corner.y}`)
-                    .join(' ')}
-                />
-              ) : null}
+                  {hexWidgets.map((widget) => {
+                    const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
+                    const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+                    const minX = Math.min(...corners.map((corner) => corner.x));
+                    const maxX = Math.max(...corners.map((corner) => corner.x));
+                    const minY = Math.min(...corners.map((corner) => corner.y));
+                    const maxY = Math.max(...corners.map((corner) => corner.y));
+                    const tile = tileMap.get(widget.tileId);
+                    const isDragOrigin =
+                      dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
 
-              {gridHoverHex && gridHoverMode === 'shrink' ? (
-                <polygon
-                  className="hex-workspace__shrink-preview"
-                  points={geometry
-                    .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
-                    .map((corner) => `${corner.x},${corner.y}`)
-                    .join(' ')}
-                />
+                    return (
+                      <g
+                        key={widget.id}
+                        className={`hex-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
+                        onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
+                      >
+                        {tile ? (
+                          <image
+                            href={tile.image}
+                            x={minX}
+                            y={minY}
+                            width={maxX - minX}
+                            height={maxY - minY}
+                            preserveAspectRatio="xMidYMid slice"
+                            clipPath={`url(#hex-clip-${widget.id})`}
+                          />
+                        ) : (
+                          <polygon points={points} fill="#d0d0d0" />
+                        )}
+                        <polygon className="hex-workspace__tile-border" points={points} />
+                      </g>
+                    );
+                  })}
+
+                  {gridHoverHex && gridHoverMode === 'expand' ? (
+                    <polygon
+                      className="hex-workspace__expand-preview"
+                      points={geometry
+                        .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
+                        .map((corner) => `${corner.x},${corner.y}`)
+                        .join(' ')}
+                    />
+                  ) : null}
+
+                  {gridHoverHex && gridHoverMode === 'shrink' ? (
+                    <polygon
+                      className="hex-workspace__shrink-preview"
+                      points={geometry
+                        .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
+                        .map((corner) => `${corner.x},${corner.y}`)
+                        .join(' ')}
+                    />
+                  ) : null}
+                </>
               ) : null}
             </g>
           </svg>
@@ -1535,98 +1622,95 @@ function HexBattleMapWorkspace() {
       </div>
 
       <div className="battlemap-workspace__right-sidebar">
+        <BattleMapLayerPanel
+          layers={mapLayers}
+          activeLayerId={activeLayerId}
+          onActiveLayerChange={(layerId) => {
+            commitLayerState(mapLayers, layerId);
+          }}
+          onToggleVisibility={(layerId) => {
+            const nextLayers = mapLayers.map((layer) =>
+              layer.id === layerId ? { ...layer, visible: !layer.visible } : layer,
+            );
+            commitLayerState(nextLayers);
+          }}
+          onAddLayer={() => {
+            const nextLayer = {
+              id: crypto.randomUUID(),
+              name: `Layer ${mapLayers.length}`,
+              kind: 'layer' as const,
+              visible: true,
+            };
+            const nextLayers = [...mapLayers, nextLayer];
+            commitLayerState(nextLayers, nextLayer.id);
+          }}
+          onRenameLayer={(layerId, nextName) => {
+            const nextLayers = mapLayers.map((layer) =>
+              layer.id === layerId ? { ...layer, name: nextName } : layer,
+            );
+            commitLayerState(nextLayers);
+          }}
+        />
         <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
-          <h3 className="battlemap-workspace__control-title">Hex Grid</h3>
-          <div className="battlemap-workspace__grid-meta">
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Orientation</span>
-              <span>{hexSettings.orientation === 'flat' ? 'Flat top' : 'Pointy top'}</span>
-            </div>
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Hex Size</span>
-              <span>{hexSettings.hexSize}px</span>
-            </div>
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Tiles Placed</span>
-              <span>{hexWidgets.length}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="button button--ghost battlemap-workspace__reset-button"
-            onClick={() => {
-              setScale(1);
-              recenterGrid(1);
-            }}
-          >
-            Reset View
-          </button>
-          <button
-            type="button"
-            className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
-            onClick={() => {
-              setIsExpandMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setIsDeleteMode(false);
-                  setIsDrawMode(false);
-                  setIsShrinkMode(false);
-                  setStatusMessage('Expand Hex Grid Mode enabled. Click or drag to add tiles.');
-                } else {
-                  setStatusMessage('Expand Hex Grid Mode disabled.');
-                }
-                return next;
-              });
-            }}
-            onKeyDown={(event) => {
-              if (event.code === 'Space') {
-                event.preventDefault();
-              }
-            }}
-          >
-            {isExpandMode ? 'Expand Mode: ON' : 'Expand Hex Grid'}
-          </button>
-          <button
-            type="button"
-            className={`button ${isShrinkMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
-            onClick={() => {
-              setIsShrinkMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setIsDeleteMode(false);
-                  setIsDrawMode(false);
-                  setIsExpandMode(false);
-                  setStatusMessage('Decrease Hex Grid Mode enabled. Click or drag to remove tiles.');
-                } else {
-                  setStatusMessage('Decrease Hex Grid Mode disabled.');
-                }
-                return next;
-              });
-            }}
-            onKeyDown={(event) => {
-              if (event.code === 'Space') {
-                event.preventDefault();
-              }
-            }}
-          >
-            {isShrinkMode ? 'Decrease Mode: ON' : 'Decrease Hex Grid'}
-          </button>
-          <div className="battlemap-workspace__export-actions">
-            <button
-              type="button"
-              className="button battlemap-workspace__export-button"
-              onClick={() => handleExportHexBattleMap('png')}
-            >
-              Save Battle Map (PNG)
-            </button>
-            <button
-              type="button"
-              className="button button--ghost battlemap-workspace__export-button"
-              onClick={() => handleExportHexBattleMap('jpeg')}
-            >
-              Save Battle Map (JPEG)
-            </button>
-          </div>
+          <h3 className="battlemap-workspace__control-title">Grid Layer Tools</h3>
+          {isGridLayerActive ? (
+            <>
+              <button
+                type="button"
+                className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+                onClick={() => {
+                  setIsExpandMode((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setIsDeleteMode(false);
+                      setIsDrawMode(false);
+                      setIsShrinkMode(false);
+                      setStatusMessage('Expand Hex Grid Mode enabled. Click or drag to add tiles.');
+                    } else {
+                      setStatusMessage('Expand Hex Grid Mode disabled.');
+                    }
+                    return next;
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.code === 'Space') {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                {isExpandMode ? 'Expand Mode: ON' : 'Expand Hex Grid'}
+              </button>
+              <button
+                type="button"
+                className={`button ${isShrinkMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+                onClick={() => {
+                  setIsShrinkMode((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setIsDeleteMode(false);
+                      setIsDrawMode(false);
+                      setIsExpandMode(false);
+                      setStatusMessage('Decrease Hex Grid Mode enabled. Click or drag to remove tiles.');
+                    } else {
+                      setStatusMessage('Decrease Hex Grid Mode disabled.');
+                    }
+                    return next;
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.code === 'Space') {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                {isShrinkMode ? 'Decrease Mode: ON' : 'Decrease Hex Grid'}
+              </button>
+            </>
+          ) : (
+            <p className="battlemap-workspace__hint">
+              Grid tools appear when the Grid Map Layer is active.
+            </p>
+          )}
           <p className="battlemap-workspace__hint">
             Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the nearest open hex. Occupied hexes are rejected (no swaps).
           </p>

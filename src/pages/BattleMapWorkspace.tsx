@@ -16,9 +16,11 @@ import type { SquareTileDefinition } from '../data/tiles/types';
 import { SQUARE_TILE_SETS, TILE_PREVIEW_SCALE } from '../data/tiles/tileSets';
 import { downloadDataUrl, fetchImageAsDataUrl, loadImageFromUrl } from '../lib/exportUtils';
 import { generateClientId } from '../lib/utils';
+import BattleMapLayerPanel, { type BattleMapLayer } from '../components/BattleMapLayerPanel/BattleMapLayerPanel';
 import './BattleMapWorkspace.css';
 
 const TILE_PREVIEW_COLUMNS = 3;
+const GRID_LAYER_ID = 'grid-layer';
 
 type DragPayload =
   | { type: 'palette'; tile: SquareTileDefinition }
@@ -65,6 +67,14 @@ function BattleMapWorkspace() {
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [isDeleteDrag, setIsDeleteDrag] = useState(false);
   const [isDeleteZoneActive, setIsDeleteZoneActive] = useState(false);
+  const [mapLayers, setMapLayers] = useState<BattleMapLayer[]>(() => (
+    squareConfig.layers && squareConfig.layers.length > 0
+      ? squareConfig.layers
+      : [{ id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true }]
+  ));
+  const [activeLayerId, setActiveLayerId] = useState(
+    squareConfig.activeLayerId ?? GRID_LAYER_ID,
+  );
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [isExpandPainting, setIsExpandPainting] = useState(false);
   const [isShrinkMode, setIsShrinkMode] = useState(false);
@@ -76,6 +86,22 @@ function BattleMapWorkspace() {
   const [gridHoverMode, setGridHoverMode] = useState<'expand' | 'shrink' | null>(null);
   const lastPaintedCellRef = useRef<string | null>(null);
   const lastGridPaintedRef = useRef<string | null>(null);
+
+  const activeLayer = useMemo(
+    () => mapLayers.find((layer) => layer.id === activeLayerId),
+    [mapLayers, activeLayerId],
+  );
+  const isGridLayerActive = activeLayer?.kind === 'grid';
+  const isGridLayerVisible =
+    mapLayers.find((layer) => layer.kind === 'grid')?.visible ?? true;
+
+  useEffect(() => {
+    if (!isGridLayerActive) {
+      setIsExpandMode(false);
+      setIsShrinkMode(false);
+      setIsDrawMode(false);
+    }
+  }, [isGridLayerActive]);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, SquareTileDefinition>();
@@ -209,7 +235,11 @@ function BattleMapWorkspace() {
   }, [saveConfig]);
 
   const queueSave = useCallback(
-    (updatedWidgets: BattleMapWidget[], currentAllowedCells: SquareCell[]) => {
+    (
+      updatedWidgets: BattleMapWidget[],
+      currentAllowedCells: SquareCell[],
+      layerOverrides?: { layers?: BattleMapLayer[]; activeLayerId?: string },
+    ) => {
       hasUnsavedChangesRef.current = true;
       saveBufferRef.current = {
         gridType: 'square',
@@ -218,6 +248,8 @@ function BattleMapWorkspace() {
         cellSize,
         widgets: updatedWidgets,
         allowedSquareCells: currentAllowedCells,
+        layers: layerOverrides?.layers ?? mapLayers,
+        activeLayerId: layerOverrides?.activeLayerId ?? activeLayerId,
         version: config.version,
         updated_at: config.updated_at,
       };
@@ -231,7 +263,25 @@ function BattleMapWorkspace() {
         flushPendingSave();
       }, 80);
     },
-    [cellSize, config.updated_at, config.version, flushPendingSave, gridColumns, gridRows],
+    [
+      activeLayerId,
+      cellSize,
+      config.updated_at,
+      config.version,
+      flushPendingSave,
+      gridColumns,
+      gridRows,
+      mapLayers,
+    ],
+  );
+
+  const commitLayerState = useCallback(
+    (nextLayers: BattleMapLayer[], nextActiveLayerId = activeLayerId) => {
+      setMapLayers(nextLayers);
+      setActiveLayerId(nextActiveLayerId);
+      queueSave(widgets, allowedCells, { layers: nextLayers, activeLayerId: nextActiveLayerId });
+    },
+    [activeLayerId, allowedCells, queueSave, widgets],
   );
 
   useEffect(() => {
@@ -246,6 +296,12 @@ function BattleMapWorkspace() {
     if (!shouldHydrate) return;
 
     setWidgets(config.widgets ?? []);
+    setMapLayers(
+      config.layers && config.layers.length > 0
+        ? config.layers
+        : [{ id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true }],
+    );
+    setActiveLayerId(config.activeLayerId ?? GRID_LAYER_ID);
     if (config.allowedSquareCells && config.allowedSquareCells.length > 0) {
       setAllowedCells(config.allowedSquareCells);
     } else if (projectChanged || !hasHydratedConfigRef.current) {
@@ -1214,6 +1270,7 @@ function BattleMapWorkspace() {
             <button
               type="button"
               className={`button ${isDrawMode ? 'button--primary' : 'button--ghost'}`}
+              disabled={!isGridLayerActive}
               onClick={() => {
                 setIsDrawMode((prev) => {
                   const next = !prev;
@@ -1306,6 +1363,36 @@ function BattleMapWorkspace() {
               </div>
             ))}
           </div>
+          <div className="battlemap-workspace__sidebar-actions">
+            <button
+              type="button"
+              className="button button--ghost battlemap-workspace__reset-button"
+              onClick={() => {
+                setScale(1);
+                hasCenteredRef.current = false;
+                recenterGrid(1);
+                hasCenteredRef.current = true;
+              }}
+            >
+              Reset View
+            </button>
+            <div className="battlemap-workspace__export-actions">
+              <button
+                type="button"
+                className="button battlemap-workspace__export-button"
+                onClick={() => handleExportBattleMap('png')}
+              >
+                Save Battle Map (PNG)
+              </button>
+              <button
+                type="button"
+                className="button button--ghost battlemap-workspace__export-button"
+                onClick={() => handleExportBattleMap('jpeg')}
+              >
+                Save Battle Map (JPEG)
+              </button>
+            </div>
+          </div>
           <p className="battlemap-workspace__hint battlemap-workspace__autosave">
             Auto-save: {isSaving ? 'Saving...' : 'Synced'}
           </p>
@@ -1391,92 +1478,96 @@ function BattleMapWorkspace() {
               ref={surfaceRef}
               transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}
             >
-              {hoverCell && hoverVisible && dragPayload ? (
-                <rect
-                  className="square-workspace__hover"
-                  x={hoverCell.x * cellSize}
-                  y={hoverCell.y * cellSize}
-                  width={cellSize * getPayloadSize(dragPayload).cols}
-                  height={cellSize * getPayloadSize(dragPayload).rows}
-                />
-              ) : null}
+              {isGridLayerVisible ? (
+                <>
+                  {hoverCell && hoverVisible && dragPayload ? (
+                    <rect
+                      className="square-workspace__hover"
+                      x={hoverCell.x * cellSize}
+                      y={hoverCell.y * cellSize}
+                      width={cellSize * getPayloadSize(dragPayload).cols}
+                      height={cellSize * getPayloadSize(dragPayload).rows}
+                    />
+                  ) : null}
 
-              {allowedCells.map((cell) => {
-                const x = cell.x * cellSize;
-                const y = cell.y * cellSize;
-                return (
-                  <rect
-                    key={`${cell.x}-${cell.y}`}
-                    className="square-workspace__cell"
-                    x={x}
-                    y={y}
-                    width={cellSize}
-                    height={cellSize}
-                  />
-                );
-              })}
-
-              {gridBoundarySegments.map((seg, index) => (
-                <line
-                  key={`boundary-${index}`}
-                  className="square-workspace__grid-boundary"
-                  x1={seg.x1}
-                  y1={seg.y1}
-                  x2={seg.x2}
-                  y2={seg.y2}
-                />
-              ))}
-
-              {widgets.map((widget) => {
-                const x = widget.x * cellSize;
-                const y = widget.y * cellSize;
-                const tile = tileMap.get(widget.tileId ?? '');
-                const width = cellSize * (widget.w ?? 1);
-                const height = cellSize * (widget.h ?? 1);
-                const isDragOrigin =
-                  dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
-
-                return (
-                  <g
-                    key={widget.id}
-                    className={`square-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
-                    onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
-                  >
-                    {tile || widget.appearance?.backgroundImageUrl ? (
-                      <image
-                        href={tile?.image ?? widget.appearance?.backgroundImageUrl}
+                  {allowedCells.map((cell) => {
+                    const x = cell.x * cellSize;
+                    const y = cell.y * cellSize;
+                    return (
+                      <rect
+                        key={`${cell.x}-${cell.y}`}
+                        className="square-workspace__cell"
                         x={x}
                         y={y}
-                        width={width}
-                        height={height}
-                        preserveAspectRatio="xMidYMid slice"
+                        width={cellSize}
+                        height={cellSize}
                       />
-                    ) : (
-                      <rect x={x} y={y} width={width} height={height} fill="#d0d0d0" />
-                    )}
-                    <rect className="square-workspace__tile-border" x={x} y={y} width={width} height={height} />
-                  </g>
-                );
-              })}
+                    );
+                  })}
 
-              {gridHoverCell && gridHoverMode === 'expand' ? (
-                <rect
-                  className="square-workspace__expand-preview"
-                  x={gridHoverCell.x * cellSize}
-                  y={gridHoverCell.y * cellSize}
-                  width={cellSize}
-                  height={cellSize}
-                />
-              ) : null}
+                  {gridBoundarySegments.map((seg, index) => (
+                    <line
+                      key={`boundary-${index}`}
+                      className="square-workspace__grid-boundary"
+                      x1={seg.x1}
+                      y1={seg.y1}
+                      x2={seg.x2}
+                      y2={seg.y2}
+                    />
+                  ))}
 
-              {gridHoverCell && gridHoverMode === 'shrink' ? (
-                <rect
-                  className="square-workspace__shrink-preview"
-                  x={gridHoverCell.x * cellSize}
-                  y={gridHoverCell.y * cellSize}
-                  width={cellSize}
-                  height={cellSize}
-                />
+                  {widgets.map((widget) => {
+                    const x = widget.x * cellSize;
+                    const y = widget.y * cellSize;
+                    const tile = tileMap.get(widget.tileId ?? '');
+                    const width = cellSize * (widget.w ?? 1);
+                    const height = cellSize * (widget.h ?? 1);
+                    const isDragOrigin =
+                      dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
+
+                    return (
+                      <g
+                        key={widget.id}
+                        className={`square-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
+                        onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
+                      >
+                        {tile || widget.appearance?.backgroundImageUrl ? (
+                          <image
+                            href={tile?.image ?? widget.appearance?.backgroundImageUrl}
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            preserveAspectRatio="xMidYMid slice"
+                          />
+                        ) : (
+                          <rect x={x} y={y} width={width} height={height} fill="#d0d0d0" />
+                        )}
+                        <rect className="square-workspace__tile-border" x={x} y={y} width={width} height={height} />
+                      </g>
+                    );
+                  })}
+
+                  {gridHoverCell && gridHoverMode === 'expand' ? (
+                    <rect
+                      className="square-workspace__expand-preview"
+                      x={gridHoverCell.x * cellSize}
+                      y={gridHoverCell.y * cellSize}
+                      width={cellSize}
+                      height={cellSize}
+                    />
+                  ) : null}
+
+                  {gridHoverCell && gridHoverMode === 'shrink' ? (
+                    <rect
+                      className="square-workspace__shrink-preview"
+                      x={gridHoverCell.x * cellSize}
+                      y={gridHoverCell.y * cellSize}
+                      width={cellSize}
+                      height={cellSize}
+                    />
+                  ) : null}
+                </>
               ) : null}
             </g>
           </svg>
@@ -1533,96 +1624,95 @@ function BattleMapWorkspace() {
       </div>
 
       <div className="battlemap-workspace__right-sidebar">
+        <BattleMapLayerPanel
+          layers={mapLayers}
+          activeLayerId={activeLayerId}
+          onActiveLayerChange={(layerId) => {
+            commitLayerState(mapLayers, layerId);
+          }}
+          onToggleVisibility={(layerId) => {
+            const nextLayers = mapLayers.map((layer) =>
+              layer.id === layerId ? { ...layer, visible: !layer.visible } : layer,
+            );
+            commitLayerState(nextLayers);
+          }}
+          onAddLayer={() => {
+            const nextLayer = {
+              id: crypto.randomUUID(),
+              name: `Layer ${mapLayers.length}`,
+              kind: 'layer' as const,
+              visible: true,
+            };
+            const nextLayers = [...mapLayers, nextLayer];
+            commitLayerState(nextLayers, nextLayer.id);
+          }}
+          onRenameLayer={(layerId, nextName) => {
+            const nextLayers = mapLayers.map((layer) =>
+              layer.id === layerId ? { ...layer, name: nextName } : layer,
+            );
+            commitLayerState(nextLayers);
+          }}
+        />
         <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
-          <h3 className="battlemap-workspace__control-title">Grid</h3>
-          <div className="battlemap-workspace__grid-meta">
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Cell Size</span>
-              <span>{cellSize}px</span>
-            </div>
-            <div className="battlemap-workspace__grid-meta-row">
-              <span>Tiles Placed</span>
-              <span>{widgets.length}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="button button--ghost battlemap-workspace__reset-button"
-            onClick={() => {
-              setScale(1);
-              hasCenteredRef.current = false;
-              recenterGrid(1);
-              hasCenteredRef.current = true;
-            }}
-          >
-            Reset View
-          </button>
-          <button
-            type="button"
-            className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
-            onClick={() => {
-              setIsExpandMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setIsDeleteMode(false);
-                  setIsDrawMode(false);
-                  setIsShrinkMode(false);
-                  setStatusMessage('Expand Grid Mode enabled. Click or drag to add cells.');
-                } else {
-                  setStatusMessage('Expand Grid Mode disabled.');
-                }
-                return next;
-              });
-            }}
-            onKeyDown={(event) => {
-              if (event.code === 'Space') {
-                event.preventDefault();
-              }
-            }}
-          >
-            {isExpandMode ? 'Expand Mode: ON' : 'Expand Grid'}
-          </button>
-          <button
-            type="button"
-            className={`button ${isShrinkMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
-            onClick={() => {
-              setIsShrinkMode((prev) => {
-                const next = !prev;
-                if (next) {
-                  setIsDeleteMode(false);
-                  setIsDrawMode(false);
-                  setIsExpandMode(false);
-                  setStatusMessage('Decrease Grid Mode enabled. Click or drag to remove cells.');
-                } else {
-                  setStatusMessage('Decrease Grid Mode disabled.');
-                }
-                return next;
-              });
-            }}
-            onKeyDown={(event) => {
-              if (event.code === 'Space') {
-                event.preventDefault();
-              }
-            }}
-          >
-            {isShrinkMode ? 'Decrease Mode: ON' : 'Decrease Grid'}
-          </button>
-          <div className="battlemap-workspace__export-actions">
-            <button
-              type="button"
-              className="button battlemap-workspace__export-button"
-              onClick={() => handleExportBattleMap('png')}
-            >
-              Save Battle Map (PNG)
-            </button>
-            <button
-              type="button"
-              className="button button--ghost battlemap-workspace__export-button"
-              onClick={() => handleExportBattleMap('jpeg')}
-            >
-              Save Battle Map (JPEG)
-            </button>
-          </div>
+          <h3 className="battlemap-workspace__control-title">Grid Layer Tools</h3>
+          {isGridLayerActive ? (
+            <>
+              <button
+                type="button"
+                className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+                onClick={() => {
+                  setIsExpandMode((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setIsDeleteMode(false);
+                      setIsDrawMode(false);
+                      setIsShrinkMode(false);
+                      setStatusMessage('Expand Grid Mode enabled. Click or drag to add cells.');
+                    } else {
+                      setStatusMessage('Expand Grid Mode disabled.');
+                    }
+                    return next;
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.code === 'Space') {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                {isExpandMode ? 'Expand Mode: ON' : 'Expand Grid'}
+              </button>
+              <button
+                type="button"
+                className={`button ${isShrinkMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
+                onClick={() => {
+                  setIsShrinkMode((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setIsDeleteMode(false);
+                      setIsDrawMode(false);
+                      setIsExpandMode(false);
+                      setStatusMessage('Decrease Grid Mode enabled. Click or drag to remove cells.');
+                    } else {
+                      setStatusMessage('Decrease Grid Mode disabled.');
+                    }
+                    return next;
+                  });
+                }}
+                onKeyDown={(event) => {
+                  if (event.code === 'Space') {
+                    event.preventDefault();
+                  }
+                }}
+              >
+                {isShrinkMode ? 'Decrease Mode: ON' : 'Decrease Grid'}
+              </button>
+            </>
+          ) : (
+            <p className="battlemap-workspace__hint">
+              Grid tools appear when the Grid Map Layer is active.
+            </p>
+          )}
           <p className="battlemap-workspace__hint">
             Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the grid. Occupied cells are swapped.
           </p>

@@ -78,6 +78,13 @@ export type SquareCell = {
   y: number;
 };
 
+export type BattleMapLayerState = {
+  id: string;
+  name: string;
+  kind: 'grid' | 'layer';
+  visible: boolean;
+};
+
 export type BattleMapConfig = {
   gridType: GridType;
   gridColumns: number;
@@ -88,6 +95,8 @@ export type BattleMapConfig = {
   hexWidgets?: HexWidget[];
   allowedHexCells?: HexCell[];
   allowedSquareCells?: SquareCell[];
+  layers?: BattleMapLayerState[];
+  activeLayerId?: string;
   version?: number;
   updated_at?: string;
 };

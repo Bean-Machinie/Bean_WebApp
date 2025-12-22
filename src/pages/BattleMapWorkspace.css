@@ -65,6 +65,14 @@
   padding-right: 0.35rem;
 }
 
+.battlemap-workspace__sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--sidebar-border);
+}
+
 .battlemap-workspace__tiles-scroll::-webkit-scrollbar {
   width: 8px;
 }
@@ -603,7 +611,7 @@
 }
 
 .battlemap-workspace__right-sidebar {
-  width: 220px;
+  width: 260px;
   background: var(--sidebar-bg);
   border-left: 1px solid var(--sidebar-border);
   padding: 1rem;
