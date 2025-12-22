@@ -22,7 +22,7 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  border-color: var(--sidebar-border);
+  border: none;
   color: var(--sidebar-text);
 }
 
@@ -30,10 +30,22 @@
   color: var(--sidebar-text);
 }
 
-.battlemap-layer-panel__item--grid .layer-item__name::after {
-  content: ' (Grid)';
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 500;
-  margin-left: 0.35rem;
+.battlemap-layer-panel .layer-item__divider {
+  background: #ffffff;
+  opacity: 0.6;
+}
+
+.battlemap-layer-panel .layer-item__section--visibility {
+  padding: 0.4rem 0.15rem;
+  width: 38px;
+}
+
+.battlemap-layer-panel .layer-item__section--thumbnail {
+  padding: 0.3rem 0.35rem;
+  width: 38px;
+}
+
+.battlemap-layer-panel .layer-item__name {
+  display: flex;
+  align-items: center;
 }
