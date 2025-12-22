@@ -45,6 +45,7 @@ export type BattleMapWidget = {
   w: number;
   h: number;
   content: string;
+  layerId?: string;
   tileId?: string;
   appearance?: WidgetAppearance;
   isFixed?: boolean;
@@ -62,6 +63,7 @@ export type HexWidget = {
   q: number;
   r: number;
   s: number;
+  layerId?: string;
   tileId: string;
   appearance?: WidgetAppearance;
   updated_at?: string;
@@ -81,7 +83,7 @@ export type SquareCell = {
 export type BattleMapLayerState = {
   id: string;
   name: string;
-  kind: 'grid' | 'layer' | 'image' | 'background';
+  kind: 'grid' | 'tiles' | 'layer' | 'image' | 'background';
   visible: boolean;
 };
 

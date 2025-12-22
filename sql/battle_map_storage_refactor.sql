@@ -49,10 +49,14 @@ alter table public.battle_map_configs
 alter table public.battle_map_configs
   add column if not exists grid_border_width double precision;
 
+alter table public.battle_map_widgets
+  add column if not exists layer_id text;
+
 create table if not exists public.battle_map_widgets (
   id uuid primary key,
   project_id uuid not null references public.projects(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
+  layer_id text,
   x integer not null default 0,
   y integer not null default 0,
   w integer not null default 1,
@@ -154,11 +158,12 @@ with legacy_widgets as (
   where p.project_type = 'battle-maps'
     and p.battle_map_config is not null
 )
-insert into public.battle_map_widgets (id, project_id, user_id, x, y, w, h, content, sort_index, updated_at)
+insert into public.battle_map_widgets (id, project_id, user_id, layer_id, x, y, w, h, content, sort_index, updated_at)
 select
   coalesce((widget->>'id')::uuid, gen_random_uuid()) as id,
   project_id,
   user_id,
+  widget->>'layerId' as layer_id,
   coalesce((widget->>'x')::integer, 0) as x,
   coalesce((widget->>'y')::integer, 0) as y,
   coalesce((widget->>'w')::integer, 1) as w,
@@ -169,6 +174,7 @@ select
 from legacy_widgets
 on conflict (id) do update
 set
+  layer_id = excluded.layer_id,
   x = excluded.x,
   y = excluded.y,
   w = excluded.w,

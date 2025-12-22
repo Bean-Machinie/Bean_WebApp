@@ -11,7 +11,10 @@ export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridLineWidth: 1,
   gridBorderWidth: 2,
   widgets: [],
-  layers: [{ id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true }],
+  layers: [
+    { id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true },
+    { id: generateClientId(), name: 'Tile Layer 1', kind: 'tiles', visible: true },
+  ],
   activeLayerId: 'grid-layer',
   version: 1,
 };
@@ -29,7 +32,10 @@ export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
     orientation: 'flat',
   },
   hexWidgets: [],
-  layers: [{ id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true }],
+  layers: [
+    { id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true },
+    { id: generateClientId(), name: 'Tile Layer 1', kind: 'tiles', visible: true },
+  ],
   activeLayerId: 'grid-layer',
   version: 1,
 };
@@ -46,11 +52,13 @@ let hasGridLineColorColumn = true;
 let hasGridBorderColorColumn = true;
 let hasGridLineWidthColumn = true;
 let hasGridBorderWidthColumn = true;
+let hasWidgetLayerIdColumn = true;
 
 const GRID_LAYER_ID = 'grid-layer';
 
 const buildDefaultLayers = (): BattleMapLayerState[] => [
   { id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true },
+  { id: generateClientId(), name: 'Tile Layer 1', kind: 'tiles', visible: true },
 ];
 
 const normalizeLayers = (layers?: BattleMapLayerState[] | null): BattleMapLayerState[] => {
@@ -58,14 +66,14 @@ const normalizeLayers = (layers?: BattleMapLayerState[] | null): BattleMapLayerS
     return buildDefaultLayers();
   }
 
-  const normalized = layers.map((layer, index) => {
+  let normalized = layers.map((layer, index) => {
     const name = typeof layer.name === 'string' && layer.name.trim().length > 0
       ? layer.name.trim()
       : `Layer ${index + 1}`;
     return {
       id: typeof layer.id === 'string' && layer.id.length > 0 ? layer.id : generateClientId(),
       name,
-      kind: layer.kind === 'grid' || layer.kind === 'image' || layer.kind === 'background'
+      kind: layer.kind === 'grid' || layer.kind === 'tiles' || layer.kind === 'image' || layer.kind === 'background'
         ? layer.kind
         : 'layer',
       visible: layer.visible !== false,
@@ -73,7 +81,26 @@ const normalizeLayers = (layers?: BattleMapLayerState[] | null): BattleMapLayerS
   });
 
   const hasGridLayer = normalized.some((layer) => layer.kind === 'grid');
-  return hasGridLayer ? normalized : [...buildDefaultLayers(), ...normalized];
+  if (!hasGridLayer) {
+    normalized = [{ id: GRID_LAYER_ID, name: 'Grid Map Layer', kind: 'grid', visible: true }, ...normalized];
+  }
+
+  const hasTileLayer = normalized.some((layer) => layer.kind === 'tiles');
+  if (!hasTileLayer) {
+    const tileLayer = { id: generateClientId(), name: 'Tile Layer 1', kind: 'tiles' as const, visible: true };
+    const gridIndex = normalized.findIndex((layer) => layer.kind === 'grid');
+    if (gridIndex >= 0) {
+      normalized = [
+        ...normalized.slice(0, gridIndex + 1),
+        tileLayer,
+        ...normalized.slice(gridIndex + 1),
+      ];
+    } else {
+      normalized = [tileLayer, ...normalized];
+    }
+  }
+
+  return normalized;
 };
 
 const normalizeActiveLayerId = (
@@ -99,7 +126,7 @@ const isMissingColumnError = (error: unknown, column: string) => {
   return message.includes('does not exist') && message.includes(column.toLowerCase());
 };
 
-const normalizeHexWidget = (widget: Partial<HexWidget>): HexWidget => {
+const normalizeHexWidget = (widget: Partial<HexWidget>, defaultLayerId?: string): HexWidget => {
   const q = Number(widget.q) || 0;
   const r = Number(widget.r) || 0;
   const s =
@@ -113,6 +140,7 @@ const normalizeHexWidget = (widget: Partial<HexWidget>): HexWidget => {
     q,
     r,
     s,
+    layerId: widget.layerId ?? defaultLayerId,
     tileId: widget.tileId ?? '',
     appearance: widget.appearance,
     updated_at: widget.updated_at,
@@ -142,6 +170,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
     };
 
     const layers = normalizeLayers((config as BattleMapConfig)?.layers);
+    const defaultTileLayerId = layers.find((layer) => layer.kind === 'tiles')?.id;
     return {
       gridType: 'hex',
       gridColumns,
@@ -153,7 +182,9 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       gridBorderColor,
       widgets: [],
       hexSettings,
-      hexWidgets: ((config as BattleMapConfig)?.hexWidgets ?? []).map(normalizeHexWidget),
+      hexWidgets: ((config as BattleMapConfig)?.hexWidgets ?? []).map((widget) =>
+        normalizeHexWidget(widget, defaultTileLayerId),
+      ),
       allowedHexCells: (config as BattleMapConfig)?.allowedHexCells,
       layers,
       activeLayerId: normalizeActiveLayerId((config as BattleMapConfig)?.activeLayerId, layers),
@@ -163,6 +194,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
   }
 
   const layers = normalizeLayers((config as BattleMapConfig)?.layers);
+  const defaultTileLayerId = layers.find((layer) => layer.kind === 'tiles')?.id;
   return {
     gridType: 'square',
     gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
@@ -191,6 +223,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
         w: widget.w ?? 1,
         h: widget.h ?? 1,
         content,
+        layerId: widget.layerId ?? defaultTileLayerId,
         tileId: widget.tileId,
         appearance: resolvedAppearance,
         isFixed: widget.isFixed ?? false,
@@ -304,9 +337,10 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     return null;
   }
 
-  const widgetSelect = hasIsFixedColumn
-    ? 'id, x, y, w, h, content, is_fixed, updated_at, sort_index'
-    : 'id, x, y, w, h, content, updated_at, sort_index';
+  const widgetSelectParts = ['id', 'x', 'y', 'w', 'h', 'content', 'updated_at', 'sort_index'];
+  if (hasIsFixedColumn) widgetSelectParts.push('is_fixed');
+  if (hasWidgetLayerIdColumn) widgetSelectParts.push('layer_id');
+  const widgetSelect = widgetSelectParts.join(', ');
 
   const { data: widgetRows, error: widgetError } = await supabase
     .from('battle_map_widgets')
@@ -320,30 +354,125 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
       hasIsFixedColumn = false;
       const retry = await supabase
         .from('battle_map_widgets')
-        .select('id, x, y, w, h, content, updated_at, sort_index')
+        .select(
+          [
+            'id',
+            'x',
+            'y',
+            'w',
+            'h',
+            'content',
+            'updated_at',
+            'sort_index',
+            ...(hasWidgetLayerIdColumn ? ['layer_id'] : []),
+          ].join(', '),
+        )
         .eq('project_id', projectId)
         .eq('user_id', userId)
         .order('sort_index', { ascending: true });
 
       if (retry.error) {
+        if (isMissingColumnError(retry.error, 'layer_id')) {
+          hasWidgetLayerIdColumn = false;
+          const retryWithoutLayer = await supabase
+            .from('battle_map_widgets')
+            .select('id, x, y, w, h, content, updated_at, sort_index')
+            .eq('project_id', projectId)
+            .eq('user_id', userId)
+            .order('sort_index', { ascending: true });
+
+          if (retryWithoutLayer.error) {
+            throw retryWithoutLayer.error;
+          }
+
+          return normalizeConfig({
+            gridColumns: configRow.grid_columns,
+            gridRows: configRow.grid_rows,
+            cellSize: configRow.cell_size,
+            widgets:
+              retryWithoutLayer.data?.map((widget) => ({
+                id: widget.id,
+                x: widget.x,
+                y: widget.y,
+                w: widget.w,
+                h: widget.h,
+                content: widget.content ?? '',
+                updated_at: widget.updated_at,
+                isFixed: false,
+              })) ?? [],
+            version: configRow.version,
+            updated_at: configRow.updated_at,
+          });
+        }
         throw retry.error;
       }
+
+          return normalizeConfig({
+            gridColumns: configRow.grid_columns,
+            gridRows: configRow.grid_rows,
+            cellSize: configRow.cell_size,
+            widgets:
+              retry.data?.map((widget) => ({
+                id: widget.id,
+                x: widget.x,
+                y: widget.y,
+                w: widget.w,
+                h: widget.h,
+                content: widget.content ?? '',
+                layerId: hasWidgetLayerIdColumn ? widget.layer_id ?? undefined : undefined,
+                updated_at: widget.updated_at,
+                isFixed: false,
+              })) ?? [],
+            version: configRow.version,
+            updated_at: configRow.updated_at,
+          });
+      }
+
+    if (isMissingColumnError(widgetError, 'layer_id')) {
+      hasWidgetLayerIdColumn = false;
+      const retry = await supabase
+        .from('battle_map_widgets')
+        .select(
+          [
+            'id',
+            'x',
+            'y',
+            'w',
+            'h',
+            'content',
+            'updated_at',
+            'sort_index',
+            ...(hasIsFixedColumn ? ['is_fixed'] : []),
+          ].join(', '),
+        )
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .order('sort_index', { ascending: true });
+
+      if (retry.error) {
+        if (isMissingColumnError(retry.error, 'is_fixed')) {
+          hasIsFixedColumn = false;
+        }
+        throw retry.error;
+      }
+
+      const retryWidgets: BattleMapWidget[] =
+        retry.data?.map((widget) => ({
+          id: widget.id,
+          x: widget.x,
+          y: widget.y,
+          w: widget.w,
+          h: widget.h,
+          content: widget.content ?? '',
+          isFixed: hasIsFixedColumn ? widget.is_fixed ?? false : false,
+          updated_at: widget.updated_at,
+        })) ?? [];
 
       return normalizeConfig({
         gridColumns: configRow.grid_columns,
         gridRows: configRow.grid_rows,
         cellSize: configRow.cell_size,
-        widgets:
-          retry.data?.map((widget) => ({
-            id: widget.id,
-            x: widget.x,
-            y: widget.y,
-            w: widget.w,
-            h: widget.h,
-            content: widget.content ?? '',
-            updated_at: widget.updated_at,
-            isFixed: false,
-          })) ?? [],
+        widgets: retryWidgets,
         version: configRow.version,
         updated_at: configRow.updated_at,
       });
@@ -365,6 +494,7 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
       h: widget.h,
       content: widget.content ?? '',
       isFixed: hasIsFixedColumn ? widget.is_fixed ?? false : false,
+      layerId: hasWidgetLayerIdColumn ? widget.layer_id ?? undefined : undefined,
       updated_at: widget.updated_at,
     })) ?? [];
 
@@ -499,6 +629,7 @@ async function persistToAdvancedTables(
       h: widget.h ?? 1,
       content: mergeAppearanceIntoContent(widget.content ?? '', resolvedAppearance),
       ...(hasIsFixedColumn ? { is_fixed: widget.isFixed ?? false } : {}),
+      ...(hasWidgetLayerIdColumn ? { layer_id: widget.layerId ?? null } : {}),
       sort_index: index,
       updated_at: now,
     };
@@ -520,6 +651,7 @@ async function persistToAdvancedTables(
         w: widget.w ?? 1,
         h: widget.h ?? 1,
         content: widget.content ?? '',
+        ...(hasWidgetLayerIdColumn ? { layer_id: widget.layerId ?? null } : {}),
         sort_index: index,
         updated_at: now,
       }));
@@ -529,6 +661,63 @@ async function persistToAdvancedTables(
         .upsert(retryWidgets, { onConflict: 'id' });
 
       if (retryResult.error) {
+        if (isMissingColumnError(retryResult.error, 'layer_id')) {
+          hasWidgetLayerIdColumn = false;
+          const retryWithoutLayer = normalizedConfig.widgets.map((widget, index) => ({
+            id: widget.id || generateClientId(),
+            project_id: projectId,
+            user_id: userId,
+            x: widget.x ?? 0,
+            y: widget.y ?? 0,
+            w: widget.w ?? 1,
+            h: widget.h ?? 1,
+            content: widget.content ?? '',
+            sort_index: index,
+            updated_at: now,
+          }));
+
+          const retryWithoutLayerResult = await supabase
+            .from('battle_map_widgets')
+            .upsert(retryWithoutLayer, { onConflict: 'id' });
+
+          if (retryWithoutLayerResult.error) {
+            throw retryWithoutLayerResult.error;
+          }
+
+          supportsAdvancedStorageCache = false;
+          return normalizedConfig;
+        }
+        throw retryResult.error;
+      }
+
+      supportsAdvancedStorageCache = false;
+      return normalizedConfig;
+    }
+
+    if (isMissingColumnError(widgetError, 'layer_id')) {
+      hasWidgetLayerIdColumn = false;
+      const retryWidgets = normalizedConfig.widgets.map((widget, index) => ({
+        id: widget.id || generateClientId(),
+        project_id: projectId,
+        user_id: userId,
+        x: widget.x ?? 0,
+        y: widget.y ?? 0,
+        w: widget.w ?? 1,
+        h: widget.h ?? 1,
+        content: widget.content ?? '',
+        ...(hasIsFixedColumn ? { is_fixed: widget.isFixed ?? false } : {}),
+        sort_index: index,
+        updated_at: now,
+      }));
+
+      const retryResult = await supabase
+        .from('battle_map_widgets')
+        .upsert(retryWidgets, { onConflict: 'id' });
+
+      if (retryResult.error) {
+        if (isMissingColumnError(retryResult.error, 'is_fixed')) {
+          hasIsFixedColumn = false;
+        }
         throw retryResult.error;
       }
 
@@ -569,6 +758,7 @@ async function persistToAdvancedTables(
       content,
       appearance: normalizedConfig.widgets.find((w) => w.id === id)?.appearance,
       isFixed: normalizedConfig.widgets.find((w) => w.id === id)?.isFixed ?? false,
+      layerId: normalizedConfig.widgets.find((w) => w.id === id)?.layerId,
       updated_at: now,
     })),
     version: nextVersion,

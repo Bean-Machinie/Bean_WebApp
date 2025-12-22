@@ -624,10 +624,24 @@
   position: sticky;
   top: 0;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .battlemap-workspace__control-section--compact {
   gap: 0.75rem;
+}
+
+.battlemap-workspace__tiles-panel--sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.battlemap-workspace__tiles-panel--sidebar .battlemap-workspace__tiles-scroll {
+  min-height: 0;
+  flex: 1;
 }
 
 .battlemap-grid-toggle-row {

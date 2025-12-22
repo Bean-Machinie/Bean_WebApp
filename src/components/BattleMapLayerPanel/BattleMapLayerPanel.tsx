@@ -22,7 +22,7 @@ import './BattleMapLayerPanel.css';
 import '../LayerPanel/LayerContextMenu.css';
 import '../LayerPanel/LayerPanel.css';
 
-export type BattleMapLayerKind = 'grid' | 'layer' | 'image' | 'background';
+export type BattleMapLayerKind = 'grid' | 'tiles' | 'layer' | 'image' | 'background';
 
 export type BattleMapLayer = {
   id: string;
@@ -93,6 +93,12 @@ function BattleMapLayerPanel({
           <Menu.Portal>
             <Menu.Positioner className="layer-context-menu__positioner">
               <Menu.Popup className="layer-context-menu__popup">
+                <Menu.Item
+                  className="layer-context-menu__item"
+                  onClick={() => onAddLayer('tiles')}
+                >
+                  Tile Layer
+                </Menu.Item>
                 <Menu.Item
                   className="layer-context-menu__item"
                   onClick={() => onAddLayer('image')}

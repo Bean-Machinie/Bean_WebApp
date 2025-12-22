@@ -138,16 +138,36 @@ function HexBattleMapWorkspace() {
     [mapLayers, activeLayerId],
   );
   const isGridLayerActive = activeLayer?.kind === 'grid';
+  const isTileLayerActive = activeLayer?.kind === 'tiles';
   const isGridLayerVisible =
     mapLayers.find((layer) => layer.kind === 'grid')?.visible ?? true;
+  const defaultTileLayerId = useMemo(
+    () => mapLayers.find((layer) => layer.kind === 'tiles')?.id ?? null,
+    [mapLayers],
+  );
+  const orderedLayers = useMemo(() => [...mapLayers].reverse(), [mapLayers]);
+  const widgetsByLayerId = useMemo(() => {
+    const layerMap = new Map<string, HexWidget[]>();
+    const fallbackLayerId = defaultTileLayerId ?? GRID_LAYER_ID;
+    hexWidgets.forEach((widget) => {
+      const layerId = widget.layerId ?? fallbackLayerId;
+      if (!layerMap.has(layerId)) {
+        layerMap.set(layerId, []);
+      }
+      layerMap.get(layerId)?.push(widget);
+    });
+    return layerMap;
+  }, [defaultTileLayerId, hexWidgets]);
 
   useEffect(() => {
     if (!isGridLayerActive) {
       setIsExpandMode(false);
       setIsShrinkMode(false);
+    }
+    if (!isTileLayerActive) {
       setIsDrawMode(false);
     }
-  }, [isGridLayerActive]);
+  }, [isGridLayerActive, isTileLayerActive]);
 
   const tileMap = useMemo(() => {
     const map = new Map<string, HexTileDefinition>();
@@ -436,6 +456,7 @@ function HexBattleMapWorkspace() {
   const placeDrawHexAtCell = useCallback(
     (hex: Cube) => {
       if (!isDrawMode || !selectedDrawTileId) return;
+      if (!isTileLayerActive || !activeLayerId) return;
       const within = allowedCells.some((cell) => cell.q === hex.q && cell.r === hex.r);
       if (!within) return;
 
@@ -449,6 +470,10 @@ function HexBattleMapWorkspace() {
       setHexWidgets((current) => {
         const existing = current.find((widget) => widget.q === hex.q && widget.r === hex.r);
         if (existing) {
+          const existingLayerId = existing.layerId ?? defaultTileLayerId;
+          if (existingLayerId !== activeLayerId) {
+            return current;
+          }
           const next = current.map((widget) =>
             widget.id === existing.id
               ? {
@@ -471,6 +496,7 @@ function HexBattleMapWorkspace() {
           q: hex.q,
           r: hex.r,
           s: hex.s ?? -(hex.q + hex.r),
+          layerId: activeLayerId,
           tileId: tile.id,
           appearance: {
             backgroundImageUrl: tile.image,
@@ -488,7 +514,7 @@ function HexBattleMapWorkspace() {
         setStatusMessage('Painted tile.');
       }
     },
-    [allowedCells, isDrawMode, queueSave, selectedDrawTileId, tileMap],
+    [activeLayerId, allowedCells, defaultTileLayerId, isDrawMode, isTileLayerActive, queueSave, selectedDrawTileId, tileMap],
   );
 
   const scheduleTransform = useCallback(
@@ -735,6 +761,24 @@ function HexBattleMapWorkspace() {
   }, [handleDelete, selectedWidgetId]);
 
   useEffect(() => {
+    const handleSpaceOnButton = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') return;
+      const active = document.activeElement as HTMLElement | null;
+      if (!active) return;
+      const inWorkspace = active.closest('.battlemap-workspace');
+      if (!inWorkspace) return;
+      const buttonTarget = active.closest('button, [role="button"]');
+      if (!buttonTarget) return;
+      event.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleSpaceOnButton, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleSpaceOnButton, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isDrawMode) {
       setIsDrawPainting(false);
       setSelectedDrawTileId(null);
@@ -794,7 +838,9 @@ function HexBattleMapWorkspace() {
         );
 
         if (dragPayload.type === 'palette') {
-          if (occupant) {
+          if (!isTileLayerActive || !activeLayerId) {
+            setStatusMessage('Select a Tile Layer to place tiles.');
+          } else if (occupant) {
             setStatusMessage('That hex is already occupied.');
           } else {
             const newWidget: HexWidget = {
@@ -803,6 +849,7 @@ function HexBattleMapWorkspace() {
               q: targetHex.q,
               r: targetHex.r,
               s: targetHex.s,
+              layerId: activeLayerId,
               tileId: dragPayload.tile.id,
               appearance: {
                 backgroundImageUrl: dragPayload.tile.image,
@@ -817,6 +864,11 @@ function HexBattleMapWorkspace() {
           const origin = draggingOrigin ?? dragPayload.widget;
           const isSameSpot = origin.q === targetHex.q && origin.r === targetHex.r;
           if (occupant && occupant.id !== dragPayload.widget.id) {
+            const occupantLayerId = occupant.layerId ?? defaultTileLayerId;
+            if (occupantLayerId !== activeLayerId) {
+              setStatusMessage('That hex is already occupied.');
+              return;
+            }
             const nextWidgets = hexWidgets.map((widget) => {
               if (widget.id === dragPayload.widget.id) {
                 return { ...widget, q: targetHex.q, r: targetHex.r, s: targetHex.s };
@@ -863,13 +915,16 @@ function HexBattleMapWorkspace() {
       setIsDeleteDrag(false);
     };
   }, [
+    activeLayerId,
     allowedCells,
+    defaultTileLayerId,
     dragPayload,
     draggingOrigin,
     geometry,
     handleDelete,
     hexWidgets,
     hoverHex,
+    isTileLayerActive,
     queueSave,
     setIsDeleteDrag,
     toWorldPoint,
@@ -1089,6 +1144,7 @@ function HexBattleMapWorkspace() {
   const handleTilePointerDown = useCallback(
     (tile: HexTileDefinition, event: ReactMouseEvent<HTMLElement>) => {
       event.preventDefault();
+      if (!isTileLayerActive) return;
       if (isDrawMode) {
         setSelectedDrawTileId(tile.id);
         setStatusMessage(`Draw mode: ${tile.label} selected.`);
@@ -1097,11 +1153,15 @@ function HexBattleMapWorkspace() {
       setDragPayload({ type: 'palette', tile });
       setStatusMessage(null);
     },
-    [isDrawMode],
+    [isDrawMode, isTileLayerActive],
   );
 
   const handleWidgetPointerDown = useCallback(
     (widget: HexWidget, event: ReactMouseEvent<SVGGElement>) => {
+      const widgetLayerId = widget.layerId ?? defaultTileLayerId;
+      if (!isTileLayerActive || widgetLayerId !== activeLayerId) {
+        return;
+      }
       if (isSpaceHeld || isDrawMode) {
         return;
       }
@@ -1116,12 +1176,12 @@ function HexBattleMapWorkspace() {
       setDragPosition({ x: event.clientX, y: event.clientY });
       setStatusMessage(null);
     },
-    [handleDelete, isDeleteMode, isDrawMode, isSpaceHeld],
+    [activeLayerId, defaultTileLayerId, handleDelete, isDeleteMode, isDrawMode, isSpaceHeld, isTileLayerActive],
   );
 
   const startDrawPainting = useCallback(
     (clientX?: number, clientY?: number) => {
-      if (!isDrawMode || isSpaceHeld) return;
+      if (!isDrawMode || isSpaceHeld || !isTileLayerActive) return;
       if (!selectedDrawTileId) {
         setStatusMessage('Select a tile to draw.');
         return;
@@ -1134,7 +1194,7 @@ function HexBattleMapWorkspace() {
       placeDrawHexAtCell(targetHex);
       setIsDrawPainting(true);
     },
-    [geometry, isDrawMode, isSpaceHeld, placeDrawHexAtCell, selectedDrawTileId, toWorldPoint],
+    [geometry, isDrawMode, isSpaceHeld, isTileLayerActive, placeDrawHexAtCell, selectedDrawTileId, toWorldPoint],
   );
 
   const continueDrawPainting = useCallback(
@@ -1247,9 +1307,14 @@ function HexBattleMapWorkspace() {
           `<svg xmlns="http://www.w3.org/2000/svg" width="${viewWidth}" height="${viewHeight}" viewBox="${viewMinX} ${viewMinY} ${viewWidth} ${viewHeight}" fill="none">`,
         );
 
-        if (hexWidgets.length) {
+        const exportLayers = [...mapLayers].reverse();
+        const visibleTileWidgets = exportLayers
+          .filter((layer) => layer.kind === 'tiles' && layer.visible)
+          .flatMap((layer) => widgetsByLayerId.get(layer.id) ?? []);
+
+        if (visibleTileWidgets.length) {
           svgParts.push('<defs>');
-          hexWidgets.forEach((widget) => {
+          visibleTileWidgets.forEach((widget) => {
             const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
             const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
             const clipId = `hex-export-${widget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
@@ -1258,50 +1323,55 @@ function HexBattleMapWorkspace() {
           svgParts.push('</defs>');
         }
 
-        // Tiles
-        hexWidgets.forEach((widget) => {
-          const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
-          const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
-          const minX = Math.min(...corners.map((corner) => corner.x));
-          const maxX = Math.max(...corners.map((corner) => corner.x));
-          const minY = Math.min(...corners.map((corner) => corner.y));
-          const maxY = Math.max(...corners.map((corner) => corner.y));
-          const clipId = `hex-export-${widget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-          const tileSrc =
-            tileMap.get(widget.tileId)?.image ?? widget.appearance?.backgroundImageUrl ?? '';
-          const href = tileSrc ? inlineImages.get(tileSrc) ?? tileSrc : '';
+        exportLayers.forEach((layer) => {
+          if (!layer.visible) return;
+          if (layer.kind === 'tiles') {
+            const layerWidgets = widgetsByLayerId.get(layer.id) ?? [];
+            layerWidgets.forEach((widget) => {
+              const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
+              const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+              const minX = Math.min(...corners.map((corner) => corner.x));
+              const maxX = Math.max(...corners.map((corner) => corner.x));
+              const minY = Math.min(...corners.map((corner) => corner.y));
+              const maxY = Math.max(...corners.map((corner) => corner.y));
+              const clipId = `hex-export-${widget.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+              const tileSrc =
+                tileMap.get(widget.tileId)?.image ?? widget.appearance?.backgroundImageUrl ?? '';
+              const href = tileSrc ? inlineImages.get(tileSrc) ?? tileSrc : '';
 
-          if (href) {
-            svgParts.push(
-              `<image href="${href}" x="${minX}" y="${minY}" width="${maxX - minX}" height="${
-                maxY - minY
-              }" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})" />`,
-            );
-          } else {
-            svgParts.push(`<polygon points="${points}" fill="#d0d0d0" />`);
+              if (href) {
+                svgParts.push(
+                  `<image href="${href}" x="${minX}" y="${minY}" width="${maxX - minX}" height="${
+                    maxY - minY
+                  }" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})" />`,
+                );
+              } else {
+                svgParts.push(`<polygon points="${points}" fill="#d0d0d0" />`);
+              }
+
+              svgParts.push(
+                `<polygon points="${points}" fill="none" stroke="${tileBorder}" stroke-width="1.5" />`,
+              );
+            });
           }
 
-          svgParts.push(
-            `<polygon points="${points}" fill="none" stroke="${tileBorder}" stroke-width="1.5" />`,
-          );
-        });
+          if (layer.kind === 'grid') {
+            allowedCells.forEach((hex) => {
+              const points = geometry
+                .hexToCorners({ q: hex.q, r: hex.r })
+                .map((corner) => `${corner.x},${corner.y}`)
+                .join(' ');
+              svgParts.push(
+                `<polygon points="${points}" fill="none" stroke="${gridLine}" stroke-width="${gridLineWidth}" />`,
+              );
+            });
 
-        // Grid lines
-        allowedCells.forEach((hex) => {
-          const points = geometry
-            .hexToCorners({ q: hex.q, r: hex.r })
-            .map((corner) => `${corner.x},${corner.y}`)
-            .join(' ');
-          svgParts.push(
-            `<polygon points="${points}" fill="none" stroke="${gridLine}" stroke-width="${gridLineWidth}" />`,
-          );
-        });
-
-        // Grid boundary
-        boundaryEdges.forEach((edge) => {
-          svgParts.push(
-            `<line x1="${edge.start.x}" y1="${edge.start.y}" x2="${edge.end.x}" y2="${edge.end.y}" stroke="${gridBorder}" stroke-width="${gridBorderWidth}" stroke-linecap="round" stroke-linejoin="round" />`,
-          );
+            boundaryEdges.forEach((edge) => {
+              svgParts.push(
+                `<line x1="${edge.start.x}" y1="${edge.start.y}" x2="${edge.end.x}" y2="${edge.end.y}" stroke="${gridBorder}" stroke-width="${gridBorderWidth}" stroke-linecap="round" stroke-linejoin="round" />`,
+              );
+            });
+          }
         });
 
         svgParts.push('</svg>');
@@ -1345,8 +1415,9 @@ function HexBattleMapWorkspace() {
       getHexStyleValues,
       gridBounds,
       hexSettings.hexSize,
-      hexWidgets,
+      mapLayers,
       tileMap,
+      widgetsByLayerId,
     ],
   );
 
@@ -1390,122 +1461,38 @@ function HexBattleMapWorkspace() {
           <h2 className="battlemap-workspace__project-name">{project.name}</h2>
         </div>
 
-        <div className="battlemap-workspace__tiles-panel">
-          <div className="battlemap-workspace__mode-toggle">
+        <div className="battlemap-workspace__sidebar-actions">
+          <button
+            type="button"
+            className="button button--ghost battlemap-workspace__reset-button"
+            onClick={() => {
+              setScale(1);
+              recenterGrid(1);
+            }}
+          >
+            Reset View
+          </button>
+          <div className="battlemap-workspace__export-actions">
             <button
               type="button"
-              className={`button ${isDrawMode ? 'button--primary' : 'button--ghost'}`}
-              disabled={!isGridLayerActive}
-              onClick={() => {
-                setIsDrawMode((prev) => {
-                  const next = !prev;
-                  if (next) {
-                    setIsDeleteMode(false);
-                    setIsExpandMode(false);
-                    setIsShrinkMode(false);
-                    setStatusMessage('Draw mode enabled. Pick a tile, then click or drag on the grid.');
-                  } else {
-                    setStatusMessage('Draw mode disabled.');
-                  }
-                  return next;
-                });
-                setDragPayload(null);
-                setHoverVisible(false);
-                lastPaintedHexRef.current = null;
-              }}
-              onKeyDown={(event) => {
-                if (event.code === 'Space') {
-                  event.preventDefault();
-                }
-              }}
+              className="button battlemap-workspace__export-button"
+              onClick={() => handleExportHexBattleMap('png')}
             >
-              {isDrawMode ? 'Draw Mode: ON' : 'Draw Mode'}
+              Save Battle Map (PNG)
             </button>
-          </div>
-          <div className="battlemap-workspace__tiles-header">
-            <h3 className="battlemap-workspace__control-title">Tiles</h3>
-          </div>
-          <div className="battlemap-workspace__tiles-scroll">
-            {HEX_TILE_SETS.map((set) => (
-              <div
-                key={set.title}
-                className={`battlemap-workspace__tile-group${accordionOpen[set.title] ? ' is-open' : ''}`}
-              >
-                <button
-                  type="button"
-                  className="battlemap-workspace__tile-group-toggle"
-                  onClick={() => setAccordionOpen((prev) => ({ ...prev, [set.title]: !prev[set.title] }))}
-                  aria-expanded={accordionOpen[set.title] ?? false}
-                  aria-controls={`tile-group-${set.title}`}
-                >
-                  <span className="battlemap-workspace__tile-group-title">{set.title}</span>
-                  <span
-                    className={`battlemap-workspace__tile-group-chevron${accordionOpen[set.title] ? ' is-open' : ''}`}
-                    aria-hidden
-                  />
-                </button>
-                <div
-                  id={`tile-group-${set.title}`}
-                  className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
-                  role="region"
-                  aria-label={`${set.title} tiles`}
-                >
-                  {set.tiles.map((tile) => (
-                    <div
-                      key={tile.id}
-                      className="battlemap-workspace__widget-template-wrapper"
-                    >
-                      <div
-                        className={`battlemap-workspace__widget-template battlemap-workspace__widget-template--hex${isDrawMode ? ' is-draw-mode' : ''}${selectedDrawTileId === tile.id ? ' is-selected' : ''}`}
-                        onMouseDown={(event) => handleTilePointerDown(tile, event)}
-                        aria-label={`${tile.label} tile`}
-                        style={
-                          {
-                            '--widget-bg-image': `url("${tile.image}")`,
-                          } as CSSProperties
-                        }
-                      >
-                        <div className="battlemap-workspace__widget-template-inner battlemap-workspace__widget-template-inner--hex" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="battlemap-workspace__sidebar-actions">
             <button
               type="button"
-              className="button button--ghost battlemap-workspace__reset-button"
-              onClick={() => {
-                setScale(1);
-                recenterGrid(1);
-              }}
+              className="button button--ghost battlemap-workspace__export-button"
+              onClick={() => handleExportHexBattleMap('jpeg')}
             >
-              Reset View
+              Save Battle Map (JPEG)
             </button>
-            <div className="battlemap-workspace__export-actions">
-              <button
-                type="button"
-                className="button battlemap-workspace__export-button"
-                onClick={() => handleExportHexBattleMap('png')}
-              >
-                Save Battle Map (PNG)
-              </button>
-              <button
-                type="button"
-                className="button button--ghost battlemap-workspace__export-button"
-                onClick={() => handleExportHexBattleMap('jpeg')}
-              >
-                Save Battle Map (JPEG)
-              </button>
-            </div>
           </div>
-          <p className="battlemap-workspace__hint battlemap-workspace__autosave">
-            Auto-save: {isSaving ? 'Saving...' : 'Synced'}
-          </p>
-          {statusMessage ? <p className="hex-workspace__status">{statusMessage}</p> : null}
         </div>
+        <p className="battlemap-workspace__hint battlemap-workspace__autosave">
+          Auto-save: {isSaving ? 'Saving...' : 'Synced'}
+        </p>
+        {statusMessage ? <p className="hex-workspace__status">{statusMessage}</p> : null}
       </div>
 
       <div className="battlemap-workspace__main hex-workspace__main">
@@ -1596,96 +1583,111 @@ function HexBattleMapWorkspace() {
               ref={surfaceRef}
               transform={`translate(${pan.x} ${pan.y}) scale(${scale})`}
             >
-              {isGridLayerVisible ? (
-                <>
-                  {hexWidgets.map((widget) => {
-                    const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
-                    const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
-                    const minX = Math.min(...corners.map((corner) => corner.x));
-                    const maxX = Math.max(...corners.map((corner) => corner.x));
-                    const minY = Math.min(...corners.map((corner) => corner.y));
-                    const maxY = Math.max(...corners.map((corner) => corner.y));
-                    const tile = tileMap.get(widget.tileId);
-                    const isDragOrigin =
-                      dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
-
-                    return (
-                      <g
-                        key={widget.id}
-                        className={`hex-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
-                        onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
-                      >
-                        {tile ? (
-                          <image
-                            href={tile.image}
-                            x={minX}
-                            y={minY}
-                            width={maxX - minX}
-                            height={maxY - minY}
-                            preserveAspectRatio="xMidYMid slice"
-                            clipPath={`url(#hex-clip-${widget.id})`}
+              {orderedLayers.map((layer) => {
+                if (!layer.visible) return null;
+                if (layer.kind === 'grid') {
+                  return (
+                    <g key={layer.id} data-layer="grid">
+                      {allowedCells.map((hex) => {
+                        const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
+                        const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+                        return (
+                          <polygon
+                            key={`${hex.q}-${hex.r}`}
+                            className="hex-workspace__cell"
+                            points={points}
                           />
-                        ) : (
-                          <polygon points={points} fill="#d0d0d0" />
-                        )}
-                        <polygon className="hex-workspace__tile-border" points={points} />
-                      </g>
-                    );
-                  })}
+                        );
+                      })}
 
-                  {allowedCells.map((hex) => {
-                    const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
-                    const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
-                    return (
-                      <polygon
-                        key={`${hex.q}-${hex.r}`}
-                        className="hex-workspace__cell"
-                        points={points}
-                      />
-                    );
-                  })}
+                      {boundaryEdges.map((edge, index) => (
+                        <line
+                          key={`boundary-${index}`}
+                          className="hex-workspace__grid-boundary"
+                          x1={edge.start.x}
+                          y1={edge.start.y}
+                          x2={edge.end.x}
+                          y2={edge.end.y}
+                        />
+                      ))}
+                    </g>
+                  );
+                }
 
-                  {boundaryEdges.map((edge, index) => (
-                    <line
-                      key={`boundary-${index}`}
-                      className="hex-workspace__grid-boundary"
-                      x1={edge.start.x}
-                      y1={edge.start.y}
-                      x2={edge.end.x}
-                      y2={edge.end.y}
-                    />
-                  ))}
+                if (layer.kind === 'tiles') {
+                  const layerWidgets = widgetsByLayerId.get(layer.id) ?? [];
+                  if (!layerWidgets.length) return null;
+                  return (
+                    <g key={layer.id} data-layer="tiles">
+                      {layerWidgets.map((widget) => {
+                        const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
+                        const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+                        const minX = Math.min(...corners.map((corner) => corner.x));
+                        const maxX = Math.max(...corners.map((corner) => corner.x));
+                        const minY = Math.min(...corners.map((corner) => corner.y));
+                        const maxY = Math.max(...corners.map((corner) => corner.y));
+                        const tile = tileMap.get(widget.tileId);
+                        const isDragOrigin =
+                          dragPayload?.type === 'widget' && dragPayload.widget.id === widget.id;
 
-                  {hoverHex && hoverVisible && dragPayload ? (
-                    <polygon
-                      className="hex-workspace__hover"
-                      points={geometry
-                        .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
-                        .map((corner) => `${corner.x},${corner.y}`)
-                        .join(' ')}
-                    />
-                  ) : null}
+                        return (
+                          <g
+                            key={widget.id}
+                            className={`hex-workspace__tile${isDragOrigin ? ' is-drag-origin' : ''}`}
+                            onMouseDown={(event) => handleWidgetPointerDown(widget, event)}
+                          >
+                            {tile ? (
+                              <image
+                                href={tile.image}
+                                x={minX}
+                                y={minY}
+                                width={maxX - minX}
+                                height={maxY - minY}
+                                preserveAspectRatio="xMidYMid slice"
+                                clipPath={`url(#hex-clip-${widget.id})`}
+                              />
+                            ) : (
+                              <polygon points={points} fill="#d0d0d0" />
+                            )}
+                            <polygon className="hex-workspace__tile-border" points={points} />
+                          </g>
+                        );
+                      })}
+                    </g>
+                  );
+                }
 
-                  {gridHoverHex && gridHoverMode === 'expand' ? (
-                    <polygon
-                      className="hex-workspace__expand-preview"
-                      points={geometry
-                        .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
-                        .map((corner) => `${corner.x},${corner.y}`)
-                        .join(' ')}
-                    />
-                  ) : null}
+                return null;
+              })}
 
-                  {gridHoverHex && gridHoverMode === 'shrink' ? (
-                    <polygon
-                      className="hex-workspace__shrink-preview"
-                      points={geometry
-                        .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
-                        .map((corner) => `${corner.x},${corner.y}`)
-                        .join(' ')}
-                    />
-                  ) : null}
-                </>
+              {isGridLayerVisible && hoverHex && hoverVisible && dragPayload ? (
+                <polygon
+                  className="hex-workspace__hover"
+                  points={geometry
+                    .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
+                    .map((corner) => `${corner.x},${corner.y}`)
+                    .join(' ')}
+                />
+              ) : null}
+
+              {isGridLayerVisible && gridHoverHex && gridHoverMode === 'expand' ? (
+                <polygon
+                  className="hex-workspace__expand-preview"
+                  points={geometry
+                    .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
+                    .map((corner) => `${corner.x},${corner.y}`)
+                    .join(' ')}
+                />
+              ) : null}
+
+              {isGridLayerVisible && gridHoverHex && gridHoverMode === 'shrink' ? (
+                <polygon
+                  className="hex-workspace__shrink-preview"
+                  points={geometry
+                    .hexToCorners({ q: gridHoverHex.q, r: gridHoverHex.r })
+                    .map((corner) => `${corner.x},${corner.y}`)
+                    .join(' ')}
+                />
               ) : null}
             </g>
           </svg>
@@ -1767,17 +1769,30 @@ function HexBattleMapWorkspace() {
           onAddLayer={(kind) => {
             const baseName = (() => {
               if (kind === 'grid') return 'Grid Layer';
+              if (kind === 'tiles') return 'Tile Layer';
               if (kind === 'image') return 'Image Layer';
               if (kind === 'background') return 'Background Layer';
               return 'Layer';
             })();
+            const tileCount = mapLayers.filter((layer) => layer.kind === 'tiles').length;
             const nextLayer = {
               id: crypto.randomUUID(),
-              name: `${baseName} ${mapLayers.length}`,
+              name: kind === 'tiles' ? `${baseName} ${tileCount + 1}` : `${baseName} ${mapLayers.length}`,
               kind,
               visible: true,
             };
-            const nextLayers = [...mapLayers, nextLayer];
+            let nextLayers = [...mapLayers];
+            if (kind === 'tiles') {
+              const gridIndex = mapLayers.findIndex((layer) => layer.kind === 'grid');
+              const insertIndex = gridIndex >= 0 ? gridIndex + 1 : 0;
+              nextLayers = [
+                ...mapLayers.slice(0, insertIndex),
+                nextLayer,
+                ...mapLayers.slice(insertIndex),
+              ];
+            } else {
+              nextLayers = [...mapLayers, nextLayer];
+            }
             commitLayerState(nextLayers, nextLayer.id);
           }}
           onRenameLayer={(layerId, nextName) => {
@@ -1803,6 +1818,10 @@ function HexBattleMapWorkspace() {
           onDeleteLayer={(layerId) => {
             const layer = mapLayers.find((entry) => entry.id === layerId);
             if (!layer || layer.kind === 'grid') return;
+            if (layer.kind === 'tiles') {
+              const tileLayers = mapLayers.filter((entry) => entry.kind === 'tiles');
+              if (tileLayers.length <= 1) return;
+            }
             if (mapLayers.length <= 1) return;
             const nextLayers = mapLayers.filter((entry) => entry.id !== layerId);
             const deletedIndex = mapLayers.findIndex((entry) => entry.id === layerId);
@@ -1810,6 +1829,14 @@ function HexBattleMapWorkspace() {
               activeLayerId === layerId
                 ? nextLayers[Math.max(0, deletedIndex - 1)]?.id ?? nextLayers[0]?.id
                 : activeLayerId;
+            if (layer.kind === 'tiles') {
+              const nextWidgets = hexWidgets.filter((widget) => (widget.layerId ?? defaultTileLayerId) !== layerId);
+              setHexWidgets(nextWidgets);
+              setMapLayers(nextLayers);
+              setActiveLayerId(nextActiveLayerId);
+              queueSave(nextWidgets, { layers: nextLayers, activeLayerId: nextActiveLayerId });
+              return;
+            }
             commitLayerState(nextLayers, nextActiveLayerId);
           }}
           onReorderLayers={(nextLayers) => {
@@ -1991,6 +2018,95 @@ function HexBattleMapWorkspace() {
           <p className="battlemap-workspace__hint">
             Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the grid.
           </p>
+        </div>
+        <div className="battlemap-workspace__control-section battlemap-workspace__tiles-panel--sidebar">
+          <h3 className="battlemap-workspace__control-title">Tiles</h3>
+          {isTileLayerActive ? (
+            <>
+              <div className="battlemap-workspace__mode-toggle">
+                <button
+                  type="button"
+                  className={`button ${isDrawMode ? 'button--primary' : 'button--ghost'}`}
+                  onClick={() => {
+                    setIsDrawMode((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setIsDeleteMode(false);
+                        setIsExpandMode(false);
+                        setIsShrinkMode(false);
+                        setStatusMessage('Draw mode enabled. Pick a tile, then click or drag on the grid.');
+                      } else {
+                        setStatusMessage('Draw mode disabled.');
+                      }
+                      return next;
+                    });
+                    setDragPayload(null);
+                    setHoverVisible(false);
+                    lastPaintedHexRef.current = null;
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.code === 'Space') {
+                      event.preventDefault();
+                    }
+                  }}
+                >
+                  {isDrawMode ? 'Draw Mode: ON' : 'Draw Mode'}
+                </button>
+              </div>
+              <div className="battlemap-workspace__tiles-scroll">
+                {HEX_TILE_SETS.map((set) => (
+                  <div
+                    key={set.title}
+                    className={`battlemap-workspace__tile-group${accordionOpen[set.title] ? ' is-open' : ''}`}
+                  >
+                    <button
+                      type="button"
+                      className="battlemap-workspace__tile-group-toggle"
+                      onClick={() => setAccordionOpen((prev) => ({ ...prev, [set.title]: !prev[set.title] }))}
+                      aria-expanded={accordionOpen[set.title] ?? false}
+                      aria-controls={`tile-group-${set.title}`}
+                    >
+                      <span className="battlemap-workspace__tile-group-title">{set.title}</span>
+                      <span
+                        className={`battlemap-workspace__tile-group-chevron${accordionOpen[set.title] ? ' is-open' : ''}`}
+                        aria-hidden
+                      />
+                    </button>
+                    <div
+                      id={`tile-group-${set.title}`}
+                      className={`battlemap-workspace__widget-tray${accordionOpen[set.title] ? ' is-open' : ''}`}
+                      role="region"
+                      aria-label={`${set.title} tiles`}
+                    >
+                      {set.tiles.map((tile) => (
+                        <div
+                          key={tile.id}
+                          className="battlemap-workspace__widget-template-wrapper"
+                        >
+                          <div
+                            className={`battlemap-workspace__widget-template battlemap-workspace__widget-template--hex${isDrawMode ? ' is-draw-mode' : ''}${selectedDrawTileId === tile.id ? ' is-selected' : ''}`}
+                            onMouseDown={(event) => handleTilePointerDown(tile, event)}
+                            aria-label={`${tile.label} tile`}
+                            style={
+                              {
+                                '--widget-bg-image': `url("${tile.image}")`,
+                              } as CSSProperties
+                            }
+                          >
+                            <div className="battlemap-workspace__widget-template-inner battlemap-workspace__widget-template-inner--hex" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="battlemap-workspace__hint">
+              Select a Tile Layer to browse and place tiles.
+            </p>
+          )}
         </div>
       </div>
     </div>

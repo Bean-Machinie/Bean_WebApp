@@ -336,6 +336,23 @@
   z-index: 1;
 }
 
+.battlemap-workspace__right-sidebar {
+  overflow: hidden;
+}
+
+.battlemap-workspace__tiles-panel--sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.battlemap-workspace__tiles-panel--sidebar .battlemap-workspace__tiles-scroll {
+  min-height: 0;
+  flex: 1;
+}
+
 .battlemap-grid-slider-wrap {
   position: relative;
   padding-top: 1.65rem;
