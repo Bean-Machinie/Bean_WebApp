@@ -1652,6 +1652,32 @@ function BattleMapWorkspace() {
             );
             commitLayerState(nextLayers);
           }}
+          onMoveLayerUp={(layerId) => {
+            const index = mapLayers.findIndex((layer) => layer.id === layerId);
+            if (index <= 0) return;
+            const nextLayers = [...mapLayers];
+            [nextLayers[index - 1], nextLayers[index]] = [nextLayers[index], nextLayers[index - 1]];
+            commitLayerState(nextLayers);
+          }}
+          onMoveLayerDown={(layerId) => {
+            const index = mapLayers.findIndex((layer) => layer.id === layerId);
+            if (index < 0 || index >= mapLayers.length - 1) return;
+            const nextLayers = [...mapLayers];
+            [nextLayers[index + 1], nextLayers[index]] = [nextLayers[index], nextLayers[index + 1]];
+            commitLayerState(nextLayers);
+          }}
+          onDeleteLayer={(layerId) => {
+            const layer = mapLayers.find((entry) => entry.id === layerId);
+            if (!layer || layer.kind === 'grid') return;
+            if (mapLayers.length <= 1) return;
+            const nextLayers = mapLayers.filter((entry) => entry.id !== layerId);
+            const deletedIndex = mapLayers.findIndex((entry) => entry.id === layerId);
+            const nextActiveLayerId =
+              activeLayerId === layerId
+                ? nextLayers[Math.max(0, deletedIndex - 1)]?.id ?? nextLayers[0]?.id
+                : activeLayerId;
+            commitLayerState(nextLayers, nextActiveLayerId);
+          }}
         />
         <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
           <h3 className="battlemap-workspace__control-title">Grid Layer Tools</h3>
