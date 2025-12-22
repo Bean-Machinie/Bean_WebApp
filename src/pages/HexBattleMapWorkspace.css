@@ -1,6 +1,8 @@
 .hex-workspace {
-  --grid-line-color: color-mix(in srgb, var(--text) 12%, transparent);
-  --grid-border-color: color-mix(in srgb, var(--text) 35%, transparent);
+  --grid-line-color: var(--text);
+  --grid-border-color: var(--text-strong);
+  --grid-line-width: 1px;
+  --grid-border-width: 2px;
   --tile-shadow: 0 4px 12px color-mix(in srgb, var(--text) 12%, transparent);
   width: 100%;
   height: 100vh;
@@ -55,7 +57,7 @@
 
 .hex-workspace__grid-boundary {
   stroke: var(--grid-border-color);
-  stroke-width: 2px;
+  stroke-width: var(--grid-border-width);
   stroke-linecap: round;
   stroke-linejoin: round;
   fill: none;
@@ -64,7 +66,7 @@
 .hex-workspace__cell {
   fill: none;
   stroke: var(--grid-line-color);
-  stroke-width: 1;
+  stroke-width: var(--grid-line-width);
 }
 
 .hex-workspace__hover {
@@ -267,4 +269,154 @@
   gap: 0.6rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--sidebar-border);
+}
+
+.battlemap-grid-toggle-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.battlemap-grid-toggle {
+  flex: 1;
+  justify-content: center;
+  border-color: var(--sidebar-border);
+  color: var(--sidebar-text);
+}
+
+.battlemap-grid-toggle.is-active {
+  background: color-mix(in srgb, var(--sidebar-hover) 75%, transparent);
+  color: var(--text-strong);
+  border-color: color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+}
+
+.battlemap-grid-visuals-title {
+  margin-top: 0.35rem;
+}
+
+.battlemap-grid-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--sidebar-bg) 75%, var(--card) 25%);
+}
+
+.battlemap-grid-visual__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.battlemap-grid-visual__value {
+  font-size: 0.7rem;
+  color: var(--sidebar-text);
+  background: var(--sidebar-bg);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  letter-spacing: 0.04em;
+}
+
+.battlemap-grid-slider {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  z-index: 1;
+}
+
+.battlemap-grid-slider-wrap {
+  position: relative;
+  padding-top: 1.65rem;
+}
+
+.battlemap-grid-slider__value {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.45rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.battlemap-grid-slider__ticks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 0.35rem);
+  transform: translateY(-50%);
+  height: 6px;
+  display: grid;
+  grid-template-columns: repeat(var(--tick-count, 11), 1fr);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.battlemap-grid-slider__ticks span {
+  width: 2px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 55%, var(--bg) 45%);
+  justify-self: center;
+}
+
+.battlemap-grid-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--primary);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 35%, transparent);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.battlemap-grid-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.08);
+  background: var(--primary-hover);
+}
+
+.battlemap-grid-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--primary);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--primary) 35%, transparent);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.battlemap-grid-slider::-moz-range-thumb:hover {
+  transform: scale(1.08);
+  background: var(--primary-hover);
+}
+
+.battlemap-grid-color {
+  width: 100%;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--sidebar-border);
+  background: var(--sidebar-bg);
+  padding: 0;
+  cursor: pointer;
 }

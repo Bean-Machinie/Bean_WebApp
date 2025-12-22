@@ -26,6 +26,33 @@ type DragPayload =
   | { type: 'widget'; widget: HexWidget };
 
 const GRID_LAYER_ID = 'grid-layer';
+const GRID_BORDER_MIN = 1;
+const GRID_BORDER_MAX = 30;
+const GRID_BORDER_STEP = 0.5;
+const GRID_BORDER_TICKS = 11;
+const GRID_LINE_MIN = 0.5;
+const GRID_LINE_MAX = 20;
+const GRID_LINE_STEP = 0.5;
+const GRID_LINE_TICKS = 11;
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const getSliderPercent = (value: number, min: number, max: number) => {
+  const clamped = clampNumber(value, min, max);
+  return ((clamped - min) / (max - min)) * 100;
+};
+
+const parseColorToHex = (value: string, fallback: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (trimmed.startsWith('#')) return trimmed;
+  const match = trimmed.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (!match) return fallback;
+  const toHex = (channel: string) => {
+    const hex = Number(channel).toString(16).padStart(2, '0');
+    return hex;
+  };
+  return `#${toHex(match[1])}${toHex(match[2])}${toHex(match[3])}`;
+};
 
 function HexBattleMapWorkspace() {
   const { projectId } = useParams();
@@ -78,6 +105,22 @@ function HexBattleMapWorkspace() {
   );
   const mapLayersRef = useRef(mapLayers);
   const activeLayerIdRef = useRef(activeLayerId);
+  const [gridLineWidth, setGridLineWidth] = useState(
+    Number.isFinite(hexConfig.gridLineWidth)
+      ? Number(hexConfig.gridLineWidth)
+      : (DEFAULT_HEX_BATTLE_MAP_CONFIG.gridLineWidth ?? 1),
+  );
+  const [gridBorderWidth, setGridBorderWidth] = useState(
+    Number.isFinite(hexConfig.gridBorderWidth)
+      ? Number(hexConfig.gridBorderWidth)
+      : (DEFAULT_HEX_BATTLE_MAP_CONFIG.gridBorderWidth ?? 2),
+  );
+  const [gridLineColor, setGridLineColor] = useState(hexConfig.gridLineColor ?? '');
+  const [gridBorderColor, setGridBorderColor] = useState(hexConfig.gridBorderColor ?? '');
+  const gridLineWidthRef = useRef(gridLineWidth);
+  const gridBorderWidthRef = useRef(gridBorderWidth);
+  const gridLineColorRef = useRef(gridLineColor);
+  const gridBorderColorRef = useRef(gridBorderColor);
   const [isExpandMode, setIsExpandMode] = useState(false);
   const [isExpandPainting, setIsExpandPainting] = useState(false);
   const [isShrinkMode, setIsShrinkMode] = useState(false);
@@ -214,6 +257,7 @@ function HexBattleMapWorkspace() {
   const exportImageCacheRef = useRef<Map<string, string>>(new Map());
   const saveBufferRef = useRef<BattleMapConfig | null>(null);
   const saveThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridVisualSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveInFlightRef = useRef(false);
   const hasUnsavedChangesRef = useRef(false);
   const hasHydratedConfigRef = useRef(false);
@@ -227,6 +271,22 @@ function HexBattleMapWorkspace() {
   useEffect(() => {
     activeLayerIdRef.current = activeLayerId;
   }, [activeLayerId]);
+
+  useEffect(() => {
+    gridLineWidthRef.current = gridLineWidth;
+  }, [gridLineWidth]);
+
+  useEffect(() => {
+    gridBorderWidthRef.current = gridBorderWidth;
+  }, [gridBorderWidth]);
+
+  useEffect(() => {
+    gridLineColorRef.current = gridLineColor;
+  }, [gridLineColor]);
+
+  useEffect(() => {
+    gridBorderColorRef.current = gridBorderColor;
+  }, [gridBorderColor]);
 
   const flushPendingSave = useCallback(async () => {
     if (saveInFlightRef.current || !saveBufferRef.current) return;
@@ -262,6 +322,10 @@ function HexBattleMapWorkspace() {
         gridColumns: gridRadius * 2 - 1,
         gridRows: gridRadius * 2 - 1,
         cellSize: hexConfig.cellSize || hexSettings.hexSize,
+        gridLineColor: gridLineColorRef.current || undefined,
+        gridBorderColor: gridBorderColorRef.current || undefined,
+        gridLineWidth: gridLineWidthRef.current,
+        gridBorderWidth: gridBorderWidthRef.current,
         widgets: [],
         hexSettings,
         hexWidgets: widgets,
@@ -301,6 +365,20 @@ function HexBattleMapWorkspace() {
     [activeLayerId, hexWidgets, queueSave],
   );
 
+  const commitGridVisuals = useCallback(() => {
+    queueSave(hexWidgets);
+  }, [hexWidgets, queueSave]);
+
+  const scheduleGridVisualSave = useCallback(() => {
+    if (gridVisualSaveTimeoutRef.current) {
+      clearTimeout(gridVisualSaveTimeoutRef.current);
+    }
+    gridVisualSaveTimeoutRef.current = setTimeout(() => {
+      gridVisualSaveTimeoutRef.current = null;
+      commitGridVisuals();
+    }, 250);
+  }, [commitGridVisuals]);
+
   useEffect(() => {
     const projectChanged = project?.id && project?.id !== lastHydratedProjectRef.current;
     if (config.gridType !== 'hex') return;
@@ -325,6 +403,18 @@ function HexBattleMapWorkspace() {
     } else if (projectChanged || !hasHydratedConfigRef.current) {
       setAllowedCells(buildFilledHexagon(gridRadius));
     }
+    setGridLineWidth(
+      Number.isFinite(config.gridLineWidth)
+        ? Number(config.gridLineWidth)
+        : (DEFAULT_HEX_BATTLE_MAP_CONFIG.gridLineWidth ?? 1),
+    );
+    setGridBorderWidth(
+      Number.isFinite(config.gridBorderWidth)
+        ? Number(config.gridBorderWidth)
+        : (DEFAULT_HEX_BATTLE_MAP_CONFIG.gridBorderWidth ?? 2),
+    );
+    setGridLineColor(config.gridLineColor ?? '');
+    setGridBorderColor(config.gridBorderColor ?? '');
 
     hasHydratedConfigRef.current = true;
     lastHydratedVersionRef.current = incomingVersion;
@@ -335,6 +425,9 @@ function HexBattleMapWorkspace() {
     () => () => {
       if (saveThrottleRef.current) {
         clearTimeout(saveThrottleRef.current);
+      }
+      if (gridVisualSaveTimeoutRef.current) {
+        clearTimeout(gridVisualSaveTimeoutRef.current);
       }
     },
     [],
@@ -1080,19 +1173,46 @@ function HexBattleMapWorkspace() {
     return { width, height, points };
   }, [geometry]);
 
+  const gridStyleVars = useMemo(
+    () =>
+      ({
+        '--grid-line-color': gridLineColor || undefined,
+        '--grid-border-color': gridBorderColor || undefined,
+        '--grid-line-width': `${gridLineWidth}px`,
+        '--grid-border-width': `${gridBorderWidth}px`,
+      }) as CSSProperties,
+    [gridBorderColor, gridBorderWidth, gridLineColor, gridLineWidth],
+  );
+
   const getHexStyleValues = useCallback(() => {
     const workspaceEl = viewportRef.current?.closest('.hex-workspace') as HTMLElement | null;
     const styles = workspaceEl ? getComputedStyle(workspaceEl) : getComputedStyle(document.documentElement);
+    const gridLineWidthValue = parseFloat(styles.getPropertyValue('--grid-line-width'));
+    const gridBorderWidthValue = parseFloat(styles.getPropertyValue('--grid-border-width'));
     return {
       background: styles.getPropertyValue('--bg').trim() || '#0f172a',
-      gridLine: styles.getPropertyValue('--grid-line-color').trim() || 'rgba(255,255,255,0.12)',
-      gridBorder: styles.getPropertyValue('--grid-border-color').trim() || 'rgba(255,255,255,0.35)',
+      gridLine: styles.getPropertyValue('--grid-line-color').trim() || '#e2e8f0',
+      gridBorder: styles.getPropertyValue('--grid-border-color').trim() || '#f8fafc',
+      gridLineWidth: Number.isFinite(gridLineWidthValue) ? gridLineWidthValue : 1,
+      gridBorderWidth: Number.isFinite(gridBorderWidthValue) ? gridBorderWidthValue : 2,
       tileBorder:
         styles.getPropertyValue('--grid-border-color').trim() ||
         styles.getPropertyValue('--text').trim() ||
         '#6b7280',
     };
   }, []);
+
+  const resolvedGridLineColor = useMemo(() => {
+    if (gridLineColor) return gridLineColor;
+    return parseColorToHex(getHexStyleValues().gridLine, '#94a3b8');
+  }, [getHexStyleValues, gridLineColor]);
+
+  const resolvedGridBorderColor = useMemo(() => {
+    if (gridBorderColor) return gridBorderColor;
+    return parseColorToHex(getHexStyleValues().gridBorder, '#94a3b8');
+  }, [getHexStyleValues, gridBorderColor]);
+  const gridBorderPercent = getSliderPercent(gridBorderWidth, GRID_BORDER_MIN, GRID_BORDER_MAX);
+  const gridLinePercent = getSliderPercent(gridLineWidth, GRID_LINE_MIN, GRID_LINE_MAX);
 
   const handleExportHexBattleMap = useCallback(
     async (format: 'png' | 'jpeg') => {
@@ -1107,7 +1227,7 @@ function HexBattleMapWorkspace() {
         const viewMinY = gridBounds.minY - padding;
         const viewWidth = gridBounds.width + padding * 2;
         const viewHeight = gridBounds.height + padding * 2;
-        const { background, gridBorder, gridLine, tileBorder } = getHexStyleValues();
+        const { background, gridBorder, gridLine, gridBorderWidth, gridLineWidth, tileBorder } = getHexStyleValues();
 
         const inlineImages = new Map<string, string>();
         await Promise.all(
@@ -1138,22 +1258,7 @@ function HexBattleMapWorkspace() {
           svgParts.push('</defs>');
         }
 
-        boundaryEdges.forEach((edge) => {
-          svgParts.push(
-            `<line x1="${edge.start.x}" y1="${edge.start.y}" x2="${edge.end.x}" y2="${edge.end.y}" stroke="${gridBorder}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`,
-          );
-        });
-
-        allowedCells.forEach((hex) => {
-          const points = geometry
-            .hexToCorners({ q: hex.q, r: hex.r })
-            .map((corner) => `${corner.x},${corner.y}`)
-            .join(' ');
-          svgParts.push(
-            `<polygon points="${points}" fill="none" stroke="${gridLine}" stroke-width="1" />`,
-          );
-        });
-
+        // Tiles
         hexWidgets.forEach((widget) => {
           const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
           const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
@@ -1178,6 +1283,24 @@ function HexBattleMapWorkspace() {
 
           svgParts.push(
             `<polygon points="${points}" fill="none" stroke="${tileBorder}" stroke-width="1.5" />`,
+          );
+        });
+
+        // Grid lines
+        allowedCells.forEach((hex) => {
+          const points = geometry
+            .hexToCorners({ q: hex.q, r: hex.r })
+            .map((corner) => `${corner.x},${corner.y}`)
+            .join(' ');
+          svgParts.push(
+            `<polygon points="${points}" fill="none" stroke="${gridLine}" stroke-width="${gridLineWidth}" />`,
+          );
+        });
+
+        // Grid boundary
+        boundaryEdges.forEach((edge) => {
+          svgParts.push(
+            `<line x1="${edge.start.x}" y1="${edge.start.y}" x2="${edge.end.x}" y2="${edge.end.y}" stroke="${gridBorder}" stroke-width="${gridBorderWidth}" stroke-linecap="round" stroke-linejoin="round" />`,
           );
         });
 
@@ -1252,7 +1375,10 @@ function HexBattleMapWorkspace() {
   }
 
   return (
-    <div className={`battlemap-workspace hex-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}>
+    <div
+      className={`battlemap-workspace hex-workspace${isDeleteMode ? ' is-delete-mode' : ''}`}
+      style={gridStyleVars}
+    >
       <div className="battlemap-workspace__sidebar hex-workspace__sidebar">
         <div className="battlemap-workspace__sidebar-header">
           <button
@@ -1472,39 +1598,6 @@ function HexBattleMapWorkspace() {
             >
               {isGridLayerVisible ? (
                 <>
-                  {boundaryEdges.map((edge, index) => (
-                    <line
-                      key={`boundary-${index}`}
-                      className="hex-workspace__grid-boundary"
-                      x1={edge.start.x}
-                      y1={edge.start.y}
-                      x2={edge.end.x}
-                      y2={edge.end.y}
-                    />
-                  ))}
-
-                  {hoverHex && hoverVisible && dragPayload ? (
-                    <polygon
-                      className="hex-workspace__hover"
-                      points={geometry
-                        .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
-                        .map((corner) => `${corner.x},${corner.y}`)
-                        .join(' ')}
-                    />
-                  ) : null}
-
-                  {allowedCells.map((hex) => {
-                    const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
-                    const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
-                    return (
-                      <polygon
-                        key={`${hex.q}-${hex.r}`}
-                        className="hex-workspace__cell"
-                        points={points}
-                      />
-                    );
-                  })}
-
                   {hexWidgets.map((widget) => {
                     const corners = geometry.hexToCorners({ q: widget.q, r: widget.r });
                     const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
@@ -1539,6 +1632,39 @@ function HexBattleMapWorkspace() {
                       </g>
                     );
                   })}
+
+                  {allowedCells.map((hex) => {
+                    const corners = geometry.hexToCorners({ q: hex.q, r: hex.r });
+                    const points = corners.map((corner) => `${corner.x},${corner.y}`).join(' ');
+                    return (
+                      <polygon
+                        key={`${hex.q}-${hex.r}`}
+                        className="hex-workspace__cell"
+                        points={points}
+                      />
+                    );
+                  })}
+
+                  {boundaryEdges.map((edge, index) => (
+                    <line
+                      key={`boundary-${index}`}
+                      className="hex-workspace__grid-boundary"
+                      x1={edge.start.x}
+                      y1={edge.start.y}
+                      x2={edge.end.x}
+                      y2={edge.end.y}
+                    />
+                  ))}
+
+                  {hoverHex && hoverVisible && dragPayload ? (
+                    <polygon
+                      className="hex-workspace__hover"
+                      points={geometry
+                        .hexToCorners({ q: hoverHex.q, r: hoverHex.r })
+                        .map((corner) => `${corner.x},${corner.y}`)
+                        .join(' ')}
+                    />
+                  ) : null}
 
                   {gridHoverHex && gridHoverMode === 'expand' ? (
                     <polygon
@@ -1691,65 +1817,180 @@ function HexBattleMapWorkspace() {
           }}
         />
         <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
-          <h3 className="battlemap-workspace__control-title">Grid Layer Tools</h3>
+          <h3 className="battlemap-workspace__control-title">Grid Properties</h3>
           {isGridLayerActive ? (
             <>
-              <button
-                type="button"
-                className={`button ${isExpandMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
-                onClick={() => {
-                  setIsExpandMode((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      setIsDeleteMode(false);
-                      setIsDrawMode(false);
-                      setIsShrinkMode(false);
-                      setStatusMessage('Expand Hex Grid Mode enabled. Click or drag to add tiles.');
-                    } else {
-                      setStatusMessage('Expand Hex Grid Mode disabled.');
+              <div className="battlemap-grid-toggle-row">
+                <button
+                  type="button"
+                  className={`button button--ghost battlemap-grid-toggle${isExpandMode ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setIsExpandMode((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setIsDeleteMode(false);
+                        setIsDrawMode(false);
+                        setIsShrinkMode(false);
+                        setStatusMessage('Expand Hex Grid Mode enabled. Click or drag to add tiles.');
+                      } else {
+                        setStatusMessage('Expand Hex Grid Mode disabled.');
+                      }
+                      return next;
+                    });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.code === 'Space') {
+                      event.preventDefault();
                     }
-                    return next;
-                  });
-                }}
-                onKeyDown={(event) => {
-                  if (event.code === 'Space') {
-                    event.preventDefault();
-                  }
-                }}
-              >
-                {isExpandMode ? 'Expand Mode: ON' : 'Expand Hex Grid'}
-              </button>
-              <button
-                type="button"
-                className={`button ${isShrinkMode ? 'button--primary' : 'button--ghost'} battlemap-workspace__reset-button`}
-                onClick={() => {
-                  setIsShrinkMode((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      setIsDeleteMode(false);
-                      setIsDrawMode(false);
-                      setIsExpandMode(false);
-                      setStatusMessage('Decrease Hex Grid Mode enabled. Click or drag to remove tiles.');
-                    } else {
-                      setStatusMessage('Decrease Hex Grid Mode disabled.');
+                  }}
+                >
+                  Expand
+                </button>
+                <button
+                  type="button"
+                  className={`button button--ghost battlemap-grid-toggle${isShrinkMode ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setIsShrinkMode((prev) => {
+                      const next = !prev;
+                      if (next) {
+                        setIsDeleteMode(false);
+                        setIsDrawMode(false);
+                        setIsExpandMode(false);
+                        setStatusMessage('Decrease Hex Grid Mode enabled. Click or drag to remove tiles.');
+                      } else {
+                        setStatusMessage('Decrease Hex Grid Mode disabled.');
+                      }
+                      return next;
+                    });
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.code === 'Space') {
+                      event.preventDefault();
                     }
-                    return next;
-                  });
-                }}
-                onKeyDown={(event) => {
-                  if (event.code === 'Space') {
-                    event.preventDefault();
-                  }
-                }}
-              >
-                {isShrinkMode ? 'Decrease Mode: ON' : 'Decrease Hex Grid'}
-              </button>
+                  }}
+                >
+                  Decrease
+                </button>
+              </div>
+
+              <h3 className="battlemap-workspace__control-title battlemap-grid-visuals-title">Grid Visuals</h3>
+              <div className="battlemap-grid-visual">
+                <div className="battlemap-grid-visual__label-row">
+                  <span>Outer Border Thickness</span>
+                  <span className="battlemap-grid-visual__value">{gridBorderWidth.toFixed(1)}px</span>
+                </div>
+                <div
+                  className="battlemap-grid-slider-wrap"
+                  style={{ '--tick-count': GRID_BORDER_TICKS } as CSSProperties}
+                >
+                  <input
+                    type="range"
+                    min={GRID_BORDER_MIN}
+                    max={GRID_BORDER_MAX}
+                    step={GRID_BORDER_STEP}
+                    value={gridBorderWidth}
+                    onChange={(event) => {
+                      const next = clampNumber(
+                        Number(event.target.value),
+                        GRID_BORDER_MIN,
+                        GRID_BORDER_MAX,
+                      );
+                      setGridBorderWidth(next);
+                      gridBorderWidthRef.current = next;
+                    }}
+                    onPointerUp={commitGridVisuals}
+                    onKeyUp={commitGridVisuals}
+                    className="battlemap-grid-slider"
+                    aria-label="Outer border thickness"
+                  />
+                  <output
+                    className="battlemap-grid-slider__value"
+                    style={{ left: `${gridBorderPercent}%` }}
+                  >
+                    {gridBorderWidth.toFixed(1)}px
+                  </output>
+                  <div className="battlemap-grid-slider__ticks" aria-hidden>
+                    {Array.from({ length: GRID_BORDER_TICKS }).map((_, index) => (
+                      <span key={`grid-border-tick-${index}`} />
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="color"
+                  value={resolvedGridBorderColor}
+                  onChange={(event) => {
+                    const next = event.currentTarget.value;
+                    setGridBorderColor(next);
+                    gridBorderColorRef.current = next;
+                    scheduleGridVisualSave();
+                  }}
+                  className="battlemap-grid-color"
+                  aria-label="Outer border color"
+                />
+              </div>
+              <div className="battlemap-grid-visual">
+                <div className="battlemap-grid-visual__label-row">
+                  <span>Inner Grid Thickness</span>
+                  <span className="battlemap-grid-visual__value">{gridLineWidth.toFixed(1)}px</span>
+                </div>
+                <div
+                  className="battlemap-grid-slider-wrap"
+                  style={{ '--tick-count': GRID_LINE_TICKS } as CSSProperties}
+                >
+                  <input
+                    type="range"
+                    min={GRID_LINE_MIN}
+                    max={GRID_LINE_MAX}
+                    step={GRID_LINE_STEP}
+                    value={gridLineWidth}
+                    onChange={(event) => {
+                      const next = clampNumber(
+                        Number(event.target.value),
+                        GRID_LINE_MIN,
+                        GRID_LINE_MAX,
+                      );
+                      setGridLineWidth(next);
+                      gridLineWidthRef.current = next;
+                    }}
+                    onPointerUp={commitGridVisuals}
+                    onKeyUp={commitGridVisuals}
+                    className="battlemap-grid-slider"
+                    aria-label="Inner grid thickness"
+                  />
+                  <output
+                    className="battlemap-grid-slider__value"
+                    style={{ left: `${gridLinePercent}%` }}
+                  >
+                    {gridLineWidth.toFixed(1)}px
+                  </output>
+                  <div className="battlemap-grid-slider__ticks" aria-hidden>
+                    {Array.from({ length: GRID_LINE_TICKS }).map((_, index) => (
+                      <span key={`grid-line-tick-${index}`} />
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="color"
+                  value={resolvedGridLineColor}
+                  onChange={(event) => {
+                    const next = event.currentTarget.value;
+                    setGridLineColor(next);
+                    gridLineColorRef.current = next;
+                    scheduleGridVisualSave();
+                  }}
+                  className="battlemap-grid-color"
+                  aria-label="Inner grid color"
+                />
+              </div>
             </>
           ) : (
             <p className="battlemap-workspace__hint">
               Grid tools appear when the Grid Map Layer is active.
             </p>
           )}
+          <p className="battlemap-workspace__hint">
+            Hold space + drag to pan. Scroll to zoom. Drop tiles to snap to the grid.
+          </p>
         </div>
       </div>
     </div>

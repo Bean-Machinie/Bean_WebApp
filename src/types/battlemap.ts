@@ -90,6 +90,10 @@ export type BattleMapConfig = {
   gridColumns: number;
   gridRows: number;
   cellSize: number;
+  gridLineColor?: string;
+  gridBorderColor?: string;
+  gridLineWidth?: number;
+  gridBorderWidth?: number;
   widgets: BattleMapWidget[];
   hexSettings?: HexGridSettings;
   hexWidgets?: HexWidget[];

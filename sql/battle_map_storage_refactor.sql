@@ -14,6 +14,10 @@ create table if not exists public.battle_map_configs (
   allowed_square_cells jsonb,
   layers jsonb,
   active_layer_id uuid,
+  grid_line_color text,
+  grid_border_color text,
+  grid_line_width double precision,
+  grid_border_width double precision,
   version integer not null default 1,
   updated_at timestamptz not null default now()
 );
@@ -32,6 +36,18 @@ alter table public.battle_map_configs
 
 alter table public.battle_map_configs
   add column if not exists active_layer_id uuid;
+
+alter table public.battle_map_configs
+  add column if not exists grid_line_color text;
+
+alter table public.battle_map_configs
+  add column if not exists grid_border_color text;
+
+alter table public.battle_map_configs
+  add column if not exists grid_line_width double precision;
+
+alter table public.battle_map_configs
+  add column if not exists grid_border_width double precision;
 
 create table if not exists public.battle_map_widgets (
   id uuid primary key,
@@ -88,6 +104,10 @@ insert into public.battle_map_configs (
   allowed_square_cells,
   layers,
   active_layer_id,
+  grid_line_color,
+  grid_border_color,
+  grid_line_width,
+  grid_border_width,
   version,
   updated_at
 )
@@ -100,6 +120,10 @@ select
   p.battle_map_config->'allowedSquareCells' as allowed_square_cells,
   p.battle_map_config->'layers' as layers,
   nullif(p.battle_map_config->>'activeLayerId', '')::uuid as active_layer_id,
+  p.battle_map_config->>'gridLineColor' as grid_line_color,
+  p.battle_map_config->>'gridBorderColor' as grid_border_color,
+  nullif(p.battle_map_config->>'gridLineWidth', '')::double precision as grid_line_width,
+  nullif(p.battle_map_config->>'gridBorderWidth', '')::double precision as grid_border_width,
   1 as version,
   now() as updated_at
 from public.projects p
@@ -112,6 +136,10 @@ set grid_columns = excluded.grid_columns,
     allowed_square_cells = excluded.allowed_square_cells,
     layers = excluded.layers,
     active_layer_id = excluded.active_layer_id,
+    grid_line_color = excluded.grid_line_color,
+    grid_border_color = excluded.grid_border_color,
+    grid_line_width = excluded.grid_line_width,
+    grid_border_width = excluded.grid_border_width,
     updated_at = now(),
     version = public.battle_map_configs.version + 1;
 

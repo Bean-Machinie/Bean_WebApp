@@ -8,6 +8,8 @@ export const DEFAULT_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridColumns: 12,
   gridRows: 8,
   cellSize: 80,
+  gridLineWidth: 1,
+  gridBorderWidth: 2,
   widgets: [],
   layers: [{ id: 'grid-layer', name: 'Grid Map Layer', kind: 'grid', visible: true }],
   activeLayerId: 'grid-layer',
@@ -19,6 +21,8 @@ export const DEFAULT_HEX_BATTLE_MAP_CONFIG: BattleMapConfig = {
   gridColumns: 7,
   gridRows: 7,
   cellSize: 80,
+  gridLineWidth: 1,
+  gridBorderWidth: 2,
   widgets: [],
   hexSettings: {
     hexSize: 80,
@@ -38,6 +42,10 @@ let hasIsFixedColumn = true;
 let hasAllowedCellsColumn = true;
 let hasLayersColumn = true;
 let hasActiveLayerIdColumn = true;
+let hasGridLineColorColumn = true;
+let hasGridBorderColorColumn = true;
+let hasGridLineWidthColumn = true;
+let hasGridBorderWidthColumn = true;
 
 const GRID_LAYER_ID = 'grid-layer';
 
@@ -114,6 +122,10 @@ const normalizeHexWidget = (widget: Partial<HexWidget>): HexWidget => {
 const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapConfig => {
   const isHexConfig =
     config?.gridType === 'hex' || Array.isArray((config as { hexWidgets?: HexWidget[] })?.hexWidgets);
+  const gridLineWidth = Number(config?.gridLineWidth ?? DEFAULT_BATTLE_MAP_CONFIG.gridLineWidth ?? 1);
+  const gridBorderWidth = Number(config?.gridBorderWidth ?? DEFAULT_BATTLE_MAP_CONFIG.gridBorderWidth ?? 2);
+  const gridLineColor = typeof config?.gridLineColor === 'string' ? config?.gridLineColor : undefined;
+  const gridBorderColor = typeof config?.gridBorderColor === 'string' ? config?.gridBorderColor : undefined;
 
   if (isHexConfig) {
     const hexSize =
@@ -135,6 +147,10 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       gridColumns,
       gridRows,
       cellSize: Number(config?.cellSize) || hexSize,
+      gridLineWidth,
+      gridBorderWidth,
+      gridLineColor,
+      gridBorderColor,
       widgets: [],
       hexSettings,
       hexWidgets: ((config as BattleMapConfig)?.hexWidgets ?? []).map(normalizeHexWidget),
@@ -152,6 +168,10 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
     gridColumns: Number(config?.gridColumns) || DEFAULT_BATTLE_MAP_CONFIG.gridColumns,
     gridRows: Number(config?.gridRows) || DEFAULT_BATTLE_MAP_CONFIG.gridRows,
     cellSize: Number(config?.cellSize) || DEFAULT_BATTLE_MAP_CONFIG.cellSize,
+    gridLineWidth,
+    gridBorderWidth,
+    gridLineColor,
+    gridBorderColor,
     widgets: (config?.widgets ?? []).map((widget) => {
       const appearanceFromContent = parseAppearanceFromContent(widget.content ?? '');
       const resolvedAppearance = resolveAppearance({
@@ -207,6 +227,10 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     if (hasAllowedCellsColumn) selectParts.push('allowed_square_cells');
     if (hasLayersColumn) selectParts.push('layers');
     if (hasActiveLayerIdColumn) selectParts.push('active_layer_id');
+    if (hasGridLineColorColumn) selectParts.push('grid_line_color');
+    if (hasGridBorderColorColumn) selectParts.push('grid_border_color');
+    if (hasGridLineWidthColumn) selectParts.push('grid_line_width');
+    if (hasGridBorderWidthColumn) selectParts.push('grid_border_width');
 
     try {
       configRowResult = await (supabase as any)
@@ -240,10 +264,30 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
       hasActiveLayerIdColumn = false;
       continue;
     }
+    if (isMissingColumnError(configRowResult.error, 'grid_line_color')) {
+      hasGridLineColorColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configRowResult.error, 'grid_border_color')) {
+      hasGridBorderColorColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configRowResult.error, 'grid_line_width')) {
+      hasGridLineWidthColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configRowResult.error, 'grid_border_width')) {
+      hasGridBorderWidthColumn = false;
+      continue;
+    }
 
     hasAllowedCellsColumn = false;
     hasLayersColumn = false;
     hasActiveLayerIdColumn = false;
+    hasGridLineColorColumn = false;
+    hasGridBorderColorColumn = false;
+    hasGridLineWidthColumn = false;
+    hasGridBorderWidthColumn = false;
   }
 
   if (configRowResult.error) {
@@ -328,6 +372,10 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     gridColumns: configRow.grid_columns,
     gridRows: configRow.grid_rows,
     cellSize: configRow.cell_size,
+    gridLineColor: hasGridLineColorColumn ? configRow.grid_line_color : undefined,
+    gridBorderColor: hasGridBorderColorColumn ? configRow.grid_border_color : undefined,
+    gridLineWidth: hasGridLineWidthColumn ? configRow.grid_line_width : undefined,
+    gridBorderWidth: hasGridBorderWidthColumn ? configRow.grid_border_width : undefined,
     widgets,
     allowedSquareCells: hasAllowedCellsColumn
       ? (configRow as { allowed_square_cells?: BattleMapConfig['allowedSquareCells'] }).allowed_square_cells
@@ -375,6 +423,18 @@ async function persistToAdvancedTables(
     if (hasActiveLayerIdColumn) {
       configUpsert = { ...configUpsert, active_layer_id: normalizedConfig.activeLayerId ?? null };
     }
+    if (hasGridLineColorColumn) {
+      configUpsert = { ...configUpsert, grid_line_color: normalizedConfig.gridLineColor ?? null };
+    }
+    if (hasGridBorderColorColumn) {
+      configUpsert = { ...configUpsert, grid_border_color: normalizedConfig.gridBorderColor ?? null };
+    }
+    if (hasGridLineWidthColumn) {
+      configUpsert = { ...configUpsert, grid_line_width: normalizedConfig.gridLineWidth ?? null };
+    }
+    if (hasGridBorderWidthColumn) {
+      configUpsert = { ...configUpsert, grid_border_width: normalizedConfig.gridBorderWidth ?? null };
+    }
 
     configResult = await (supabase as any).from('battle_map_configs').upsert(configUpsert);
 
@@ -392,6 +452,22 @@ async function persistToAdvancedTables(
     }
     if (isMissingColumnError(configResult.error, 'active_layer_id')) {
       hasActiveLayerIdColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configResult.error, 'grid_line_color')) {
+      hasGridLineColorColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configResult.error, 'grid_border_color')) {
+      hasGridBorderColorColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configResult.error, 'grid_line_width')) {
+      hasGridLineWidthColumn = false;
+      continue;
+    }
+    if (isMissingColumnError(configResult.error, 'grid_border_width')) {
+      hasGridBorderWidthColumn = false;
       continue;
     }
 
@@ -512,6 +588,10 @@ async function persistLegacySnapshot(
           gridColumns: config.gridColumns,
           gridRows: config.gridRows,
           cellSize: config.cellSize,
+          gridLineColor: config.gridLineColor,
+          gridBorderColor: config.gridBorderColor,
+          gridLineWidth: config.gridLineWidth,
+          gridBorderWidth: config.gridBorderWidth,
           hexSettings: config.hexSettings ?? DEFAULT_HEX_BATTLE_MAP_CONFIG.hexSettings,
           hexWidgets: config.hexWidgets ?? [],
           allowedHexCells: config.allowedHexCells,
@@ -525,6 +605,10 @@ async function persistLegacySnapshot(
           gridColumns: config.gridColumns,
           gridRows: config.gridRows,
           cellSize: config.cellSize,
+          gridLineColor: config.gridLineColor,
+          gridBorderColor: config.gridBorderColor,
+          gridLineWidth: config.gridLineWidth,
+          gridBorderWidth: config.gridBorderWidth,
           widgets: config.widgets,
           allowedSquareCells: config.allowedSquareCells,
           layers: config.layers,
@@ -572,6 +656,26 @@ export async function loadBattleMapState(params: {
                 ? {}
                 : params.legacyConfig?.activeLayerId
                   ? { activeLayerId: params.legacyConfig.activeLayerId }
+                  : {}),
+              ...(config.gridLineColor
+                ? {}
+                : params.legacyConfig?.gridLineColor
+                  ? { gridLineColor: params.legacyConfig.gridLineColor }
+                  : {}),
+              ...(config.gridBorderColor
+                ? {}
+                : params.legacyConfig?.gridBorderColor
+                  ? { gridBorderColor: params.legacyConfig.gridBorderColor }
+                  : {}),
+              ...(config.gridLineWidth !== undefined
+                ? {}
+                : params.legacyConfig?.gridLineWidth !== undefined
+                  ? { gridLineWidth: params.legacyConfig.gridLineWidth }
+                  : {}),
+              ...(config.gridBorderWidth !== undefined
+                ? {}
+                : params.legacyConfig?.gridBorderWidth !== undefined
+                  ? { gridBorderWidth: params.legacyConfig.gridBorderWidth }
                   : {}),
             }
           : config;
