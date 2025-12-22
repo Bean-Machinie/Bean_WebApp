@@ -1,6 +1,6 @@
 .battlemap-layer-panel {
   border: 1px solid var(--sidebar-border);
-  border-radius: 8px;
+  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -15,6 +15,22 @@
 
 .battlemap-layer-panel .layer-panel__list {
   max-height: 240px;
+  scrollbar-color: color-mix(in srgb, var(--sidebar-text) 35%, transparent)
+    color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
+  scrollbar-width: thin;
+}
+
+.battlemap-layer-panel .layer-panel__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.battlemap-layer-panel .layer-panel__list::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--sidebar-text) 35%, transparent);
+  border-radius: 8px;
+}
+
+.battlemap-layer-panel .layer-panel__list::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
 }
 
 .battlemap-layer-panel__thumbnail {

@@ -1676,6 +1676,9 @@ function HexBattleMapWorkspace() {
                 : activeLayerId;
             commitLayerState(nextLayers, nextActiveLayerId);
           }}
+          onReorderLayers={(nextLayers) => {
+            commitLayerState(nextLayers);
+          }}
         />
         <div className="battlemap-workspace__control-section battlemap-workspace__control-section--compact">
           <h3 className="battlemap-workspace__control-title">Grid Layer Tools</h3>

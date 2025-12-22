@@ -1,4 +1,20 @@
 import React from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { CSS } from '@dnd-kit/utilities';
 import { ContextMenu } from '@base-ui-components/react/context-menu';
 import { Edit3, Trash2 } from 'lucide-react';
 import './BattleMapLayerPanel.css';
@@ -22,6 +38,7 @@ type BattleMapLayerPanelProps = {
   onMoveLayerUp: (layerId: string) => void;
   onMoveLayerDown: (layerId: string) => void;
   onDeleteLayer: (layerId: string) => void;
+  onReorderLayers: (nextLayers: BattleMapLayer[]) => void;
 };
 
 function BattleMapLayerPanel({
@@ -34,7 +51,30 @@ function BattleMapLayerPanel({
   onMoveLayerUp,
   onMoveLayerDown,
   onDeleteLayer,
+  onReorderLayers,
 }: BattleMapLayerPanelProps) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+  );
+  const layerIds = layers.map((layer) => layer.id);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = layers.findIndex((layer) => layer.id === active.id);
+    const newIndex = layers.findIndex((layer) => layer.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const reordered = arrayMove(layers, oldIndex, newIndex);
+    onReorderLayers(reordered);
+  };
+
   return (
     <div className="layer-panel battlemap-layer-panel">
       <div className="layer-panel__header">
@@ -43,21 +83,30 @@ function BattleMapLayerPanel({
           + New
         </button>
       </div>
-      <div className="layer-panel__list">
-        {layers.map((layer) => (
-          <LayerRow
-            key={layer.id}
-            layer={layer}
-            isActive={layer.id === activeLayerId}
-            onSelect={() => onActiveLayerChange(layer.id)}
-            onToggleVisibility={() => onToggleVisibility(layer.id)}
-            onRename={(nextName) => onRenameLayer(layer.id, nextName)}
-            onMoveUp={() => onMoveLayerUp(layer.id)}
-            onMoveDown={() => onMoveLayerDown(layer.id)}
-            onDelete={() => onDeleteLayer(layer.id)}
-          />
-        ))}
-      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+        modifiers={[restrictToVerticalAxis]}
+      >
+        <SortableContext items={layerIds} strategy={verticalListSortingStrategy}>
+          <div className="layer-panel__list">
+            {layers.map((layer) => (
+              <SortableLayerRow
+                key={layer.id}
+                layer={layer}
+                isActive={layer.id === activeLayerId}
+                onSelect={() => onActiveLayerChange(layer.id)}
+                onToggleVisibility={() => onToggleVisibility(layer.id)}
+                onRename={(nextName) => onRenameLayer(layer.id, nextName)}
+                onMoveUp={() => onMoveLayerUp(layer.id)}
+                onMoveDown={() => onMoveLayerDown(layer.id)}
+                onDelete={() => onDeleteLayer(layer.id)}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }
@@ -73,7 +122,56 @@ type LayerRowProps = {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
+  dragAttributes?: Record<string, unknown>;
+  dragListeners?: Record<string, unknown>;
+  dragRef?: (node: HTMLDivElement | null) => void;
+  dragStyle?: React.CSSProperties;
+  isDragging?: boolean;
 };
+
+function SortableLayerRow({
+  layer,
+  isActive,
+  onSelect,
+  onToggleVisibility,
+  onRename,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+}: Omit<LayerRowProps, 'dragAttributes' | 'dragListeners' | 'dragRef' | 'dragStyle' | 'isDragging'>) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: layer.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <LayerRow
+      layer={layer}
+      isActive={isActive}
+      onSelect={onSelect}
+      onToggleVisibility={onToggleVisibility}
+      onRename={onRename}
+      onMoveUp={onMoveUp}
+      onMoveDown={onMoveDown}
+      onDelete={onDelete}
+      dragAttributes={attributes}
+      dragListeners={listeners}
+      dragRef={setNodeRef}
+      dragStyle={style}
+      isDragging={isDragging}
+    />
+  );
+}
 
 function LayerRow({
   layer,
@@ -84,6 +182,11 @@ function LayerRow({
   onMoveUp,
   onMoveDown,
   onDelete,
+  dragAttributes,
+  dragListeners,
+  dragRef,
+  dragStyle,
+  isDragging,
 }: LayerRowProps) {
   const [isRenaming, setIsRenaming] = React.useState(false);
   const [editName, setEditName] = React.useState(layer.name);
@@ -108,10 +211,10 @@ function LayerRow({
     <ContextMenu.Root>
       <ContextMenu.Trigger className="layer-context-menu__trigger">
         <div
-          className={`layer-item${isActive ? ' layer-item--active' : ''}${layer.kind === 'grid' ? ' battlemap-layer-panel__item--grid' : ''}`}
+          ref={dragRef}
+          style={dragStyle}
+          className={`layer-item${isActive ? ' layer-item--active' : ''}${layer.kind === 'grid' ? ' battlemap-layer-panel__item--grid' : ''}${isDragging ? ' layer-item--dragging' : ''}`}
           onClick={onSelect}
-          role="button"
-          tabIndex={0}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
@@ -122,6 +225,8 @@ function LayerRow({
               setIsRenaming(false);
             }
           }}
+          {...dragAttributes}
+          {...dragListeners}
         >
           <div className="layer-item__section layer-item__section--visibility">
             <button
