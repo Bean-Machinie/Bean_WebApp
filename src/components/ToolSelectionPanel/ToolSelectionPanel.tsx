@@ -1,4 +1,3 @@
-import React from 'react';
 import './ToolSelectionPanel.css';
 
 type Tool = 'pen' | 'eraser' | 'shape';

@@ -5,6 +5,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DraggableAttributes,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
@@ -232,7 +233,7 @@ type LayerRowProps = {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
-  dragAttributes?: Record<string, unknown>;
+  dragAttributes?: DraggableAttributes;
   dragListeners?: Record<string, unknown>;
   dragRef?: (node: HTMLDivElement | null) => void;
   dragStyle?: React.CSSProperties;

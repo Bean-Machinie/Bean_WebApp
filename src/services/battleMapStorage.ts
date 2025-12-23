@@ -66,16 +66,18 @@ const normalizeLayers = (layers?: BattleMapLayerState[] | null): BattleMapLayerS
     return buildDefaultLayers();
   }
 
-  let normalized = layers.map((layer, index) => {
+  let normalized: BattleMapLayerState[] = layers.map((layer, index) => {
     const name = typeof layer.name === 'string' && layer.name.trim().length > 0
       ? layer.name.trim()
       : `Layer ${index + 1}`;
+    const kind: BattleMapLayerState['kind'] =
+      layer.kind === 'grid' || layer.kind === 'tiles' || layer.kind === 'image' || layer.kind === 'background'
+        ? layer.kind
+        : 'layer';
     return {
       id: typeof layer.id === 'string' && layer.id.length > 0 ? layer.id : generateClientId(),
       name,
-      kind: layer.kind === 'grid' || layer.kind === 'tiles' || layer.kind === 'image' || layer.kind === 'background'
-        ? layer.kind
-        : 'layer',
+      kind,
       visible: layer.visible !== false,
     };
   });
@@ -164,7 +166,7 @@ const normalizeConfig = (config?: Partial<BattleMapConfig> | null): BattleMapCon
       (config as BattleMapConfig)?.hexSettings?.orientation === 'pointy' ? 'pointy' : 'flat';
     const gridColumns = Number(config?.gridColumns) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridColumns;
     const gridRows = Number(config?.gridRows) || DEFAULT_HEX_BATTLE_MAP_CONFIG.gridRows;
-    const hexSettings = {
+    const hexSettings: NonNullable<BattleMapConfig['hexSettings']> = {
       hexSize,
       orientation,
     };
@@ -347,7 +349,7 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
     .select(widgetSelect)
     .eq('project_id', projectId)
     .eq('user_id', userId)
-    .order('sort_index', { ascending: true });
+    .order('sort_index', { ascending: true }) as { data: any[] | null; error: any };
 
   if (widgetError) {
     if (isMissingColumnError(widgetError, 'is_fixed')) {
@@ -369,7 +371,7 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
         )
         .eq('project_id', projectId)
         .eq('user_id', userId)
-        .order('sort_index', { ascending: true });
+        .order('sort_index', { ascending: true }) as { data: any[] | null; error: any };
 
       if (retry.error) {
         if (isMissingColumnError(retry.error, 'layer_id')) {
@@ -379,7 +381,7 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
             .select('id, x, y, w, h, content, updated_at, sort_index')
             .eq('project_id', projectId)
             .eq('user_id', userId)
-            .order('sort_index', { ascending: true });
+            .order('sort_index', { ascending: true }) as { data: any[] | null; error: any };
 
           if (retryWithoutLayer.error) {
             throw retryWithoutLayer.error;
@@ -447,7 +449,7 @@ async function loadFromAdvancedTables(projectId: string, userId: string): Promis
         )
         .eq('project_id', projectId)
         .eq('user_id', userId)
-        .order('sort_index', { ascending: true });
+        .order('sort_index', { ascending: true }) as { data: any[] | null; error: any };
 
       if (retry.error) {
         if (isMissingColumnError(retry.error, 'is_fixed')) {
@@ -531,7 +533,7 @@ async function persistToAdvancedTables(
   const nextVersion = (normalizedConfig.version ?? 1) + 1;
   const now = new Date().toISOString();
 
-  const baseConfigUpsert = {
+  const baseConfigUpsert: Record<string, unknown> = {
     project_id: projectId,
     user_id: userId,
     grid_columns: normalizedConfig.gridColumns,
@@ -543,7 +545,7 @@ async function persistToAdvancedTables(
 
   let configResult: any;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    let configUpsert = baseConfigUpsert;
+    let configUpsert: Record<string, unknown> = { ...baseConfigUpsert };
     if (hasAllowedCellsColumn) {
       configUpsert = { ...configUpsert, allowed_square_cells: normalizedConfig.allowedSquareCells ?? null };
     }

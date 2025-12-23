@@ -330,7 +330,7 @@ export default function LayerPanel({
     onActiveLayerChange(duplicatedLayer.id);
   };
 
-  const handleMerge = (layerId: string) => {
+  const handleMerge = (_layerId: string) => {
     // For now, merge is disabled (canMerge is always false)
     // This would require multi-selection implementation
     alert('Multi-layer selection and merging will be available in a future update.');

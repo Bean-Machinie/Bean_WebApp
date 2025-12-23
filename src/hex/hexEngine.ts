@@ -2,14 +2,16 @@ import { Grid as HexaGrid, Hex as Hexagon } from 'hexagrid';
 import type { HexWidget } from '../types/battlemap';
 import type { HexCellData } from './hexTypes';
 
-export const buildHexGrid = (widgets: HexWidget[]): HexaGrid<Hexagon<HexCellData>> => {
+type HexGrid = InstanceType<typeof HexaGrid>;
+
+export const buildHexGrid = (widgets: HexWidget[]): HexGrid => {
   const cells = widgets.map(
-    (widget) => new Hexagon<HexCellData>(widget.q, widget.r, { widget }),
+    (widget) => new Hexagon(widget.q, widget.r, { widget } as HexCellData),
   );
-  return new HexaGrid<Hexagon<HexCellData>>(...cells);
+  return new HexaGrid(...cells);
 };
 
 export const isOccupied = (
-  grid: HexaGrid<Hexagon<HexCellData>>,
+  grid: HexGrid,
   coords: { q: number; r: number },
 ) => Boolean(grid.get(coords));

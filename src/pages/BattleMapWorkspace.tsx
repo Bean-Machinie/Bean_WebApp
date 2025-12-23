@@ -1543,7 +1543,7 @@ function BattleMapWorkspace() {
               handlePanMove(event);
             }
           }}
-          onMouseUp={(event) => {
+          onMouseUp={(_event) => {
             if (isPanning) {
               stopPan();
             } else if (isDrawMode && isDrawPainting) {
@@ -2079,14 +2079,16 @@ function BattleMapWorkspace() {
                         <div
                           key={`${tile.id}-${index}`}
                           className="battlemap-workspace__widget-template-wrapper"
-                          style={{
-                            gridColumnEnd: `span ${tile.cols}`,
-                            gridRowEnd: `span ${tile.rows}`,
-                            '--tile-cols': tile.cols,
-                            '--tile-rows': tile.rows,
-                            justifySelf:
-                              tile.cols >= TILE_PREVIEW_COLUMNS ? 'stretch' : 'center',
-                          }}
+                          style={
+                            {
+                              gridColumnEnd: `span ${tile.cols}`,
+                              gridRowEnd: `span ${tile.rows}`,
+                              '--tile-cols': tile.cols,
+                              '--tile-rows': tile.rows,
+                              justifySelf:
+                                tile.cols >= TILE_PREVIEW_COLUMNS ? 'stretch' : 'center',
+                            } as CSSProperties
+                          }
                         >
                           <div
                             className={`battlemap-workspace__widget-template${isDrawMode ? ' is-draw-mode' : ''}${selectedDrawTileId === tile.id ? ' is-selected' : ''}`}

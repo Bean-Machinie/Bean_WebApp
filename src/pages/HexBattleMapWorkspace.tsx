@@ -10,7 +10,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useBattleMap } from '../hooks/useBattleMap';
-import { DEFAULT_BATTLE_MAP_CONFIG, DEFAULT_HEX_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
+import { DEFAULT_HEX_BATTLE_MAP_CONFIG } from '../services/battleMapStorage';
 import type { BattleMapConfig, HexWidget } from '../types/battlemap';
 import type { HexTileDefinition } from '../data/tiles/types';
 import { HEX_TILE_SETS } from '../data/tiles/tileSets';
@@ -1532,7 +1532,7 @@ function HexBattleMapWorkspace() {
               handlePanMove(event);
             }
           }}
-          onMouseUp={(event) => {
+          onMouseUp={(_event) => {
             if (isPanning) {
               stopPan();
             } else if (isDrawMode && isDrawPainting) {
