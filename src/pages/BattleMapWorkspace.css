@@ -310,7 +310,7 @@
   --widget-bg: #6b6f7b;
   --widget-border: #6b6f7b;
   --widget-text: #f8fafc;
-  --widget-bg-image: url('/assets/widgets/stone_tile.webp');
+  --widget-bg-image: url(var(--asset-base)assets/widgets/stone_tile.webp);
   --tile-cols: 2;
   --tile-rows: 2;
   --tile-image: var(--widget-bg-image);
@@ -896,7 +896,7 @@
   --widget-bg: transparent;
   --widget-border: transparent;
   --widget-text: #ffffff;
-  --widget-bg-image: url('/assets/widgets/stone_tile.webp');
+  --widget-bg-image: url(var(--asset-base)assets/widgets/stone_tile.webp);
   border: none;
 }
 
@@ -911,7 +911,7 @@
   --widget-bg: #6b6f7b !important;
   --widget-border: #6b6f7b !important;
   --widget-text: #f8fafc !important;
-  --widget-bg-image: url('/assets/widgets/stone_tile.webp');
+  --widget-bg-image: url(var(--asset-base)assets/widgets/stone_tile.webp);
 }
 
 .battlemap-workspace__widget-template.grid-stack-item {

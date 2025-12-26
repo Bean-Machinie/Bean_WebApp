@@ -1,4 +1,5 @@
 import type { SquareTileDefinition } from './types';
+import { toPublicAssetUrl } from '@/lib/assetPaths';
 
 export const stoneTiles: SquareTileDefinition[] = [
   {
@@ -7,7 +8,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     label: 'Stone 1x1',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/stone_tile.webp',
+    image: toPublicAssetUrl('assets/widgets/stone_tile.webp'),
     isFixed: true,
   },
   {
@@ -16,7 +17,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     label: 'Stone 2x1',
     cols: 2,
     rows: 2,
-    image: '/assets/widgets/stone_tile.webp',
+    image: toPublicAssetUrl('assets/widgets/stone_tile.webp'),
     isFixed: true,
   },
   {
@@ -25,7 +26,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     label: 'Stone 1x2',
     cols: 1,
     rows: 2,
-    image: '/assets/widgets/stone_tile.webp',
+    image: toPublicAssetUrl('assets/widgets/stone_tile.webp'),
     isFixed: true,
   },
   {
@@ -34,7 +35,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     label: 'Gravel 1x1',
     cols: 2,
     rows: 1,
-    image: '/assets/widgets/gravel_tile.webp',
+    image: toPublicAssetUrl('assets/widgets/gravel_tile.webp'),
     isFixed: true,
   },
   {
@@ -43,7 +44,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     label: 'Gravel 2x1',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/gravel_tile.webp',
+    image: toPublicAssetUrl('assets/widgets/gravel_tile.webp'),
     isFixed: true,
   },
   {
@@ -52,7 +53,7 @@ export const stoneTiles: SquareTileDefinition[] = [
     label: 'Gravel 2x2',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/gravel_tile.webp',
+    image: toPublicAssetUrl('assets/widgets/gravel_tile.webp'),
     isFixed: true,
   },
 ];

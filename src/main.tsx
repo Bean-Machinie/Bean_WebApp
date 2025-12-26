@@ -8,6 +8,8 @@ import { ThemeProvider } from './theme/ThemeProvider';
 import './styles/themes.css';
 import './index.css';
 
+document.documentElement.style.setProperty('--asset-base', import.meta.env.BASE_URL);
+
 // Root entry: set up providers and routing for the whole app.
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

@@ -1,4 +1,5 @@
 import type { SquareTileDefinition } from './types';
+import { toPublicAssetUrl } from '@/lib/assetPaths';
 
 export const dirtTiles: SquareTileDefinition[] = [
   {
@@ -7,7 +8,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass.webp'),
     isFixed: true,
   },
   {
@@ -16,7 +17,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass_path_1',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass_path_1.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass_path_1.webp'),
     isFixed: true,
   },
   {
@@ -25,7 +26,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass_path_2',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass_path_2.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass_path_2.webp'),
     isFixed: true,
   },
   {
@@ -34,7 +35,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass_path_3',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass_path_3.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass_path_3.webp'),
     isFixed: true,
   },
   {
@@ -43,7 +44,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass_path_4',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass_path_4.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass_path_4.webp'),
     isFixed: true,
   },
   {
@@ -52,7 +53,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass_path_5',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass_path_5.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass_path_5.webp'),
     isFixed: true,
   },
   {
@@ -61,7 +62,7 @@ export const dirtTiles: SquareTileDefinition[] = [
     label: 'hex_grass_path_6',
     cols: 1,
     rows: 1,
-    image: '/assets/widgets/hex/grass/hex_grass_path_6.webp',
+    image: toPublicAssetUrl('assets/widgets/hex/grass/hex_grass_path_6.webp'),
     isFixed: true,
   },
 ];

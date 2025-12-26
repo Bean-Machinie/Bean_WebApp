@@ -1,4 +1,5 @@
 import type { BattleMapWidget, WidgetAppearance } from '../types/battlemap';
+import { toPublicAssetUrl } from './assetPaths';
 
 export const DYNAMIC_WIDGET_APPEARANCE: WidgetAppearance = {
   backgroundColor: '#0000ff',
@@ -10,7 +11,7 @@ export const FIXED_WIDGET_APPEARANCE: WidgetAppearance = {
   backgroundColor: '#6b6f7b',
   borderColor: '#6b6f7b',
   textColor: '#ffffff',
-  backgroundImageUrl: '/assets/widgets/stone_tile.webp',
+  backgroundImageUrl: toPublicAssetUrl('assets/widgets/stone_tile.webp'),
 };
 
 const stripAppearanceAttributes = (html: string) =>
